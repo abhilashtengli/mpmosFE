@@ -124,7 +124,7 @@ export default function Navbar() {
             {/* Search and Login */}
             <div className="flex items-center space-x-3 transition-all duration-500">
               <div
-                className={`px-5 py-2 rounded-full font-medium transition-all duration-300
+                className={`px-5 py-1 rounded-full font-medium transition-all duration-300
                   ${scrolled
                     ? "bg-green-700 text-white hover:bg-green-800"
                     : "bg-white text-green-800 hover:bg-green-100"}

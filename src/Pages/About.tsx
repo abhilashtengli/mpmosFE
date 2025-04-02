@@ -1,16 +1,16 @@
 import type React from "react";
 
 import {
-  ChevronRight,
   BarChart3,
   FileText,
   Database,
   UserCircle,
   Download,
-  Leaf
+  Leaf,
+  Building2
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+// import { Button } from "@/components/ui/button";
 import { AnimatedMillet } from "@/components/animated-millet";
 import { StatsCounter } from "@/components/stats-counter";
 // import { FloatingGrains } from "@/components/floating-grains"
@@ -22,15 +22,15 @@ import millet3 from "@/assets/millet_3.jpg";
 import millet4 from "@/assets/millet_4.jpg";
 import millet5 from "@/assets/millet_5.jpg";
 import millet6 from "@/assets/millet_6.jpg";
-import iimr from "@/assets/IIMR_logo.jpg";
-import cpgs from "@/assets/CPGS_logo.jpg";
+// import iimr from "@/assets/IIMR_logo.jpg";
+// import cpgs from "@/assets/CPGS_logo.jpg";
+import { motion } from "framer-motion";
 
 export default function AboutPage() {
   return (
     <div className="flex min-h-screen flex-col">
-
       {/* Hero Section with Premium Background */}
-      <section className="relative overflow-hidden py-12">
+      <section className="relative overflow-hidden pb-16 pt-12 px-20">
         {/* Premium background with gradient overlay */}
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-gradient-to-b from-green-900 to-green-50" />
@@ -43,13 +43,8 @@ export default function AboutPage() {
               <div className="max-w-2xl">
                 <h1 className="mb-2 text-3xl font-bold text-white md:text-4xl drop-shadow-md">
                   About{" "}
-                  <span className="relative group">
-                    <span className="absolute inset-0 bg-gradient-to-r from-amber-600 to-amber-800 bg-clip-text text-transparent transition-all duration-300 group-hover:opacity-0">
-                      M-PMoS
-                    </span>
-                    <span className="bg-gradient-to-r from-green-600 to-green-800 bg-clip-text text-transparent opacity-0 transition-all duration-300 group-hover:opacity-100">
-                      M-PMoS
-                    </span>
+                  <span className="bg-gradient-to-r from-amber-500 to-amber-700 bg-clip-text text-transparent transition-all duration-300 group-hover:opacity-100">
+                    M-PMoS
                   </span>
                 </h1>
                 <div className="mb-4 h-1 w-20 bg-amber-500"></div>
@@ -72,7 +67,7 @@ export default function AboutPage() {
             </div>
 
             <div className="flex items-center justify-center md:col-span-2">
-              <div className="relative rounded-2xl border-4 border-amber-200/50 bg-white/80 p-6 backdrop-blur-sm shadow-lg">
+              <div className="relative hover:scale-105 duration-300 rounded-2xl border-1 border-amber-200/50 bg-white/80 p-6 backdrop-blur-sm shadow-2xl">
                 {/* Floating grains spread across the entire container */}
                 {/* <div className="absolute inset-0 overflow-hidden">
                   <FloatingGrains />
@@ -104,7 +99,7 @@ export default function AboutPage() {
 
       {/* Rest of the page content remains unchanged */}
       {/* Millet Varieties Section */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-white px-20">
         <div className="container mx-auto px-4">
           <div className="mb-12 text-center">
             <h2 className="mb-4 text-3xl font-bold text-amber-800">
@@ -158,7 +153,7 @@ export default function AboutPage() {
       </section>
 
       {/* Key Features Section */}
-      <section className="py-16 bg-green-50">
+      <section className="py-16 bg-gradient-to-b from-green-0 to-green-100 px-20">
         <div className="container mx-auto px-4">
           <div className="mb-12 text-center">
             <h2 className="mb-4 text-3xl font-bold text-green-800">
@@ -206,7 +201,7 @@ export default function AboutPage() {
       </section>
 
       {/* Partners Section */}
-      <section className="py-16 bg-white">
+      {/* <section className="py-16 bg-white px-20">
         <div className="container mx-auto px-4">
           <div className="mb-12 text-center">
             <h2 className="mb-4 text-3xl font-bold text-amber-800">
@@ -224,7 +219,7 @@ export default function AboutPage() {
                 <img
                   src={iimr}
                   alt="ICAR-IIMR Hyderabad"
-                  className="object-contain p-8"
+                  className="object-cover border p-8 w-full "
                 />
               </div>
               <div className="p-6">
@@ -264,6 +259,71 @@ export default function AboutPage() {
                 </Button>
               </div>
             </div>
+          </div>
+        </div>
+      </section> */}
+      <section className="pt-7 pb-12 bg-gradient-to-r text-gray-600 ">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-16  "
+          >
+            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-amber-800">
+              Our Partners <span className="text-amber-800">🤝</span>
+            </h2>
+            <p className="text-md max-w-2xl mx-auto text-gray-600">
+              Collaborating to promote sustainable millet cultivation in
+              Northeast India
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1  border-red-400 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.6 }}
+              className=" backdrop-blur-sm p-6 border shadow-md hover:shadow-neutral-50  bg-gradient-to-r from-green-200 to-green-50 rounded-xl"
+            >
+              <div className="flex items-center mb-4">
+                <div className="w-12 h-12 bg-white bor rounded-full flex items-center justify-center mr-4">
+                  <Building2 className="h-6 w-6 text-green-700" />
+                </div>
+                <h3 className="text-xl font-semibold text-amber-800">
+                  ICAR-IIMR Hyderabad
+                </h3>
+              </div>
+              <p className="text-gray-600">
+                Indian Institute of Millets Research, leading research and
+                development in millet cultivation, processing, and utilization
+                technologies.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="bg-white/10 backdrop-blur-sm p-6 border shadow-md hover:shadow-neutral-50 duration-200 rounded-xl bg-gradient-to-l from-green-200 to-green-50"
+            >
+              <div className="flex items-center mb-4">
+                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mr-4">
+                  <Building2 className="h-6 w-6 text-green-700" />
+                </div>
+                <h3 className="text-xl text-amber-800 font-semibold">
+                  CAU Imphal
+                </h3>
+              </div>
+              <p className="text-gray-600">
+                Central Agricultural University, Imphal, supporting agricultural
+                education, research, and extension activities in the
+                northeastern region.
+              </p>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -441,7 +501,7 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <Card className="overflow-hidden transition-all hover:shadow-md">
+    <Card className="overflow-hidden shadow-lg transition-all border-[0.5px] border-gray-300 hover:shadow-md bg-gradient-to-r from-white to-green-50">
       <CardContent className="p-6">
         <div className="mb-4">{icon}</div>
         <h3 className="mb-2 text-xl font-bold text-green-800">{title}</h3>

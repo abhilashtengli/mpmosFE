@@ -77,7 +77,7 @@ function Counter({ value, label, icon, duration = 2000 }: CounterProps) {
   return (
     <motion.div
       ref={ref}
-      className="flex flex-col items-center justify-center p-3 bg-white/80 backdrop-blur-sm rounded-lg shadow-md"
+      className="flex flex-col shadow-2xl items-center hover:scale-105 duration-300 border-[0.5px] border-gray-400 justify-center p-3 bg-white/80 backdrop-blur-sm rounded-lg "
       initial={{ opacity: 0, y: 20 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.5 }}
