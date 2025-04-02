@@ -9,7 +9,6 @@ import {
   Target,
   Award
 } from "lucide-react";
-import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -168,7 +167,6 @@ export default function NEHProjectsPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Navbar />
 
       {/* Hero Section */}
       <section className="relative py-12">

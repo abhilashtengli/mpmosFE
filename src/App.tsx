@@ -7,9 +7,7 @@ import GalleryPage from "./Pages/Gallery";
 import AboutPage from "./Pages/About";
 import AICRPProjectsPage from "./Pages/AicrpProjects";
 
-
 function App() {
-
   return (
     <>
       <BrowserRouter>
@@ -27,7 +25,7 @@ function App() {
         </Routes>
       </BrowserRouter>
     </>
-  )
+  );
 }
 
-export default App
+export default App;

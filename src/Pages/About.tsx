@@ -10,18 +10,24 @@ import {
   Leaf
 } from "lucide-react";
 
-import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { AnimatedMillet } from "@/components/animated-millet";
 import { StatsCounter } from "@/components/stats-counter";
 // import { FloatingGrains } from "@/components/floating-grains"
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "react-router-dom";
+import millet1 from "@/assets/millet_1.jpg";
+import millet2 from "@/assets/millet_2.jpg";
+import millet3 from "@/assets/millet_3.jpg";
+import millet4 from "@/assets/millet_4.jpg";
+import millet5 from "@/assets/millet_5.jpg";
+import millet6 from "@/assets/millet_6.jpg";
+import iimr from "@/assets/IIMR_logo.jpg";
+import cpgs from "@/assets/CPGS_logo.jpg";
 
 export default function AboutPage() {
   return (
     <div className="flex min-h-screen flex-col">
-      <Navbar />
 
       {/* Hero Section with Premium Background */}
       <section className="relative overflow-hidden py-12">
@@ -112,37 +118,37 @@ export default function AboutPage() {
 
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             <MilletCard
-              image="/images/millet_8.jpg"
+              image={millet1}
               name="Pearl Millet"
               scientificName="Pennisetum glaucum"
               description="A highly drought-resistant cereal grown in Assam and Meghalaya. Rich in iron and protein."
             />
             <MilletCard
-              image="/images/millet_7.jpg"
+              image={millet2}
               name="Sorghum"
               scientificName="Sorghum bicolor"
               description="Cultivated in parts of Tripura and Assam, known for its versatility and nutritional value."
             />
             <MilletCard
-              image="/images/millet_2.jpg"
+              image={millet3}
               name="Finger Millet"
               scientificName="Eleusine coracana"
               description="Popular in Sikkim and Arunachal Pradesh, known for its exceptional calcium content."
             />
             <MilletCard
-              image="/images/millet_3.jpg"
+              image={millet4}
               name="Foxtail Millet"
               scientificName="Setaria italica"
               description="Widely grown in Nagaland and Manipur, valued for its drought tolerance and short growing season."
             />
             <MilletCard
-              image="/images/millet_4.jpg"
+              image={millet5}
               name="Proso Millet"
               scientificName="Panicum miliaceum"
               description="Cultivated in parts of Meghalaya, known for its short growing season and low water requirements."
             />
             <MilletCard
-              image="/images/millet_6.jpg"
+              image={millet6}
               name="Barnyard Millet"
               scientificName="Echinochloa frumentacea"
               description="Grown in Arunachal Pradesh and parts of Assam, rich in fiber and micronutrients."
@@ -216,7 +222,7 @@ export default function AboutPage() {
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md transition-all hover:shadow-lg">
               <div className="relative h-64">
                 <img
-                  src="/images/IIMR_logo.jpg"
+                  src={iimr}
                   alt="ICAR-IIMR Hyderabad"
                   className="object-contain p-8"
                 />
@@ -239,7 +245,7 @@ export default function AboutPage() {
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md transition-all hover:shadow-lg">
               <div className="relative h-64">
                 <img
-                  src="/images/CPGS_logo.jpg"
+                  src={cpgs}
                   alt="CAU Imphal"
                   className="object-contain p-8"
                 />

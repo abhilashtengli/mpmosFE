@@ -10,12 +10,11 @@ import {
   ExternalLink,
   ChevronDown
 } from "lucide-react";
-import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Link } from "react-router-dom";
-
+import neMap from "@/assets/NE_map-removebg-preview.png"
 // Contact information
 const contactInfo = {
   email: "info@m-pmos.org",
@@ -126,7 +125,6 @@ export default function ContactPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Navbar />
 
       {/* Hero Section */}
       <section className="relative py-12">
@@ -251,7 +249,7 @@ export default function ContactPage() {
               className="relative h-[400px] rounded-lg overflow-hidden shadow-lg"
             >
               <img
-                src="/images/NE_map.jpg"
+                src={neMap}
                 alt="North East India Map"
                 className="object-cover"
               />

@@ -3,11 +3,22 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ZoomIn } from "lucide-react";
-
-import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+import millet1 from "@/assets/millet_1.jpg";
+import millet2 from "@/assets/millet_2.jpg";
+import millet3 from "@/assets/millet_3.jpg";
+import millet4 from "@/assets/millet_4.jpg";
+import millet5 from "@/assets/millet_5.jpg";
+import millet6 from "@/assets/millet_6.jpg";
+
+import ph1 from "@/assets/ph1.jpg";
+import ph2 from "@/assets/ph2.jpg";
+import ph3 from "@/assets/ph3.jpg";
+import ph4 from "@/assets/ph4.jpg";
+import ph5 from "@/assets/ph5.jpg";
+import ph6 from "@/assets/ph6.jpg";
 // Gallery data
 const galleryItems = [
   // Millet Varieties
@@ -17,7 +28,7 @@ const galleryItems = [
     title: "Finger Millet (Eleusine coracana)",
     description:
       "Rich in calcium and protein, finger millet is drought-resistant and widely grown in the NEH region.",
-    image: "/images/gallery/millet-1.jpg",
+    image: millet1,
     location: "Arunachal Pradesh"
   },
   {
@@ -26,7 +37,7 @@ const galleryItems = [
     title: "Foxtail Millet (Setaria italica)",
     description:
       "A nutritious millet variety with high iron content and excellent drought tolerance.",
-    image: "/images/gallery/millet-2.jpg",
+    image: millet2,
     location: "Manipur"
   },
   {
@@ -35,7 +46,7 @@ const galleryItems = [
     title: "Pearl Millet (Pennisetum glaucum)",
     description:
       "Known for its high protein content and ability to grow in poor soil conditions.",
-    image: "/images/gallery/millet-3.jpg",
+    image: millet3,
     location: "Tripura"
   },
   {
@@ -44,7 +55,7 @@ const galleryItems = [
     title: "Proso Millet (Panicum miliaceum)",
     description:
       "Fast-growing millet variety with excellent nutritional profile and low water requirements.",
-    image: "/images/millet_4.jpg",
+    image: millet4,
     location: "Meghalaya"
   },
   {
@@ -53,7 +64,7 @@ const galleryItems = [
     title: "Barnyard Millet (Echinochloa frumentacea)",
     description:
       "High in fiber and micronutrients, this variety is excellent for sustainable farming.",
-    image: "/images/millet_6.jpg",
+    image: millet5,
     location: "Sikkim"
   },
   {
@@ -62,7 +73,7 @@ const galleryItems = [
     title: "Kodo Millet (Paspalum scrobiculatum)",
     description:
       "Drought-resistant variety with excellent storage properties and nutritional benefits.",
-    image: "/images/millet_7.jpg",
+    image: millet6,
     location: "Nagaland"
   },
 
@@ -73,7 +84,7 @@ const galleryItems = [
     title: "Farmer Training Program",
     description:
       "Capacity building workshop for local farmers on improved millet cultivation techniques.",
-    image: "/images/gallery/neh-1.jpg",
+    image: ph1,
     location: "Imphal, Manipur"
   },
   {
@@ -82,7 +93,7 @@ const galleryItems = [
     title: "Millet Processing Unit",
     description:
       "Installation of modern millet processing equipment to support local value addition.",
-    image: "/images/gallery/neh-2.jpg",
+    image: ph2,
     location: "Pasighat, Arunachal Pradesh"
   },
   {
@@ -91,7 +102,7 @@ const galleryItems = [
     title: "Field Demonstration",
     description:
       "Demonstration of improved millet varieties and cultivation practices for local farmers.",
-    image: "/images/gallery/neh-3.jpg",
+    image: ph3,
     location: "Kohima, Nagaland"
   },
   {
@@ -100,7 +111,7 @@ const galleryItems = [
     title: "Millet Awareness Campaign",
     description:
       "Community outreach program promoting nutritional benefits of millets.",
-    image: "/images/farmer-woman.png",
+    image: ph4,
     location: "Gangtok, Sikkim"
   },
   {
@@ -109,7 +120,7 @@ const galleryItems = [
     title: "Seed Distribution Program",
     description:
       "Distribution of high-quality millet seeds to farmers in remote villages.",
-    image: "/images/millet_2.jpg",
+    image: ph5,
     location: "Agartala, Tripura"
   },
   {
@@ -118,7 +129,7 @@ const galleryItems = [
     title: "Millet Value Addition Training",
     description:
       "Training women farmers on preparing value-added millet products for market.",
-    image: "/images/millet_3.jpg",
+    image: ph6,
     location: "Shillong, Meghalaya"
   }
 ];
@@ -130,12 +141,11 @@ export default function GalleryPage() {
   >(null);
 
   const filteredItems = galleryItems.filter(
-    item => item.category === selectedCategory
+    (item) => item.category === selectedCategory
   );
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Navbar />
 
       {/* Hero Section */}
       <section className="relative py-12">
@@ -196,7 +206,7 @@ export default function GalleryPage() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <AnimatePresence mode="wait">
-              {filteredItems.map(item =>
+              {filteredItems.map((item) => (
                 <motion.div
                   key={item.id}
                   layout
@@ -215,12 +225,8 @@ export default function GalleryPage() {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                        <h3 className="text-lg font-bold">
-                          {item.title}
-                        </h3>
-                        <p className="text-sm text-gray-200">
-                          {item.location}
-                        </p>
+                        <h3 className="text-lg font-bold">{item.title}</h3>
+                        <p className="text-sm text-gray-200">{item.location}</p>
                       </div>
                       <div className="absolute top-4 right-4">
                         <ZoomIn className="h-6 w-6 text-white" />
@@ -228,7 +234,7 @@ export default function GalleryPage() {
                     </div>
                   </div>
                 </motion.div>
-              )}
+              ))}
             </AnimatePresence>
           </div>
         </div>
@@ -236,7 +242,7 @@ export default function GalleryPage() {
 
       {/* Image Modal */}
       <AnimatePresence>
-        {selectedImage &&
+        {selectedImage && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -250,7 +256,7 @@ export default function GalleryPage() {
               exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="relative max-w-4xl w-full bg-white rounded-lg overflow-hidden"
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <Button
                 variant="ghost"
@@ -276,12 +282,11 @@ export default function GalleryPage() {
                 <p className="text-sm text-gray-500 mb-4">
                   {selectedImage.location}
                 </p>
-                <p className="text-gray-700">
-                  {selectedImage.description}
-                </p>
+                <p className="text-gray-700">{selectedImage.description}</p>
               </div>
             </motion.div>
-          </motion.div>}
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Footer */}

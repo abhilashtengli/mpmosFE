@@ -3,33 +3,34 @@ import { ChevronRight, MapPin, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Navbar } from "@/components/navbar";
 import { PromoMeter } from "@/components/promo-meter";
 import { EventCard } from "@/components/event-card";
 import { SuccessStoryCarousel } from "@/components/success-story-carousel";
 import { Link } from "react-router-dom";
-
+import heroImg from "@/assets/hs-1.png";
+import aircp from "@/assets/AICRP_logo.png";
+import iimr from "@/assets/IIMR_logo.jpg";
+import cpgs from "@/assets/CPGS_logo.jpg";
+// import neMap from "@/assets/NE_map-removebg-preview.png";
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col">
-      <Navbar />
-
+    <div className="flex min-h-screen flex-col ">
       {/* Hero Section */}
-      <section className="relative py-16 text-white">
+      <section className="relative py-16 text-white border h-screen border-blue-900">
         {/* Hero background image */}
         <div className="absolute inset-0 z-0">
           <img
-            src="/images/hero-section.png"
+            src={heroImg}
             alt="Millet field"
-            className="object-cover"
+            className="object-cover w-full h-full"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-black/30 backdrop-blur-[2px]" />
         </div>
 
-        <div className="container relative z-10 mx-auto px-4">
+        <div className="container relative z-10 mx-auto px-20">
           <div className="grid gap-8 md:grid-cols-2">
             <div className="flex flex-col justify-center space-y-6">
-              <div className="inline-block rounded-lg bg-green-600/90 px-4 py-1 text-sm font-medium backdrop-blur-sm">
+              <div className="inline-block rounded-md bg-green-600/90 px-4 py-1 text-sm font-medium backdrop-blur-sm">
                 Millets-Project Monitoring System
               </div>
               <h1 className="text-4xl font-bold leading-tight md:text-5xl lg:text-6xl">
@@ -40,67 +41,53 @@ export default function Home() {
                 Region
               </p>
               <div className="flex flex-wrap items-center gap-6">
-                <div className="flex h-16 items-center justify-center rounded bg-white/90 p-2">
+                <div className="flex h-16 items-center justify-center  bg-white/90 rounded">
                   <img
-                    src="/images/AICRP_logo.png"
+                    src={aircp}
                     alt="AICRP on Sorghum and Millets"
                     width={80}
                     height={80}
-                    className="h-auto max-h-full w-auto"
+                    className="h-auto max-h-full w-auto rounded-sm"
                   />
                 </div>
-                <div className="flex h-16 items-center justify-center rounded bg-white/90 p-2">
+                <div className="flex h-16 items-center justify-center  bg-white/90 rounded">
                   <img
-                    src="/images/CPGS_logo.jpg"
+                    src={cpgs}
                     alt="CPGS Logo"
                     width={80}
                     height={80}
-                    className="h-auto max-h-full w-auto"
+                    className="h-auto max-h-full w-auto rounded-sm"
                   />
                 </div>
-                <div className="flex h-16 items-center justify-center rounded bg-white/90 p-2">
+                <div className="flex h-16 items-center justify-center rounded bg-white/90">
                   <img
-                    src="/images/IIMR_logo.jpg"
+                    src={iimr}
                     alt="IIMR Logo"
                     width={120}
                     height={80}
-                    className="h-auto max-h-full w-auto"
+                    className="h-auto max-h-full w-auto rounded-sm"
                   />
                 </div>
               </div>
               <div className="flex gap-4">
-                <Button className="bg-green-700 hover:bg-green-800">
+                <Button className="bg-green-700 hover:bg-green-800 cursor-pointer">
                   Explore Dashboard
                 </Button>
-                <Button
-                  variant="outline"
-                  className="border-white text-white hover:bg-white/20"
-                >
+                <Button className="border-white text-white hover:bg-white/20 cursor-pointer">
                   Learn More
                 </Button>
               </div>
             </div>
             <div className="flex items-center justify-center">
-              <div className="relative overflow-hidden rounded-lg border-2 border-white/20 bg-white/95 p-3 backdrop-blur-sm">
+              {/* <div className="relative overflow-hidden rounded-lg border-2 border-white/20 bg-white/95 p-3 backdrop-blur-sm">
                 <img
-                  src="/images/NE_map.jpg"
+                  src={neMap}
                   alt="Millets map of North East India"
-                  width={180}
-                  height={180}
+                //   width={180}
+                //   height={180}
                   className="h-auto w-full"
                 />
-              </div>
-
-              {/* Subtle farmer image */}
-              <div className="absolute bottom-0 right-0 md:right-16 lg:right-24 w-32 h-32 md:w-40 md:h-40 opacity-70 transition-opacity hover:opacity-90">
-                <img
-                  src="/images/farmer-woman.png"
-                  alt="Northeast farmer tending to millet"
-                  width={160}
-                  height={160}
-                  className="object-contain"
-                />
-              </div>
+              </div> */}
             </div>
           </div>
         </div>
@@ -108,7 +95,7 @@ export default function Home() {
       </section>
 
       {/* Millet Promo-meter */}
-      <section className="bg-gradient-to-b from-green-50 to-white py-16">
+      <section className="bg-gradient-to-b from-green-50 to-white py-16 px-20">
         <div className="container mx-auto px-4">
           <div className="mb-10 text-center">
             <h2 className="text-3xl font-bold text-green-800">
@@ -123,7 +110,7 @@ export default function Home() {
       </section>
 
       {/* Upcoming Events */}
-      <section className="py-16">
+      <section className="py-16 px-20">
         <div className="container mx-auto px-4">
           <div className="mb-10 flex items-center justify-between">
             <div>
@@ -165,7 +152,7 @@ export default function Home() {
       </section>
 
       {/* Project Highlights */}
-      <section className="bg-green-50 py-16">
+      <section className="bg-green-50 py-16 px-20">
         <div className="container mx-auto px-4">
           <div className="mb-10 text-center">
             <h2 className="text-3xl font-bold text-green-800">
@@ -186,7 +173,7 @@ export default function Home() {
             </TabsList>
             <TabsContent value="farmers">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {[1, 2, 3, 4, 5, 6].map((item) => (
+                {[1, 2, 3, 4, 5, 6].map(item =>
                   <Card
                     key={item}
                     className="overflow-hidden transition-all duration-300 hover:shadow-lg"
@@ -218,12 +205,12 @@ export default function Home() {
                       </Button>
                     </CardContent>
                   </Card>
-                ))}
+                )}
               </div>
             </TabsContent>
             <TabsContent value="researchers">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {[1, 2, 3, 4, 5, 6].map((item) => (
+                {[1, 2, 3, 4, 5, 6].map(item =>
                   <Card
                     key={item}
                     className="overflow-hidden transition-all duration-300 hover:shadow-lg"
@@ -255,7 +242,7 @@ export default function Home() {
                       </Button>
                     </CardContent>
                   </Card>
-                ))}
+                )}
               </div>
             </TabsContent>
           </Tabs>
@@ -263,7 +250,7 @@ export default function Home() {
       </section>
 
       {/* Success Stories */}
-      <section className="py-16">
+      <section className="py-16 px-20">
         <div className="container mx-auto px-4">
           <div className="mb-10 text-center">
             <h2 className="text-3xl font-bold text-green-800">
