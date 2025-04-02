@@ -1,0 +1,299 @@
+"use client";
+
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, ZoomIn } from "lucide-react";
+
+import { Navbar } from "@/components/navbar";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+// Gallery data
+const galleryItems = [
+  // Millet Varieties
+  {
+    id: 1,
+    category: "millet",
+    title: "Finger Millet (Eleusine coracana)",
+    description:
+      "Rich in calcium and protein, finger millet is drought-resistant and widely grown in the NEH region.",
+    image: "/images/gallery/millet-1.jpg",
+    location: "Arunachal Pradesh"
+  },
+  {
+    id: 2,
+    category: "millet",
+    title: "Foxtail Millet (Setaria italica)",
+    description:
+      "A nutritious millet variety with high iron content and excellent drought tolerance.",
+    image: "/images/gallery/millet-2.jpg",
+    location: "Manipur"
+  },
+  {
+    id: 3,
+    category: "millet",
+    title: "Pearl Millet (Pennisetum glaucum)",
+    description:
+      "Known for its high protein content and ability to grow in poor soil conditions.",
+    image: "/images/gallery/millet-3.jpg",
+    location: "Tripura"
+  },
+  {
+    id: 4,
+    category: "millet",
+    title: "Proso Millet (Panicum miliaceum)",
+    description:
+      "Fast-growing millet variety with excellent nutritional profile and low water requirements.",
+    image: "/images/millet_4.jpg",
+    location: "Meghalaya"
+  },
+  {
+    id: 5,
+    category: "millet",
+    title: "Barnyard Millet (Echinochloa frumentacea)",
+    description:
+      "High in fiber and micronutrients, this variety is excellent for sustainable farming.",
+    image: "/images/millet_6.jpg",
+    location: "Sikkim"
+  },
+  {
+    id: 6,
+    category: "millet",
+    title: "Kodo Millet (Paspalum scrobiculatum)",
+    description:
+      "Drought-resistant variety with excellent storage properties and nutritional benefits.",
+    image: "/images/millet_7.jpg",
+    location: "Nagaland"
+  },
+
+  // NEH Region Work
+  {
+    id: 7,
+    category: "neh",
+    title: "Farmer Training Program",
+    description:
+      "Capacity building workshop for local farmers on improved millet cultivation techniques.",
+    image: "/images/gallery/neh-1.jpg",
+    location: "Imphal, Manipur"
+  },
+  {
+    id: 8,
+    category: "neh",
+    title: "Millet Processing Unit",
+    description:
+      "Installation of modern millet processing equipment to support local value addition.",
+    image: "/images/gallery/neh-2.jpg",
+    location: "Pasighat, Arunachal Pradesh"
+  },
+  {
+    id: 9,
+    category: "neh",
+    title: "Field Demonstration",
+    description:
+      "Demonstration of improved millet varieties and cultivation practices for local farmers.",
+    image: "/images/gallery/neh-3.jpg",
+    location: "Kohima, Nagaland"
+  },
+  {
+    id: 10,
+    category: "neh",
+    title: "Millet Awareness Campaign",
+    description:
+      "Community outreach program promoting nutritional benefits of millets.",
+    image: "/images/farmer-woman.png",
+    location: "Gangtok, Sikkim"
+  },
+  {
+    id: 11,
+    category: "neh",
+    title: "Seed Distribution Program",
+    description:
+      "Distribution of high-quality millet seeds to farmers in remote villages.",
+    image: "/images/millet_2.jpg",
+    location: "Agartala, Tripura"
+  },
+  {
+    id: 12,
+    category: "neh",
+    title: "Millet Value Addition Training",
+    description:
+      "Training women farmers on preparing value-added millet products for market.",
+    image: "/images/millet_3.jpg",
+    location: "Shillong, Meghalaya"
+  }
+];
+
+export default function GalleryPage() {
+  const [selectedCategory, setSelectedCategory] = useState<string>("millet");
+  const [selectedImage, setSelectedImage] = useState<
+    (typeof galleryItems)[0] | null
+  >(null);
+
+  const filteredItems = galleryItems.filter(
+    item => item.category === selectedCategory
+  );
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Navbar />
+
+      {/* Hero Section */}
+      <section className="relative py-12">
+        <div className="absolute inset-0 z-0">
+          <div className="absolute inset-0 bg-gradient-to-b from-green-900 to-green-50" />
+          <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,#ffffff,transparent_70%)]" />
+        </div>
+
+        <div className="container relative z-10 mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-center"
+          >
+            <h1 className="mb-2 text-3xl font-bold text-white md:text-4xl drop-shadow-md">
+              Gallery
+            </h1>
+            <p className="mx-auto mb-4 max-w-2xl text-base text-white font-medium drop-shadow-sm">
+              Explore our collection of millet varieties and project activities
+              across the North Eastern Hilly Region
+            </p>
+          </motion.div>
+
+          {/* Category Tabs */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+          >
+            <Tabs
+              defaultValue="millet"
+              value={selectedCategory}
+              onValueChange={setSelectedCategory}
+              className="mx-auto max-w-md"
+            >
+              <TabsList className="grid w-full grid-cols-2 bg-green-800/80 backdrop-blur-sm">
+                <TabsTrigger
+                  value="millet"
+                  className="data-[state=active]:bg-green-100 data-[state=active]:text-green-900 text-white font-medium"
+                >
+                  Millet Varieties
+                </TabsTrigger>
+                <TabsTrigger
+                  value="neh"
+                  className="data-[state=active]:bg-green-100 data-[state=active]:text-green-900 text-white font-medium"
+                >
+                  NEH Region Work
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Gallery Grid */}
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <AnimatePresence mode="wait">
+              {filteredItems.map(item =>
+                <motion.div
+                  key={item.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.5 }}
+                  className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-all duration-300 cursor-pointer"
+                  onClick={() => setSelectedImage(item)}
+                >
+                  <div className="relative h-64 w-full">
+                    <img
+                      src={item.image || "/placeholder.svg"}
+                      alt={item.title}
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                        <h3 className="text-lg font-bold">
+                          {item.title}
+                        </h3>
+                        <p className="text-sm text-gray-200">
+                          {item.location}
+                        </p>
+                      </div>
+                      <div className="absolute top-4 right-4">
+                        <ZoomIn className="h-6 w-6 text-white" />
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </section>
+
+      {/* Image Modal */}
+      <AnimatePresence>
+        {selectedImage &&
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+            onClick={() => setSelectedImage(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative max-w-4xl w-full bg-white rounded-lg overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-2 right-2 z-10 bg-white/80 hover:bg-white rounded-full"
+                onClick={() => setSelectedImage(null)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+
+              <div className="relative h-[50vh] md:h-[60vh] w-full">
+                <img
+                  src={selectedImage.image || "/placeholder.svg"}
+                  alt={selectedImage.title}
+                  className="object-contain"
+                />
+              </div>
+
+              <div className="p-6">
+                <h2 className="text-2xl font-bold text-green-800 mb-2">
+                  {selectedImage.title}
+                </h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  {selectedImage.location}
+                </p>
+                <p className="text-gray-700">
+                  {selectedImage.description}
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>}
+      </AnimatePresence>
+
+      {/* Footer */}
+      <footer className="bg-gradient-to-b from-zinc-800 to-zinc-900 py-12 text-zinc-100 mt-auto">
+        <div className="container mx-auto px-4 text-center">
+          <p>© 2025 Millets-Project Monitoring System. All rights reserved.</p>
+          <p className="mt-2">
+            Funded by the Ministry of Agriculture and Farmers' Welfare,
+            Government of India.
+          </p>
+        </div>
+      </footer>
+    </div>
+  );
+}
