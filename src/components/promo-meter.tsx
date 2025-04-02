@@ -1,7 +1,3 @@
-"use client";
-
-import type React from "react";
-
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -48,7 +44,7 @@ export function PromoMeter() {
     districts: 22,
     projects: 11,
     states: 4,
-    trainers: 4
+    trainers: 23
   };
 
   useEffect(() => {
@@ -87,41 +83,88 @@ export function PromoMeter() {
     }, interval);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [
+    finalCounters.districts,
+    finalCounters.farmers,
+    finalCounters.projects,
+    finalCounters.states,
+    finalCounters.trainers
+  ]);
 
   return (
     <div className="space-y-8">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard
-          icon={<Users className="h-8 w-8 text-green-600" />}
-          title="Farmers Impacted"
-          value={counters.farmers.toLocaleString()}
-          color="green"
-        />
-        <StatCard
-          icon={<MapPin className="h-8 w-8 text-amber-600" />}
-          title="Districts in NEH"
-          value={counters.districts.toLocaleString()}
-          color="amber"
-        />
-        <StatCard
-          icon={<Package className="h-8 w-8 text-blue-600" />}
-          title="Projects"
-          value={counters.projects.toLocaleString()}
-          color="blue"
-        />
-        <StatCard
-          icon={<Home className="h-8 w-8 text-emerald-600" />}
-          title="States in NEH"
-          value={counters.states.toLocaleString()}
-          color="emerald"
-        />
-        <StatCard
-          icon={<Award className="h-8 w-8 text-purple-600" />}
-          title="Master Trainers"
-          value={counters.trainers.toLocaleString()}
-          color="purple"
-        />
+        <Card className={`border-green-100 bg-green-100`}>
+          <CardContent className="flex items-center p-6">
+            <div className="mr-4 text-green-700">
+              <Users />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">
+                Farmers Impacted
+              </p>
+              <h3 className={`text-2xl font-bold text-green-700`}>
+                {counters.farmers.toLocaleString()}
+              </h3>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={`border-amber-100 bg-amber-100`}>
+          <CardContent className="flex items-center p-6">
+            <div className="mr-4 text-amber-700">
+              <MapPin />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">
+                Districts in NEH
+              </p>
+              <h3 className={`text-2xl font-bold text-amber-700`}>
+                {counters.districts.toLocaleString()}
+              </h3>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={`border-blue-100 bg-blue-100`}>
+          <CardContent className="flex items-center p-6">
+            <div className="mr-4 text-blue-700">
+              <Package />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Projects</p>
+              <h3 className={`text-2xl font-bold text-blue-700`}>
+                {counters.projects.toLocaleString()}
+              </h3>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={`border-emerald-100 bg-emerald-100`}>
+          <CardContent className="flex items-center p-6">
+            <div className="mr-4 text-emerald-700">
+              <Home />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">States in NEH</p>
+              <h3 className={`text-2xl font-bold text-emerald-700`}>
+                {counters.states.toLocaleString()}
+              </h3>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={`border-purple-100 bg-purple-100`}>
+          <CardContent className="flex items-center p-6">
+            <div className="mr-4 text-purple-700">
+              <Award />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">
+                Masters in NEH
+              </p>
+              <h3 className={`text-2xl font-bold text-purple-700`}>
+                {counters.trainers.toLocaleString()}
+              </h3>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="mt-8 rounded-lg bg-white p-4 shadow-md">
@@ -181,29 +224,5 @@ export function PromoMeter() {
         </div>
       </div>
     </div>
-  );
-}
-
-function StatCard({
-  icon,
-  title,
-  value,
-  color
-}: {
-  icon: React.ReactNode;
-  title: string;
-  value: string;
-  color: string;
-}) {
-  return (
-    <Card className={`border-${color}-100 bg-${color}-50`}>
-      <CardContent className="flex items-center p-6">
-        <div className="mr-4">{icon}</div>
-        <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <h3 className={`text-2xl font-bold text-${color}-700`}>{value}</h3>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

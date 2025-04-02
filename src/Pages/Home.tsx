@@ -1,18 +1,32 @@
-import { ChevronRight, MapPin, Users } from "lucide-react";
+import { ArrowDown, ArrowRight, ChevronRight, Clock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { PromoMeter } from "@/components/promo-meter";
 import { EventCard } from "@/components/event-card";
-import { SuccessStoryCarousel } from "@/components/success-story-carousel";
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import heroImg from "@/assets/hs-1.png";
 import aircp from "@/assets/AICRP_logo.png";
 import iimr from "@/assets/IIMR_logo.jpg";
 import cpgs from "@/assets/CPGS_logo.jpg";
-// import neMap from "@/assets/NE_map-removebg-preview.png";
+import millet1 from "@/assets/millet_1.jpg";
+import millet2 from "@/assets/millet_2.jpg";
+import millet3 from "@/assets/millet_3.jpg";
+import { useRef, useState } from "react";
+import ph1 from "@/assets/ph1.jpg";
+import ph2 from "@/assets/ph2.jpg";
+import ph3 from "@/assets/ph3.jpg";
+import ph4 from "@/assets/ph4.jpg";
 export default function Home() {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [upcomingEventsPresent, setUpcomingEventsPresent] = useState(false);
+  const eventsRef = useRef<HTMLDivElement>(null);
+
+  const scrollToEvents = () => {
+    eventsRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+  const projecthighlights = [ph1, ph2, ph3, ph4];
   return (
     <div className="flex min-h-screen flex-col ">
       {/* Hero Section */}
@@ -27,20 +41,20 @@ export default function Home() {
           <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-black/30 backdrop-blur-[2px]" />
         </div>
 
-        <div className="container relative z-10 mx-auto px-20">
-          <div className="grid gap-8 md:grid-cols-2">
-            <div className="flex flex-col justify-center space-y-6">
-              <div className="inline-block rounded-md bg-green-600/90 px-4 py-1 text-sm font-medium backdrop-blur-sm">
+        <div className="container relative z-10 mx-auto px-20 ">
+          <div className="grid gap-8 md:grid-cols-2 ">
+            <div className="flex flex-col justify-center space-y-6  border-red-500">
+              <div className="inline-block tracking-wider rounded-md bg-green-600/90 px-4 py-1 text-sm font-medium backdrop-blur-sm">
                 Millets-Project Monitoring System
               </div>
-              <h1 className="text-4xl font-bold leading-tight md:text-5xl lg:text-6xl">
+              <h1 className="text-4xl tracking-wider font-bold leading-tight md:text-5xl lg:text-6xl">
                 Empowering Millets, Transforming the Northeast
               </h1>
-              <p className="max-w-md text-lg text-gray-100">
+              <p className="max-w-md text-lg text-gray-100 tracking-wide">
                 A Digital Platform for Monitoring Millet Promotion in the NEH
                 Region
               </p>
-              <div className="flex flex-wrap items-center gap-6">
+              <div className="flex flex-wrap items-center gap-6 ">
                 <div className="flex h-16 items-center justify-center  bg-white/90 rounded">
                   <img
                     src={aircp}
@@ -78,7 +92,7 @@ export default function Home() {
                 </Button>
               </div>
             </div>
-            <div className="flex items-center justify-center">
+            <div className="relative flex items-center justify-center  border-red-500">
               {/* <div className="relative overflow-hidden rounded-lg border-2 border-white/20 bg-white/95 p-3 backdrop-blur-sm">
                 <img
                   src={neMap}
@@ -88,6 +102,20 @@ export default function Home() {
                   className="h-auto w-full"
                 />
               </div> */}
+              <motion.button
+                onClick={scrollToEvents}
+                whileTap={{ scale: 0.95 }}
+                className="px-3 py-2 absolute right-2 bottom-2 cursor-pointer bg-amber-200 text-amber-900 rounded-md font-medium text-md flex items-center gap-2 hover:bg-amber-400 transition-all shadow-lg"
+              >
+                <Clock className="h-5 w-5" />
+                Upcoming Events
+                <motion.div
+                  animate={{ y: [0, 6, 0] }}
+                  transition={{ repeat: Number.POSITIVE_INFINITY, duration: 2 }}
+                >
+                  <ArrowDown className="h-6 w-6 text-amber/70" />
+                </motion.div>
+              </motion.button>
             </div>
           </div>
         </div>
@@ -110,46 +138,48 @@ export default function Home() {
       </section>
 
       {/* Upcoming Events */}
-      <section className="py-16 px-20">
-        <div className="container mx-auto px-4">
-          <div className="mb-10 flex items-center justify-between">
-            <div>
-              <h2 className="text-3xl font-bold text-green-800">
-                Upcoming Events
-              </h2>
-              <p className="mt-2 text-gray-600">
-                Join us in our mission to promote millets
-              </p>
+      {upcomingEventsPresent && (
+        <section ref={eventsRef} className="py-16 px-20">
+          <div className="container mx-auto px-4">
+            <div className="mb-10 flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-green-800">
+                  Upcoming Events
+                </h2>
+                <p className="mt-2 text-gray-600">
+                  Join us in our mission to promote millets
+                </p>
+              </div>
+              <Button variant="outline" className="gap-2 text-green-800">
+                View All Events <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
-            <Button variant="outline" className="gap-2 text-green-800">
-              View All Events <ChevronRight className="h-4 w-4" />
-            </Button>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <EventCard
+                title="Millet Cultivation Workshop"
+                date="April 15, 2025"
+                location="Imphal, Manipur"
+                description="Learn advanced techniques for millet cultivation from agricultural experts."
+                image={millet1}
+              />
+              <EventCard
+                title="Northeast Millet Festival"
+                date="May 10, 2025"
+                location="Guwahati, Assam"
+                description="A celebration of millet diversity with cooking demonstrations and cultural programs."
+                image={millet2}
+              />
+              <EventCard
+                title="Farmer-Scientist Interface Meeting"
+                date="June 5, 2025"
+                location="Shillong, Meghalaya"
+                description="Bridging the gap between research and field application for millet cultivation."
+                image={millet3}
+              />
+            </div>
           </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <EventCard
-              title="Millet Cultivation Workshop"
-              date="April 15, 2025"
-              location="Imphal, Manipur"
-              description="Learn advanced techniques for millet cultivation from agricultural experts."
-              image="/placeholder.svg?height=200&width=400"
-            />
-            <EventCard
-              title="Northeast Millet Festival"
-              date="May 10, 2025"
-              location="Guwahati, Assam"
-              description="A celebration of millet diversity with cooking demonstrations and cultural programs."
-              image="/placeholder.svg?height=200&width=400"
-            />
-            <EventCard
-              title="Farmer-Scientist Interface Meeting"
-              date="June 5, 2025"
-              location="Shillong, Meghalaya"
-              description="Bridging the gap between research and field application for millet cultivation."
-              image="/placeholder.svg?height=200&width=400"
-            />
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Project Highlights */}
       <section className="bg-green-50 py-16 px-20">
@@ -159,10 +189,52 @@ export default function Home() {
               Project Highlights
             </h2>
             <p className="mt-2 text-gray-600">
-              Showcasing our impact across the Northeast
+              Visual documentation of our work across the North Eastern Hilly
+              Region
             </p>
           </div>
-          <Tabs defaultValue="farmers" className="w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {projecthighlights.map((item, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, delay: index * 0.1 }}
+                viewport={{ amount: 0.3 }}
+                whileHover={{ y: -10, transition: { duration: 0.2 } }}
+                className="bg-white rounded-xl overflow-hidden shadow-lg"
+              >
+                <div className="aspect-square relative">
+                  <div
+                    className="absolute inset-0 bg-cover bg-center"
+                    style={{ backgroundImage: `url(${item})` }}
+                  ></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-green-900/70 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-end">
+                    <div className="p-4 text-white">
+                      <h3 className="font-medium">Project Image </h3>
+                      <p className="text-sm text-green-100">
+                        Millet cultivation in NEH region
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          <div className="mt-10 text-center ">
+            <Link to="/gallery">
+              {" "}
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="px-5 py-3 bg-green-700 w-fit cursor-pointer text-white rounded-full font-medium text-lg flex items-center gap-2 mx-auto hover:bg-green-800 transition-all"
+              >
+                View Full Gallery <ArrowRight className="h-5 w-5" />
+              </motion.div>
+            </Link>
+          </div>
+          {/* <Tabs defaultValue="farmers" className="w-full">
             <TabsList className="mx-auto mb-8 grid w-full max-w-md grid-cols-2">
               <TabsTrigger value="farmers" className="text-sm md:text-base">
                 Farmer Stories
@@ -173,7 +245,7 @@ export default function Home() {
             </TabsList>
             <TabsContent value="farmers">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {[1, 2, 3, 4, 5, 6].map(item =>
+                {[1, 2, 3, 4, 5, 6].map((item) => (
                   <Card
                     key={item}
                     className="overflow-hidden transition-all duration-300 hover:shadow-lg"
@@ -205,12 +277,12 @@ export default function Home() {
                       </Button>
                     </CardContent>
                   </Card>
-                )}
+                ))}
               </div>
             </TabsContent>
             <TabsContent value="researchers">
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {[1, 2, 3, 4, 5, 6].map(item =>
+                {[1, 2, 3, 4, 5, 6].map((item) => (
                   <Card
                     key={item}
                     className="overflow-hidden transition-all duration-300 hover:shadow-lg"
@@ -242,15 +314,15 @@ export default function Home() {
                       </Button>
                     </CardContent>
                   </Card>
-                )}
+                ))}
               </div>
             </TabsContent>
-          </Tabs>
+          </Tabs> */}
         </div>
       </section>
 
       {/* Success Stories */}
-      <section className="py-16 px-20">
+      {/* <section className="py-16 px-20">
         <div className="container mx-auto px-4">
           <div className="mb-10 text-center">
             <h2 className="text-3xl font-bold text-green-800">
@@ -262,7 +334,7 @@ export default function Home() {
           </div>
           <SuccessStoryCarousel />
         </div>
-      </section>
+      </section> */}
 
       {/* Footer */}
       <footer className="bg-gradient-to-b from-green-800 to-green-900 py-12 text-green-50">
