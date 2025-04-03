@@ -1,19 +1,14 @@
-import type React from "react";
-
 import {
   BarChart3,
   FileText,
   Database,
   UserCircle,
   Download,
-  Leaf,
-  Building2
+  Leaf
 } from "lucide-react";
 
-// import { Button } from "@/components/ui/button";
 import { AnimatedMillet } from "@/components/animated-millet";
 import { StatsCounter } from "@/components/stats-counter";
-// import { FloatingGrains } from "@/components/floating-grains"
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "react-router-dom";
 import millet1 from "@/assets/millet_1.jpg";
@@ -22,15 +17,15 @@ import millet3 from "@/assets/millet_3.jpg";
 import millet4 from "@/assets/millet_4.jpg";
 import millet5 from "@/assets/millet_5.jpg";
 import millet6 from "@/assets/millet_6.jpg";
-// import iimr from "@/assets/IIMR_logo.jpg";
-// import cpgs from "@/assets/CPGS_logo.jpg";
+import iimr from "@/assets/IIMR_logo.jpg";
+import cpgs from "@/assets/CPGS_logo.jpg";
 import { motion } from "framer-motion";
 
 export default function AboutPage() {
   return (
     <div className="flex min-h-screen flex-col">
       {/* Hero Section with Premium Background */}
-      <section className="relative overflow-hidden pb-16 pt-12 px-20">
+      <section className="relative overflow-hidden pb-12 pt-12 px-20">
         {/* Premium background with gradient overlay */}
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-gradient-to-b from-green-900 to-green-50" />
@@ -47,7 +42,7 @@ export default function AboutPage() {
                     M-PMoS
                   </span>
                 </h1>
-                <div className="mb-4 h-1 w-20 bg-amber-500"></div>
+                <div className="mb-4 h-1 w-20 bg-amber-500" />
                 <p className="mb-4 text-base leading-relaxed text-white">
                   The Millets-Project Monitoring System (M-PMoS) is an
                   innovative digital platform jointly developed by CAU-CPGSAS,
@@ -85,19 +80,18 @@ export default function AboutPage() {
         <div className="absolute bottom-0 left-0 right-0">
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 1440 100"
+            viewBox="0 0 1440 80"
             className="w-full"
           >
             <path
               fill="#ffffff"
               fillOpacity="1"
               d="M0,64L60,58.7C120,53,240,43,360,48C480,53,600,75,720,80C840,85,960,75,1080,64C1200,53,1320,43,1380,37.3L1440,32L1440,100L1380,100C1320,100,1200,100,1080,100C960,100,840,100,720,100C600,100,480,100,360,100C240,100,120,100,60,100L0,100Z"
-            ></path>
+            />
           </svg>
         </div>
       </section>
 
-      {/* Rest of the page content remains unchanged */}
       {/* Millet Varieties Section */}
       <section className="py-16 bg-white px-20">
         <div className="container mx-auto px-4">
@@ -201,67 +195,6 @@ export default function AboutPage() {
       </section>
 
       {/* Partners Section */}
-      {/* <section className="py-16 bg-white px-20">
-        <div className="container mx-auto px-4">
-          <div className="mb-12 text-center">
-            <h2 className="mb-4 text-3xl font-bold text-amber-800">
-              Our Partners 🤝
-            </h2>
-            <p className="mx-auto max-w-2xl text-gray-600">
-              Collaborating to promote millet cultivation and consumption across
-              Northeast India
-            </p>
-          </div>
-
-          <div className="grid gap-8 md:grid-cols-2">
-            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md transition-all hover:shadow-lg">
-              <div className="relative h-64">
-                <img
-                  src={iimr}
-                  alt="ICAR-IIMR Hyderabad"
-                  className="object-cover border p-8 w-full "
-                />
-              </div>
-              <div className="p-6">
-                <h3 className="mb-3 text-xl font-bold text-amber-800">
-                  ICAR-IIMR Hyderabad
-                </h3>
-                <p className="text-gray-600">
-                  Indian Institute of Millets Research, leading research and
-                  development in millet cultivation, processing, and utilization
-                  technologies.
-                </p>
-                <Button variant="outline" className="mt-4 gap-2 text-amber-800">
-                  Learn More <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md transition-all hover:shadow-lg">
-              <div className="relative h-64">
-                <img
-                  src={cpgs}
-                  alt="CAU Imphal"
-                  className="object-contain p-8"
-                />
-              </div>
-              <div className="p-6">
-                <h3 className="mb-3 text-xl font-bold text-amber-800">
-                  CAU Imphal
-                </h3>
-                <p className="text-gray-600">
-                  Central Agricultural University, Imphal, supporting
-                  agricultural education, research, and extension activities in
-                  the northeastern region.
-                </p>
-                <Button variant="outline" className="mt-4 gap-2 text-amber-800">
-                  Learn More <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section> */}
       <section className="pt-7 pb-12 bg-gradient-to-r text-gray-600 ">
         <div className="container mx-auto px-4">
           <motion.div
@@ -289,8 +222,12 @@ export default function AboutPage() {
               className=" backdrop-blur-sm p-6 border shadow-md hover:shadow-neutral-50  bg-gradient-to-r from-green-200 to-green-50 rounded-xl"
             >
               <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-white bor rounded-full flex items-center justify-center mr-4">
-                  <Building2 className="h-6 w-6 text-green-700" />
+                <div className="w-16 h-12 bg-white rounded-lg flex items-center justify-center mr-4">
+                  <img
+                    src={iimr}
+                    alt="iimr"
+                    className="w-full rounded-sm h-full"
+                  />
                 </div>
                 <h3 className="text-xl font-semibold text-amber-800">
                   ICAR-IIMR Hyderabad
@@ -311,8 +248,12 @@ export default function AboutPage() {
               className="bg-white/10 backdrop-blur-sm p-6 border shadow-md hover:shadow-neutral-50 duration-200 rounded-xl bg-gradient-to-l from-green-200 to-green-50"
             >
               <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mr-4">
-                  <Building2 className="h-6 w-6 text-green-700" />
+                <div className="w-14 h-12 bg-white rounded-full flex items-center justify-center mr-4">
+                  <img
+                    src={cpgs}
+                    alt="cpgs"
+                    className="w-full rounded-full h-full"
+                  />
                 </div>
                 <h3 className="text-xl text-amber-800 font-semibold">
                   CAU Imphal
@@ -483,9 +424,15 @@ function MilletCard({
         />
       </div>
       <div className="p-5">
-        <h3 className="mb-1 text-xl font-bold text-amber-800">{name}</h3>
-        <p className="mb-3 text-sm italic text-gray-500">{scientificName}</p>
-        <p className="text-gray-600">{description}</p>
+        <h3 className="mb-1 text-xl font-bold text-amber-800">
+          {name}
+        </h3>
+        <p className="mb-3 text-sm italic text-gray-500">
+          {scientificName}
+        </p>
+        <p className="text-gray-600">
+          {description}
+        </p>
       </div>
     </div>
   );
@@ -503,9 +450,15 @@ function FeatureCard({
   return (
     <Card className="overflow-hidden shadow-lg transition-all border-[0.5px] border-gray-300 hover:shadow-md bg-gradient-to-r from-white to-green-50">
       <CardContent className="p-6">
-        <div className="mb-4">{icon}</div>
-        <h3 className="mb-2 text-xl font-bold text-green-800">{title}</h3>
-        <p className="text-gray-600">{description}</p>
+        <div className="mb-4">
+          {icon}
+        </div>
+        <h3 className="mb-2 text-xl font-bold text-green-800">
+          {title}
+        </h3>
+        <p className="text-gray-600">
+          {description}
+        </p>
       </CardContent>
     </Card>
   );

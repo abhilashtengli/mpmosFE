@@ -141,16 +141,15 @@ export default function GalleryPage() {
   >(null);
 
   const filteredItems = galleryItems.filter(
-    (item) => item.category === selectedCategory
+    item => item.category === selectedCategory
   );
 
   return (
     <div className="flex min-h-screen flex-col">
-
       {/* Hero Section */}
-      <section className="relative py-12">
+      <section className="relative pt-12 pb-16">
         <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 bg-gradient-to-b from-green-900 to-green-50" />
+          <div className="absolute inset-0 bg-gradient-to-b from-green-900 to-green-0" />
           <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,#ffffff,transparent_70%)]" />
         </div>
 
@@ -182,16 +181,16 @@ export default function GalleryPage() {
               onValueChange={setSelectedCategory}
               className="mx-auto max-w-md"
             >
-              <TabsList className="grid w-full grid-cols-2 bg-green-800/80 backdrop-blur-sm">
+              <TabsList className=" grid w-full grid-cols-2 bg-green-800/80 backdrop-blur-sm">
                 <TabsTrigger
                   value="millet"
-                  className="data-[state=active]:bg-green-100 data-[state=active]:text-green-900 text-white font-medium"
+                  className="data-[state=active]:bg-green-100 cursor-pointer data-[state=active]:text-green-900 text-white font-medium"
                 >
                   Millet Varieties
                 </TabsTrigger>
                 <TabsTrigger
                   value="neh"
-                  className="data-[state=active]:bg-green-100 data-[state=active]:text-green-900 text-white font-medium"
+                  className="data-[state=active]:bg-green-100 cursor-pointer data-[state=active]:text-green-900 text-white font-medium"
                 >
                   NEH Region Work
                 </TabsTrigger>
@@ -199,14 +198,28 @@ export default function GalleryPage() {
             </Tabs>
           </motion.div>
         </div>
+
+        <div className="absolute bottom-0 left-0 right-0">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 1440 80"
+            className="w-full"
+          >
+            <path
+              fill="#ffffff"
+              fillOpacity="1"
+              d="M0,64L60,58.7C120,53,240,43,360,48C480,53,600,75,720,80C840,85,960,75,1080,64C1200,53,1320,43,1380,37.3L1440,32L1440,100L1380,100C1320,100,1200,100,1080,100C960,100,840,100,720,100C600,100,480,100,360,100C240,100,120,100,60,100L0,100Z"
+            />
+          </svg>
+        </div>
       </section>
 
       {/* Gallery Grid */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-white px-20">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <AnimatePresence mode="wait">
-              {filteredItems.map((item) => (
+              {filteredItems.map(item =>
                 <motion.div
                   key={item.id}
                   layout
@@ -217,16 +230,20 @@ export default function GalleryPage() {
                   className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-all duration-300 cursor-pointer"
                   onClick={() => setSelectedImage(item)}
                 >
-                  <div className="relative h-64 w-full">
+                  <div className="relative h-72 w-full">
                     <img
                       src={item.image || "/placeholder.svg"}
                       alt={item.title}
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      className="object- transition-transform duration-500 group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                        <h3 className="text-lg font-bold">{item.title}</h3>
-                        <p className="text-sm text-gray-200">{item.location}</p>
+                        <h3 className="text-lg font-bold">
+                          {item.title}
+                        </h3>
+                        <p className="text-sm text-gray-200">
+                          {item.location}
+                        </p>
                       </div>
                       <div className="absolute top-4 right-4">
                         <ZoomIn className="h-6 w-6 text-white" />
@@ -234,7 +251,7 @@ export default function GalleryPage() {
                     </div>
                   </div>
                 </motion.div>
-              ))}
+              )}
             </AnimatePresence>
           </div>
         </div>
@@ -242,7 +259,7 @@ export default function GalleryPage() {
 
       {/* Image Modal */}
       <AnimatePresence>
-        {selectedImage && (
+        {selectedImage &&
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -256,7 +273,7 @@ export default function GalleryPage() {
               exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="relative max-w-4xl w-full bg-white rounded-lg overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
             >
               <Button
                 variant="ghost"
@@ -282,11 +299,12 @@ export default function GalleryPage() {
                 <p className="text-sm text-gray-500 mb-4">
                   {selectedImage.location}
                 </p>
-                <p className="text-gray-700">{selectedImage.description}</p>
+                <p className="text-gray-700">
+                  {selectedImage.description}
+                </p>
               </div>
             </motion.div>
-          </motion.div>
-        )}
+          </motion.div>}
       </AnimatePresence>
 
       {/* Footer */}

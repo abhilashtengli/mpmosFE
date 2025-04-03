@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Link } from "react-router-dom";
-import neMap from "@/assets/NE_map-removebg-preview.png"
+import neMap from "@/assets/NE_map-removebg-preview.png";
 // Contact information
 const contactInfo = {
   email: "info@m-pmos.org",
@@ -26,35 +26,35 @@ const contactInfo = {
 };
 
 // Key contacts
-const keyContacts = [
-  {
-    id: 1,
-    name: "Dr. Rajesh Kumar",
-    position: "Project Director",
-    email: "rajesh.kumar@m-pmos.org",
-    phone: "+91 98765 43210",
-    location: "Imphal, Manipur",
-    image: "/placeholder.svg?height=200&width=200&text=Dr.+Rajesh"
-  },
-  {
-    id: 2,
-    name: "Dr. Priya Singh",
-    position: "Co-Project Director",
-    email: "priya.singh@m-pmos.org",
-    phone: "+91 98765 43211",
-    location: "Guwahati, Assam",
-    image: "/placeholder.svg?height=200&width=200&text=Dr.+Priya"
-  },
-  {
-    id: 3,
-    name: "Dr. Amit Patel",
-    position: "Technical Coordinator",
-    email: "amit.patel@m-pmos.org",
-    phone: "+91 98765 43212",
-    location: "Shillong, Meghalaya",
-    image: "/placeholder.svg?height=200&width=200&text=Dr.+Amit"
-  }
-];
+// const keyContacts = [
+//   {
+//     id: 1,
+//     name: "Dr. Rajesh Kumar",
+//     position: "Project Director",
+//     email: "rajesh.kumar@m-pmos.org",
+//     phone: "+91 98765 43210",
+//     location: "Imphal, Manipur",
+//     image: "/placeholder.svg?height=200&width=200&text=Dr.+Rajesh"
+//   },
+//   {
+//     id: 2,
+//     name: "Dr. Priya Singh",
+//     position: "Co-Project Director",
+//     email: "priya.singh@m-pmos.org",
+//     phone: "+91 98765 43211",
+//     location: "Guwahati, Assam",
+//     image: "/placeholder.svg?height=200&width=200&text=Dr.+Priya"
+//   },
+//   {
+//     id: 3,
+//     name: "Dr. Amit Patel",
+//     position: "Technical Coordinator",
+//     email: "amit.patel@m-pmos.org",
+//     phone: "+91 98765 43212",
+//     location: "Shillong, Meghalaya",
+//     image: "/placeholder.svg?height=200&width=200&text=Dr.+Amit"
+//   }
+// ];
 
 // Office locations
 const officeLocations = [
@@ -125,11 +125,10 @@ export default function ContactPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-
       {/* Hero Section */}
       <section className="relative py-12">
         <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 bg-gradient-to-b from-green-900 to-green-50" />
+          <div className="absolute inset-0 bg-gradient-to-b from-green-900 to-green-100" />
           <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,#ffffff,transparent_70%)]" />
         </div>
 
@@ -149,10 +148,23 @@ export default function ContactPage() {
             </p>
           </motion.div>
         </div>
+        <div className="absolute bottom-0 left-0 right-0">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 1440 65"
+            className="w-full"
+          >
+            <path
+              fill="#ffffff"
+              fillOpacity="1"
+              d="M0,64L60,58.7C120,53,240,43,360,48C480,53,600,75,720,80C840,85,960,75,1080,64C1200,53,1320,43,1380,37.3L1440,32L1440,100L1380,100C1320,100,1200,100,1080,100C960,100,840,100,720,100C600,100,480,100,360,100C240,100,120,100,60,100L0,100Z"
+            />
+          </svg>
+        </div>
       </section>
 
       {/* Main Contact Information */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-white px-20">
         <div className="container mx-auto px-4">
           <div className="grid gap-8 md:grid-cols-2">
             {/* Contact Details */}
@@ -166,7 +178,7 @@ export default function ContactPage() {
                 Get In Touch
               </h2>
 
-              <div className="space-y-6">
+              <div className="space-y-6 grid grid-cols-2">
                 <ContactItem
                   icon={<Mail className="h-6 w-6 text-green-600" />}
                   title="Email"
@@ -226,17 +238,16 @@ export default function ContactPage() {
                     </motion.a>
                   }
                 />
-              </div>
-
-              <div className="mt-8">
-                <h3 className="text-lg font-semibold text-green-800 mb-4">
-                  Connect With Us
-                </h3>
-                <div className="flex space-x-4">
-                  <SocialButton icon="twitter" />
-                  <SocialButton icon="facebook" />
-                  <SocialButton icon="instagram" />
-                  <SocialButton icon="youtube" />
+                <div className="">
+                  <h3 className="text-lg font-semibold text-green-800 mb-4">
+                    Connect With Us
+                  </h3>
+                  <div className="flex space-x-4">
+                    <SocialButton icon="twitter" />
+                    <SocialButton icon="facebook" />
+                    <SocialButton icon="instagram" />
+                    <SocialButton icon="youtube" />
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -246,22 +257,22 @@ export default function ContactPage() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
-              className="relative h-[400px] rounded-lg overflow-hidden shadow-lg"
+              className="relative h-[400px]  rounded-lg overflow-hidden shadow-lg border grid place-content-center"
             >
               <img
                 src={neMap}
                 alt="North East India Map"
-                className="object-cover"
+                className="object-cover h-full w-fit m-5"
               />
-              <div className="absolute inset-0 bg-green-900/20 flex items-center justify-center">
-                <div className="bg-white/90 backdrop-blur-sm p-6 rounded-lg max-w-md text-center">
-                  <h3 className="text-xl font-bold text-green-800 mb-2">
+              <div className="absolute top-2 left-2  flex items-center justify-center ">
+                <div className="bg-white/90 backdrop-blur-sm px-1 pt-1  rounded-md max-w-md text-center">
+                  <h3 className="text-sm font-bold text-green-800 mb-2">
                     Our Coverage Area
                   </h3>
-                  <p className="text-gray-700">
+                  {/* <p className="text-gray-700 text-xs">
                     We operate across all states in the North Eastern Hilly
                     Region, promoting millet cultivation and consumption.
-                  </p>
+                  </p> */}
                 </div>
               </div>
             </motion.div>
@@ -270,7 +281,7 @@ export default function ContactPage() {
       </section>
 
       {/* Key Contacts */}
-      <section className="py-16 bg-green-50">
+      {/* <section className="py-16 bg-gradient-to-b from-green-0 to-green-100 px-20">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -293,10 +304,10 @@ export default function ContactPage() {
             ))}
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* Office Locations */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-white px-20">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -403,7 +414,7 @@ export default function ContactPage() {
       </section>
 
       {/* Funding Agencies */}
-      <section className="py-16 bg-green-50">
+      <section className="py-16 bg-green-50 px-20">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -687,70 +698,70 @@ function SocialButton({ icon }: { icon: string }) {
 }
 
 // Contact Card Component
-function ContactCard({
-  contact,
-  index
-}: {
-  contact: (typeof keyContacts)[0];
-  index: number;
-}) {
-  const cardRef = useRef(null);
-  const isInView = useInView(cardRef, { once: true, amount: 0.3 });
+// function ContactCard({
+//   contact,
+//   index
+// }: {
+//   contact: (typeof keyContacts)[0];
+//   index: number;
+// }) {
+//   const cardRef = useRef(null);
+//   const isInView = useInView(cardRef, { once: true, amount: 0.3 });
 
-  return (
-    <motion.div
-      ref={cardRef}
-      initial={{ opacity: 0, y: 20 }}
-      animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.5, delay: index * 0.1 }}
-    >
-      <Card className="overflow-hidden transition-all duration-300 hover:shadow-lg">
-        <CardContent className="p-0">
-          <div className="relative h-48 w-full">
-            <img
-              src={contact.image || "/placeholder.svg"}
-              alt={contact.name}
-              className="object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-green-900/80 to-transparent flex items-end">
-              <div className="p-4 text-white">
-                <h3 className="text-lg font-bold">{contact.name}</h3>
-                <p className="text-green-100">{contact.position}</p>
-              </div>
-            </div>
-          </div>
+//   return (
+//     <motion.div
+//       ref={cardRef}
+//       initial={{ opacity: 0, y: 20 }}
+//       animate={isInView ? { opacity: 1, y: 0 } : {}}
+//       transition={{ duration: 0.5, delay: index * 0.1 }}
+//     >
+//       <Card className="overflow-hidden transition-all duration-300 hover:shadow-lg">
+//         <CardContent className="p-0">
+//           <div className="relative h-48 w-full">
+//             <img
+//               src={contact.image || "/placeholder.svg"}
+//               alt={contact.name}
+//               className="object-cover"
+//             />
+//             <div className="absolute inset-0 bg-gradient-to-t from-green-900/80 to-transparent flex items-end">
+//               <div className="p-4 text-white">
+//                 <h3 className="text-lg font-bold">{contact.name}</h3>
+//                 <p className="text-green-100">{contact.position}</p>
+//               </div>
+//             </div>
+//           </div>
 
-          <div className="p-4 space-y-3">
-            <div className="flex items-center">
-              <Mail className="h-5 w-5 text-green-600 mr-2" />
-              <a
-                href={`mailto:${contact.email}`}
-                className="text-green-600 hover:text-green-800 transition-colors"
-              >
-                {contact.email}
-              </a>
-            </div>
+//           <div className="p-4 space-y-3">
+//             <div className="flex items-center">
+//               <Mail className="h-5 w-5 text-green-600 mr-2" />
+//               <a
+//                 href={`mailto:${contact.email}`}
+//                 className="text-green-600 hover:text-green-800 transition-colors"
+//               >
+//                 {contact.email}
+//               </a>
+//             </div>
 
-            <div className="flex items-center">
-              <Phone className="h-5 w-5 text-green-600 mr-2" />
-              <a
-                href={`tel:${contact.phone}`}
-                className="text-green-600 hover:text-green-800 transition-colors"
-              >
-                {contact.phone}
-              </a>
-            </div>
+//             <div className="flex items-center">
+//               <Phone className="h-5 w-5 text-green-600 mr-2" />
+//               <a
+//                 href={`tel:${contact.phone}`}
+//                 className="text-green-600 hover:text-green-800 transition-colors"
+//               >
+//                 {contact.phone}
+//               </a>
+//             </div>
 
-            <div className="flex items-center">
-              <MapPin className="h-5 w-5 text-green-600 mr-2" />
-              <span className="text-gray-600">{contact.location}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
-}
+//             <div className="flex items-center">
+//               <MapPin className="h-5 w-5 text-green-600 mr-2" />
+//               <span className="text-gray-600">{contact.location}</span>
+//             </div>
+//           </div>
+//         </CardContent>
+//       </Card>
+//     </motion.div>
+//   );
+// }
 
 // Funding Agency Card Component
 function FundingAgencyCard({
