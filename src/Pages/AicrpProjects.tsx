@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 // This is a placeholder for AICRP NEH projects
@@ -172,14 +171,16 @@ export default function AICRPProjectsPage() {
               defaultValue="All"
               value={selectedLocation}
               onValueChange={setSelectedLocation}
-              className="mx-auto max-w-3xl"
+              className="mx-auto max-w-3xl  grid place-content-center"
             >
-              <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 bg-green-800/80 backdrop-blur-sm">
+              <TabsList
+                className={`grid w-fit grid-cols-2  md:grid-cols-${locations.length} bg-green-800/80 backdrop-blur-sm`}
+              >
                 {locations.map(location =>
                   <TabsTrigger
                     key={location}
                     value={location}
-                    className="data-[state=active]:bg-green-100 data-[state=active]:text-green-900 text-white font-medium"
+                    className="data-[state=active]:bg-green-100 cursor-pointer data-[state=active]:text-green-900 text-white font-medium"
                   >
                     {location}
                   </TabsTrigger>
@@ -188,10 +189,23 @@ export default function AICRPProjectsPage() {
             </Tabs>
           </motion.div>
         </div>
+        <div className="absolute bottom-0 left-0 right-0">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 1440 65"
+            className="w-full"
+          >
+            <path
+              fill="#ffffff"
+              fillOpacity="1"
+              d="M0,64L60,58.7C120,53,240,43,360,48C480,53,600,75,720,80C840,85,960,75,1080,64C1200,53,1320,43,1380,37.3L1440,32L1440,100L1380,100C1320,100,1200,100,1080,100C960,100,840,100,720,100C600,100,480,100,360,100C240,100,120,100,60,100L0,100Z"
+            />
+          </svg>
+        </div>
       </section>
 
       {/* Projects Section */}
-      <section className="py-16">
+      <section className="py-16 px-20">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0 }}
@@ -213,6 +227,7 @@ export default function AICRPProjectsPage() {
                     project={project}
                     isExpanded={expandedProject === project.id}
                     onToggle={() => toggleProject(project.id)}
+                    index={index}
                   />
                 </motion.div>
               )}
@@ -250,48 +265,59 @@ interface ProjectCardProps {
   project: (typeof projects)[0];
   isExpanded: boolean;
   onToggle: () => void;
+  index: number;
 }
 
-function ProjectCard({ project, isExpanded, onToggle }: ProjectCardProps) {
+function ProjectCard({
+  project,
+  isExpanded,
+  onToggle,
+  index
+}: ProjectCardProps) {
   return (
-    <Card className="overflow-hidden transition-all duration-300 hover:shadow-lg">
-      <CardContent className="p-6">
-        <div className="flex flex-col h-full">
+    <motion.div
+      className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-md"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: index * 0.1 }}
+    >
+      <div className="flex w-full items-start justify-between p-6 text-left hover:bg-gray-50 transition-colors">
+        <div className="flex-1">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-xl font-bold text-green-800">
               {project.title}
             </h2>
-            <Badge className="bg-zinc-800 hover:bg-zinc-900 text-white">
+            <Badge className="bg-green-600 hover:bg-green-700 text-white ml-2">
               {project.location}
             </Badge>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 my-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
             <div className="flex items-center">
-              <Calendar className="h-5 w-5 text-green-600 mr-2" />
+              <Calendar className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
               <span className="text-sm text-gray-600">
                 Year: {project.year}
               </span>
             </div>
             <div className="flex items-center">
-              <Coins className="h-5 w-5 text-green-600 mr-2" />
+              <Coins className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
               <span className="text-sm text-gray-600">
                 Budget: {project.budget}
               </span>
             </div>
-            <div className="flex items-center col-span-2">
-              <MapPin className="h-5 w-5 text-green-600 mr-2" />
-              <span className="text-sm text-gray-600">
+            <div className="flex items-center">
+              <MapPin className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
+              <span className="text-sm text-gray-600 truncate">
                 Centre: {project.centre}
               </span>
             </div>
           </div>
 
-          <div className="mt-auto">
+          <div className="mt-4">
             <Button
               onClick={onToggle}
               variant="ghost"
-              className="w-full justify-between text-green-800 hover:bg-green-50 hover:text-green-900 group"
+              className="w-full justify-between text-green-800 border cursor-pointer hover:bg-green-50 hover:text-green-900 group"
             >
               <span>
                 View {isExpanded ? "Less" : "Details"}
@@ -304,94 +330,93 @@ function ProjectCard({ project, isExpanded, onToggle }: ProjectCardProps) {
             </Button>
           </div>
         </div>
+      </div>
 
-        <AnimatePresence>
-          {isExpanded &&
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="overflow-hidden"
-            >
-              <div className="border-t border-zinc-100 pt-6 mt-2">
-                <div className="grid gap-8 md:grid-cols-2">
-                  <div>
-                    <h3 className="flex items-center text-lg font-semibold text-green-800 mb-4">
-                      <Target className="h-5 w-5 mr-2" />
-                      Objectives
-                    </h3>
-                    <ul className="list-disc pl-5 space-y-2 text-zinc-700">
-                      {project.objectives.map((objective, index) =>
-                        <motion.li
-                          key={index}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.3, delay: index * 0.1 }}
-                        >
-                          {objective}
-                        </motion.li>
-                      )}
-                    </ul>
+      <AnimatePresence>
+        {isExpanded &&
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className=" border-gray-200 bg-gray-50 p-6">
+              <div className="grid gap-8 md:grid-cols-2">
+                <div>
+                  <h3 className="flex items-center text-lg font-semibold text-green-800 mb-4">
+                    <Target className="h-5 w-5 mr-2" />
+                    Objectives
+                  </h3>
+                  <ul className="list-disc pl-5 space-y-2 text-zinc-700">
+                    {project.objectives.map((objective, index) =>
+                      <motion.li
+                        key={index}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.1 }}
+                      >
+                        {objective}
+                      </motion.li>
+                    )}
+                  </ul>
 
-                    <h3 className="flex items-center text-lg font-semibold text-green-800 mt-6 mb-4">
-                      <Users className="h-5 w-5 mr-2" />
-                      Project Team
-                    </h3>
-                    <p className="font-medium text-zinc-800">
-                      Project Director: {project.director}
-                    </p>
-                    <p className="mt-2 font-medium text-zinc-800">
-                      Co-Project Directors:
-                    </p>
-                    <ul className="list-disc pl-5 space-y-1 text-zinc-700">
-                      {project.coDirectors.map((director, index) =>
-                        <motion.li
-                          key={index}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{
-                            duration: 0.3,
-                            delay: 0.3 + index * 0.1
-                          }}
-                        >
-                          {director}
-                        </motion.li>
-                      )}
-                    </ul>
-                  </div>
+                  <h3 className="flex items-center text-lg font-semibold text-green-800 mt-6 mb-4">
+                    <Users className="h-5 w-5 mr-2" />
+                    Project Team
+                  </h3>
+                  <p className="font-medium text-zinc-800">
+                    Project Director: {project.director}
+                  </p>
+                  <p className="mt-2 font-medium text-zinc-800">
+                    Co-Project Directors:
+                  </p>
+                  <ul className="list-disc pl-5 space-y-1 text-zinc-700">
+                    {project.coDirectors.map((director, index) =>
+                      <motion.li
+                        key={index}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{
+                          duration: 0.3,
+                          delay: 0.3 + index * 0.1
+                        }}
+                      >
+                        {director}
+                      </motion.li>
+                    )}
+                  </ul>
+                </div>
 
-                  <div>
-                    <h3 className="flex items-center text-lg font-semibold text-green-800 mb-4">
-                      <Award className="h-5 w-5 mr-2" />
-                      Salient Achievements
-                    </h3>
-                    {project.achievements.length > 0
-                      ? <ul className="list-disc pl-5 space-y-2 text-zinc-700">
-                          {project.achievements.map((achievement, index) =>
-                            <motion.li
-                              key={index}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{
-                                duration: 0.3,
-                                delay: 0.6 + index * 0.1
-                              }}
-                            >
-                              {achievement}
-                            </motion.li>
-                          )}
-                        </ul>
-                      : <p className="text-zinc-500 italic">
-                          Project is in progress. Achievements will be updated
-                          soon.
-                        </p>}
-                  </div>
+                <div>
+                  <h3 className="flex items-center text-lg font-semibold text-green-800 mb-4">
+                    <Award className="h-5 w-5 mr-2" />
+                    Salient Achievements
+                  </h3>
+                  {project.achievements.length > 0
+                    ? <ul className="list-disc pl-5 space-y-2 text-zinc-700">
+                        {project.achievements.map((achievement, index) =>
+                          <motion.li
+                            key={index}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{
+                              duration: 0.3,
+                              delay: 0.6 + index * 0.1
+                            }}
+                          >
+                            {achievement}
+                          </motion.li>
+                        )}
+                      </ul>
+                    : <p className="text-zinc-500 italic">
+                        Project is in progress. Achievements will be updated
+                        soon.
+                      </p>}
                 </div>
               </div>
-            </motion.div>}
-        </AnimatePresence>
-      </CardContent>
-    </Card>
+            </div>
+          </motion.div>}
+      </AnimatePresence>
+    </motion.div>
   );
 }
