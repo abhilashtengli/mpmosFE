@@ -143,7 +143,7 @@ const projects = [
 // Get unique locations
 const locations = [
   "All",
-  ...Array.from(new Set(projects.map(project => project.location)))
+  ...Array.from(new Set(projects.map((project) => project.location)))
 ];
 
 export default function NEHProjectsPage() {
@@ -151,20 +151,17 @@ export default function NEHProjectsPage() {
   const [filteredProjects, setFilteredProjects] = useState(projects);
   const [expandedProject, setExpandedProject] = useState<number | null>(null);
 
-  useEffect(
-    () => {
-      if (selectedLocation === "All") {
-        setFilteredProjects(projects);
-      } else {
-        setFilteredProjects(
-          projects.filter(project => project.location === selectedLocation)
-        );
-      }
-      // Reset expanded project when changing location
-      setExpandedProject(null);
-    },
-    [selectedLocation]
-  );
+  useEffect(() => {
+    if (selectedLocation === "All") {
+      setFilteredProjects(projects);
+    } else {
+      setFilteredProjects(
+        projects.filter((project) => project.location === selectedLocation)
+      );
+    }
+    // Reset expanded project when changing location
+    setExpandedProject(null);
+  }, [selectedLocation]);
 
   const toggleProject = (id: number) => {
     setExpandedProject(expandedProject === id ? null : id);
@@ -210,7 +207,7 @@ export default function NEHProjectsPage() {
               <TabsList
                 className={`grid w-full grid-cols-2 md:grid-cols-${locations.length} bg-green-800/80 backdrop-blur-sm`}
               >
-                {locations.map(location =>
+                {locations.map((location) => (
                   <TabsTrigger
                     key={location}
                     value={location}
@@ -218,7 +215,7 @@ export default function NEHProjectsPage() {
                   >
                     {location}
                   </TabsTrigger>
-                )}
+                ))}
               </TabsList>
             </Tabs>
           </motion.div>
@@ -248,7 +245,7 @@ export default function NEHProjectsPage() {
             className="grid gap-8"
           >
             <AnimatePresence>
-              {filteredProjects.map((project, index) =>
+              {filteredProjects.map((project, index) => (
                 <motion.div
                   key={project.id}
                   initial={{ opacity: 0, y: 50 }}
@@ -264,10 +261,10 @@ export default function NEHProjectsPage() {
                     index={index}
                   />
                 </motion.div>
-              )}
+              ))}
             </AnimatePresence>
 
-            {filteredProjects.length === 0 &&
+            {filteredProjects.length === 0 && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -276,7 +273,8 @@ export default function NEHProjectsPage() {
                 <p className="text-xl text-zinc-500">
                   No projects found for this location.
                 </p>
-              </motion.div>}
+              </motion.div>
+            )}
           </motion.div>
         </div>
       </section>
@@ -353,13 +351,11 @@ function ProjectCard({
               variant="ghost"
               className="w-full justify-between text-green-800 border cursor-pointer hover:bg-green-50 hover:text-green-900 group"
             >
-              <span>
-                View {isExpanded ? "Less" : "Details"}
-              </span>
+              <span>View {isExpanded ? "Less" : "Details"}</span>
               <ChevronDown
-                className={`h-5 w-5 transition-transform duration-300 ${isExpanded
-                  ? "rotate-180"
-                  : ""}`}
+                className={`h-5 w-5 transition-transform duration-300 ${
+                  isExpanded ? "rotate-180" : ""
+                }`}
               />
             </Button>
           </div>
@@ -367,7 +363,7 @@ function ProjectCard({
       </div>
 
       <AnimatePresence>
-        {isExpanded &&
+        {isExpanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -382,7 +378,7 @@ function ProjectCard({
                     Objectives
                   </h3>
                   <ul className="list-disc pl-5 space-y-2 text-zinc-700">
-                    {project.objectives.map((objective, index) =>
+                    {project.objectives.map((objective, index) => (
                       <motion.li
                         key={index}
                         initial={{ opacity: 0, x: -20 }}
@@ -391,7 +387,7 @@ function ProjectCard({
                       >
                         {objective}
                       </motion.li>
-                    )}
+                    ))}
                   </ul>
 
                   <h3 className="flex items-center text-lg font-semibold text-green-800 mt-6 mb-4">
@@ -405,7 +401,7 @@ function ProjectCard({
                     Co-Project Directors:
                   </p>
                   <ul className="list-disc pl-5 space-y-1 text-zinc-700">
-                    {project.coDirectors.map((director, index) =>
+                    {project.coDirectors.map((director, index) => (
                       <motion.li
                         key={index}
                         initial={{ opacity: 0, x: -20 }}
@@ -417,7 +413,7 @@ function ProjectCard({
                       >
                         {director}
                       </motion.li>
-                    )}
+                    ))}
                   </ul>
                 </div>
 
@@ -426,30 +422,32 @@ function ProjectCard({
                     <Award className="h-5 w-5 mr-2" />
                     Salient Achievements
                   </h3>
-                  {project.achievements.length > 0
-                    ? <ul className="list-disc pl-5 space-y-2 text-zinc-700">
-                        {project.achievements.map((achievement, index) =>
-                          <motion.li
-                            key={index}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{
-                              duration: 0.3,
-                              delay: 0.6 + index * 0.1
-                            }}
-                          >
-                            {achievement}
-                          </motion.li>
-                        )}
-                      </ul>
-                    : <p className="text-zinc-500 italic">
-                        Project is in progress. Achievements will be updated
-                        soon.
-                      </p>}
+                  {project.achievements.length > 0 ? (
+                    <ul className="list-disc pl-5 space-y-2 text-zinc-700">
+                      {project.achievements.map((achievement, index) => (
+                        <motion.li
+                          key={index}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{
+                            duration: 0.3,
+                            delay: 0.6 + index * 0.1
+                          }}
+                        >
+                          {achievement}
+                        </motion.li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-zinc-500 italic">
+                      Project is in progress. Achievements will be updated soon.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
-          </motion.div>}
+          </motion.div>
+        )}
       </AnimatePresence>
     </motion.div>
   );
