@@ -7,6 +7,17 @@ import GalleryPage from "./Pages/Gallery";
 import AboutPage from "./Pages/About";
 import AICRPProjectsPage from "./Pages/AicrpProjects";
 import AdminBody from "./Pages/admin/AdminBody";
+import ReportsAdPage from "./Pages/admin/reports";
+import GalleryAdPage from "./Pages/admin/Content/gallery";
+import ProjectsAdPage from "./Pages/admin/ProjectActivities/projects";
+import PublicationsAdPage from "./Pages/admin/Content/publications";
+import EventsAdPage from "./Pages/admin/Content/upcoming_events";
+import AwarenessAdPage from "./Pages/admin/ProjectActivities/awarness";
+import FLDAdPage from "./Pages/admin/ProjectActivities/fld";
+import InfrastructureAdPage from "./Pages/admin/ProjectActivities/infrastructure_dev";
+import InputDistributionAdPage from "./Pages/admin/ProjectActivities/input_distribution";
+import TrainingAdPage from "./Pages/admin/ProjectActivities/trainings";
+import DashboardAdPage from "./Pages/admin/dashboard";
 
 function App() {
   return (
@@ -26,18 +37,24 @@ function App() {
 
           {/* Admin Pages  */}
           <Route path="/admin" element={<AdminBody />}>
-            <Route path="dashboard" element={<AdminBody />} />
-            <Route path="reports" element={<AdminBody />} />
-            <Route path="gallery" element={<AdminBody />} />
-            <Route path="project_details" element={<AdminBody />} />
-            <Route path="publications" element={<AdminBody />} />
-            <Route path="upcoming_events" element={<AdminBody />} />
-            <Route path="awarness_programs" element={<AdminBody />} />
-            <Route path="fld" element={<AdminBody />} />
-            <Route path="infrastructure_development" element={<AdminBody />} />
-            <Route path="input_distribution" element={<AdminBody />} />
-            <Route path="projects" element={<AdminBody />} />
-            <Route path="trainings" element={<AdminBody />} />
+            <Route path="dashboard" element={<DashboardAdPage />} />
+            <Route path="reports" element={<ReportsAdPage />} />
+            <Route path="gallery" element={<GalleryAdPage />} />
+            <Route path="project_details" element={<ProjectsAdPage />} />
+            <Route path="publications" element={<PublicationsAdPage />} />
+            <Route path="upcoming_events" element={<EventsAdPage />} />
+            <Route path="awarness_programs" element={<AwarenessAdPage />} />
+            <Route path="fld" element={<FLDAdPage />} />
+            <Route
+              path="infrastructure_development"
+              element={<InfrastructureAdPage />}
+            />
+            <Route
+              path="input_distribution"
+              element={<InputDistributionAdPage />}
+            />
+            <Route path="projects" element={<ProjectsAdPage />} />
+            <Route path="trainings" element={<TrainingAdPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
