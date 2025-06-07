@@ -722,7 +722,7 @@ export default function TrainingAdPage() {
                       <TableCell className="text-sm">
                         {training.project}
                       </TableCell>
-                      <TableCell>
+                      <TableCell>b
                         <Badge variant="outline">{training.quarter}</Badge>
                       </TableCell>
                       <TableCell className="text-sm">
