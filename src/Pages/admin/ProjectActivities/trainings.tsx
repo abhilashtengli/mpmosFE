@@ -1049,25 +1049,24 @@ function TrainingForm({
             <p className="text-red-500 text-sm mt-1">{formErrors.project}</p>
           )}
         </div>
-      </div>
-
-      <div>
-        <Label htmlFor="title">
-          Training Title <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="title"
-          name="title"
-          placeholder="Enter training title (max 255 characters)"
-          value={formData.title}
-          onChange={handleInputChange}
-          maxLength={255}
-          className={formErrors.title ? "border-red-500" : ""}
-          required
-        />
-        {formErrors.title && (
-          <p className="text-red-500 text-sm mt-1">{formErrors.title}</p>
-        )}
+        <div>
+          <Label htmlFor="title">
+            Training Title <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="title"
+            name="title"
+            placeholder="Enter training title (max 255 characters)"
+            value={formData.title}
+            onChange={handleInputChange}
+            maxLength={255}
+            className={formErrors.title ? "border-red-500" : ""}
+            required
+          />
+          {formErrors.title && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.title}</p>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -1112,9 +1111,6 @@ function TrainingForm({
             <p className="text-red-500 text-sm mt-1">{formErrors.units}</p>
           )}
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
         <div>
           <Label htmlFor="target">
             Target <span className="text-red-500">*</span>
@@ -1151,9 +1147,6 @@ function TrainingForm({
             <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
           )}
         </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
         <div>
           <Label htmlFor="district">
             District <span className="text-red-500">*</span>
@@ -1262,14 +1255,14 @@ function TrainingForm({
           value={formData.remarks}
           onChange={handleInputChange}
           maxLength={300}
-          className={formErrors.remarks ? "border-red-500" : ""}
+          className={formErrors.remarks ? "border-red-500 mt-2" : "mt-2"}
         />
         {formErrors.remarks && (
           <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div>
           <Label htmlFor="imageFile">Training Image</Label>
           <div className="space-y-2">

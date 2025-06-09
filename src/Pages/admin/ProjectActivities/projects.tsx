@@ -1,4 +1,3 @@
-import type React from "react";
 import { useEffect, useState } from "react";
 import {
   Card,
@@ -126,6 +125,7 @@ export default function ProjectsAdPage() {
 
   useEffect(() => {
     fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Filter projects based on search and filter criteria

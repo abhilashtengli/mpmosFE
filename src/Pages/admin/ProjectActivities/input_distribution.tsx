@@ -34,7 +34,23 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Package, Plus, Search, ImageIcon, Eye, Edit } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Package,
+  Plus,
+  Search,
+  ImageIcon,
+  Eye,
+  Edit,
+  X,
+  AlertCircle
+} from "lucide-react";
+import { toast } from "sonner";
+import {
+  createInputDistributionValidation,
+  updateInputDistributionValidation
+} from "@/lib/validations/input-distribution";
+import { z } from "zod";
 
 interface InputDistribution {
   id: string;
@@ -52,15 +68,37 @@ interface InputDistribution {
   units: string;
   remarks: string;
   status: string;
+  imageUrl?: string;
 }
 
 interface DistributionViewProps {
   distribution: InputDistribution;
 }
 
+interface InputDistributionFormData {
+  inputDistId: string;
+  activityType: string;
+  customActivityType: string;
+  name: string;
+  project: string;
+  quarter: string;
+  target: string;
+  achieved: string;
+  district: string;
+  village: string;
+  block: string;
+  units: string;
+  remarks: string;
+  imageFile: File | null;
+}
+
+interface FormErrors {
+  [key: string]: string;
+}
+
 interface InputDistributionFormProps {
   distribution?: InputDistribution;
-  onSave: (data: FormData) => void;
+  onSave: (data: InputDistributionFormData) => void;
   onClose: () => void;
   isEdit?: boolean;
 }
@@ -117,7 +155,7 @@ const inputDistributions: InputDistribution[] = [
   }
 ];
 
-export default function InputDistributionAdPage() {
+export default function InputDistributionPage() {
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState<boolean>(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
@@ -128,6 +166,7 @@ export default function InputDistributionAdPage() {
   const [selectedQuarter, setSelectedQuarter] = useState<string>("");
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
+  const [pageError, setPageError] = useState<string | null>(null);
 
   // Filter distributions based on search and filter criteria
   const filteredDistributions = inputDistributions.filter((distribution) => {
@@ -176,10 +215,22 @@ export default function InputDistributionAdPage() {
     setIsEditDialogOpen(true);
   };
 
-  const handleSave = (formData: FormData): void => {
-    console.log("Saving distribution:", formData);
-    setIsDialogOpen(false);
-    setIsEditDialogOpen(false);
+  const handleSave = (data: InputDistributionFormData): void => {
+    try {
+      setPageError(null);
+      console.log("Saving distribution:", data);
+      setIsDialogOpen(false);
+      setIsEditDialogOpen(false);
+      toast.success("Success", {
+        description: "Input distribution saved successfully."
+      });
+    } catch (error) {
+      console.error("Error saving distribution:", error);
+      setPageError("An error occurred while saving. Please try again.");
+      toast.error("Error", {
+        description: "Failed to save input distribution. Please try again."
+      });
+    }
   };
 
   return (
@@ -221,6 +272,13 @@ export default function InputDistributionAdPage() {
       </header>
 
       <div className="p-6">
+        {pageError && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{pageError}</AlertDescription>
+          </Alert>
+        )}
+
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-lg">Filters & Search</CardTitle>
@@ -387,11 +445,11 @@ export default function InputDistributionAdPage() {
                       <TableCell>{distribution.units}</TableCell>
                       <TableCell>
                         <Badge
-                          className={` ${
+                          variant={
                             distribution.status === "Completed"
-                              ? "bg-green-500 text-white"
+                              ? "default"
                               : "secondary"
-                          }`}
+                          }
                         >
                           {distribution.status}
                         </Badge>
@@ -476,11 +534,10 @@ function DistributionView({ distribution }: DistributionViewProps) {
         <div>
           <Label className="text-sm font-medium text-gray-500">Status</Label>
           <Badge
-            className={`mt-1 ${
-              distribution.status === "Completed"
-                ? "bg-green-500 text-white"
-                : "secondary"
-            }`}
+            variant={
+              distribution.status === "Completed" ? "default" : "secondary"
+            }
+            className="mt-1"
           >
             {distribution.status}
           </Badge>
@@ -560,6 +617,21 @@ function DistributionView({ distribution }: DistributionViewProps) {
           </p>
         </div>
       )}
+
+      {distribution.imageUrl && (
+        <div>
+          <Label className="text-sm font-medium text-gray-500">
+            Distribution Image
+          </Label>
+          <div className="mt-2">
+            <img
+              src={distribution.imageUrl || "/placeholder.svg"}
+              alt="Distribution"
+              className="max-w-full h-auto rounded-md border"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -570,233 +642,520 @@ function InputDistributionForm({
   onClose,
   isEdit = false
 }: InputDistributionFormProps) {
-  const [selectedActivityType, setSelectedActivityType] = useState<string>(
-    distribution?.activityType || ""
-  );
-  const [showCustomInput, setShowCustomInput] = useState<boolean>(
-    distribution?.activityType === "Other"
+  const [formData, setFormData] = useState<InputDistributionFormData>({
+    inputDistId: distribution?.inputDistId || "",
+    activityType: distribution?.activityType || "",
+    customActivityType: distribution?.customActivityType || "",
+    name: distribution?.name || "",
+    project: distribution?.project || "",
+    quarter: distribution?.quarter || "",
+    target: distribution?.target?.toString() || "",
+    achieved: distribution?.achieved?.toString() || "",
+    district: distribution?.district || "",
+    village: distribution?.village || "",
+    block: distribution?.block || "",
+    units: distribution?.units || "",
+    remarks: distribution?.remarks || "",
+    imageFile: null
+  });
+
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(
+    distribution?.imageUrl || null
   );
 
-  const handleActivityTypeChange = (value: string): void => {
-    setSelectedActivityType(value);
-    setShowCustomInput(value === "Other");
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ): void => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Clear error for this field
+    if (formErrors[name]) {
+      setFormErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
+  const handleSelectChange = (name: string, value: string): void => {
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Clear error for this field
+    if (formErrors[name]) {
+      setFormErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = e.target.files?.[0] || null;
+
+    if (!file) return;
+
+    // Validate file size (20MB max)
+    if (file.size > 20 * 1024 * 1024) {
+      setFormErrors((prev) => ({
+        ...prev,
+        imageFile: "File size must be less than 20MB"
+      }));
+      return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      setFormErrors((prev) => ({
+        ...prev,
+        imageFile: "Please select a valid image file"
+      }));
+      return;
+    }
+
+    setFormData((prev) => ({ ...prev, imageFile: file }));
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImagePreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Clear error for this field
+    if (formErrors.imageFile) {
+      setFormErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors.imageFile;
+        return newErrors;
+      });
+    }
+
+    toast.success("Image selected", {
+      description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`
+    });
+  };
+
+  const removeImage = (): void => {
+    setFormData((prev) => ({ ...prev, imageFile: null }));
+    setImagePreview(null);
+  };
+
+  const validateForm = (): boolean => {
+    try {
+      const dataToValidate = {
+        projectId: "550e8400-e29b-41d4-a716-446655440000", // Mock project ID
+        quarterId: "550e8400-e29b-41d4-a716-446655440001", // Mock quarter ID
+        activityType: formData.activityType,
+        customActivityType: formData.customActivityType,
+        name: formData.name,
+        target: Number.parseInt(formData.target) || 0,
+        achieved: Number.parseInt(formData.achieved) || 0,
+        district: formData.district,
+        village: formData.village,
+        block: formData.block,
+        units: formData.units,
+        remarks: formData.remarks,
+        imageUrl: formData.imageFile ? "https://example.com/image.jpg" : null,
+        imageKey: formData.imageFile ? `input-distribution-${Date.now()}` : null
+      };
+
+      if (isEdit) {
+        updateInputDistributionValidation.parse(dataToValidate);
+      } else {
+        createInputDistributionValidation.parse(dataToValidate);
+      }
+
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const newErrors: FormErrors = {};
+        error.errors.forEach((err) => {
+          const path = err.path[0].toString();
+          newErrors[path] = err.message;
+        });
+        setFormErrors(newErrors);
+      }
+      return false;
+    }
+  };
+
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ): Promise<void> => {
     e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
-    onSave(formData);
+
+    if (!validateForm()) {
+      toast.error("Validation Error", {
+        description: "Please fix the errors in the form before submitting."
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFormError(null);
+
+    try {
+      // Simulate file upload delay
+      if (formData.imageFile) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      onSave(formData);
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      setFormError("An error occurred while saving. Please try again.");
+      toast.error("Error", {
+        description: "Failed to save input distribution. Please try again."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="inputDistId">Distribution ID</Label>
-          <Input
-            id="inputDistId"
-            name="inputDistId"
-            placeholder="IND-2024-XXX"
-            defaultValue={distribution?.inputDistId || ""}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="activityType">Activity Type</Label>
-          <Select
-            value={selectedActivityType}
-            onValueChange={handleActivityTypeChange}
-            name="activityType"
-            required
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select activity type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Seed Distribution">
-                Seed Distribution
-              </SelectItem>
-              <SelectItem value="Fertilizers">Fertilizers</SelectItem>
-              <SelectItem value="Pesticides">Pesticides</SelectItem>
-              <SelectItem value="Planting Materials">
-                Planting Materials
-              </SelectItem>
-              <SelectItem value="Other">Other</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Conditional Custom Activity Type Input */}
-      {showCustomInput && (
-        <div>
-          <Label htmlFor="customActivityType">Custom Activity Type</Label>
-          <Input
-            id="customActivityType"
-            name="customActivityType"
-            placeholder="Enter custom activity type"
-            defaultValue={distribution?.customActivityType || ""}
-            required={selectedActivityType === "Other"}
-          />
-        </div>
+    <div className="space-y-4">
+      {formError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{formError}</AlertDescription>
+        </Alert>
       )}
 
-      <div>
-        <Label htmlFor="name">Name/Description</Label>
-        <Input
-          id="name"
-          name="name"
-          placeholder="Enter distribution name (max 200 characters)"
-          maxLength={200}
-          defaultValue={distribution?.name || ""}
-          required
-        />
-      </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 gap-4">
+          <div>
+            <Label>
+              Project <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              value={formData.project}
+              onValueChange={(value) => handleSelectChange("project", value)}
+            >
+              <SelectTrigger
+                className={formErrors.project ? "border-red-500" : ""}
+              >
+                <SelectValue placeholder="Select project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Crop Improvement Program">
+                  Crop Improvement Program
+                </SelectItem>
+                <SelectItem value="Sustainable Agriculture Initiative">
+                  Sustainable Agriculture Initiative
+                </SelectItem>
+                <SelectItem value="Organic Farming Initiative">
+                  Organic Farming Initiative
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {formErrors.project && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.project}</p>
+            )}
+          </div>
+          <div>
+            <Label htmlFor="name">
+              Name/Description <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="name"
+              name="name"
+              placeholder="Enter distribution name"
+              value={formData.name}
+              onChange={handleInputChange}
+              maxLength={200}
+              className={formErrors.name ? "border-red-500" : ""}
+              required
+            />
+            {formErrors.name && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
+            )}
+          </div>
+        </div>
 
-      <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>
+              Quarter <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              value={formData.quarter}
+              onValueChange={(value) => handleSelectChange("quarter", value)}
+            >
+              <SelectTrigger
+                className={formErrors.quarter ? "border-red-500" : ""}
+              >
+                <SelectValue placeholder="Select quarter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Q1 2024">Q1 2024</SelectItem>
+                <SelectItem value="Q2 2024">Q2 2024</SelectItem>
+                <SelectItem value="Q3 2024">Q3 2024</SelectItem>
+                <SelectItem value="Q4 2024">Q4 2024</SelectItem>
+              </SelectContent>
+            </Select>
+            {formErrors.quarter && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.quarter}</p>
+            )}
+          </div>
+          <div>
+            <Label>
+              Activity Type <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              value={formData.activityType}
+              onValueChange={(value) =>
+                handleSelectChange("activityType", value)
+              }
+            >
+              <SelectTrigger
+                className={formErrors.activityType ? "border-red-500" : ""}
+              >
+                <SelectValue placeholder="Select activity type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Seed Distribution">
+                  Seed Distribution
+                </SelectItem>
+                <SelectItem value="Fertilizers">Fertilizers</SelectItem>
+                <SelectItem value="Pesticides">Pesticides</SelectItem>
+                <SelectItem value="Planting Materials">
+                  Planting Materials
+                </SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+            {formErrors.activityType && (
+              <p className="text-red-500 text-sm mt-1">
+                {formErrors.activityType}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {formData.activityType === "Other" && (
+          <div>
+            <Label htmlFor="customActivityType">
+              Custom Activity Type <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="customActivityType"
+              name="customActivityType"
+              placeholder="Enter custom activity type"
+              value={formData.customActivityType}
+              onChange={handleInputChange}
+              className={formErrors.customActivityType ? "border-red-500" : ""}
+              required
+            />
+            {formErrors.customActivityType && (
+              <p className="text-red-500 text-sm mt-1">
+                {formErrors.customActivityType}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="target">
+              Target <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="target"
+              name="target"
+              type="number"
+              placeholder="Enter target"
+              value={formData.target}
+              onChange={handleInputChange}
+              className={formErrors.target ? "border-red-500" : ""}
+              required
+            />
+            {formErrors.target && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.target}</p>
+            )}
+          </div>
+          <div>
+            <Label htmlFor="achieved">
+              Achieved <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="achieved"
+              name="achieved"
+              type="number"
+              placeholder="Enter achieved"
+              value={formData.achieved}
+              onChange={handleInputChange}
+              className={formErrors.achieved ? "border-red-500" : ""}
+              required
+            />
+            {formErrors.achieved && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
+            )}
+          </div>
+          <div>
+            <Label htmlFor="units">
+              Units <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="units"
+              name="units"
+              placeholder="kg, bags, packets"
+              value={formData.units}
+              onChange={handleInputChange}
+              maxLength={20}
+              className={formErrors.units ? "border-red-500" : ""}
+              required
+            />
+            {formErrors.units && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.units}</p>
+            )}
+          </div>
+          <div>
+            <Label htmlFor="district">
+              District <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="district"
+              name="district"
+              placeholder="District name"
+              value={formData.district}
+              onChange={handleInputChange}
+              maxLength={100}
+              className={formErrors.district ? "border-red-500" : ""}
+              required
+            />
+            {formErrors.district && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.district}</p>
+            )}
+          </div>
+          <div>
+            <Label htmlFor="village">
+              Village <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="village"
+              name="village"
+              placeholder="Village name"
+              value={formData.village}
+              onChange={handleInputChange}
+              maxLength={100}
+              className={formErrors.village ? "border-red-500" : ""}
+              required
+            />
+            {formErrors.village && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.village}</p>
+            )}
+          </div>
+          <div>
+            <Label htmlFor="block">
+              Block <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="block"
+              name="block"
+              placeholder="Block name"
+              value={formData.block}
+              onChange={handleInputChange}
+              maxLength={100}
+              className={formErrors.block ? "border-red-500" : ""}
+              required
+            />
+            {formErrors.block && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.block}</p>
+            )}
+          </div>
+        </div>
+
         <div>
-          <Label htmlFor="project">Project</Label>
-          <Select
-            name="project"
-            defaultValue={distribution?.project || ""}
-            required
+          <Label htmlFor="remarks">Remarks</Label>
+          <Textarea
+            id="remarks"
+            name="remarks"
+            placeholder="Additional remarks (max 300 characters)"
+            value={formData.remarks}
+            onChange={handleInputChange}
+            maxLength={300}
+            className={` mt-2 ${formErrors.remarks ? "border-red-500" : ""}`}
+          />
+          {formErrors.remarks && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
+          )}
+        </div>
+
+        <div>
+          <Label htmlFor="imageFile">Distribution Image</Label>
+          <div className="space-y-2 mt-2">
+            {imagePreview ? (
+              <div className="relative">
+                <img
+                  src={imagePreview || "/placeholder.svg"}
+                  alt="Preview"
+                  className="max-w-full h-48 object-cover rounded-md border"
+                />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="absolute top-2 right-2"
+                  onClick={removeImage}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="border-2 border-dashed border-gray-300 rounded-md p-6 text-center">
+                <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
+                <div className="mt-2">
+                  <Label htmlFor="imageFile" className="cursor-pointer">
+                    <span className="mt-2 block text-sm font-medium text-gray-900">
+                      Upload an image
+                    </span>
+                  </Label>
+                  <Input
+                    id="imageFile"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+            )}
+            {formErrors.imageFile ? (
+              <p className="text-red-500 text-sm">{formErrors.imageFile}</p>
+            ) : (
+              <p className="text-sm text-gray-500">Max file size: 20MB</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-2 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isSubmitting}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Select project" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Crop Improvement Program">
-                Crop Improvement Program
-              </SelectItem>
-              <SelectItem value="Sustainable Agriculture Initiative">
-                Sustainable Agriculture Initiative
-              </SelectItem>
-              <SelectItem value="Organic Farming Initiative">
-                Organic Farming Initiative
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="quarter">Quarter</Label>
-          <Select
-            name="quarter"
-            defaultValue={distribution?.quarter || ""}
-            required
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            className="bg-green-600 hover:bg-green-700"
+            disabled={isSubmitting}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Select quarter" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Q1 2024">Q1 2024</SelectItem>
-              <SelectItem value="Q2 2024">Q2 2024</SelectItem>
-              <SelectItem value="Q3 2024">Q3 2024</SelectItem>
-              <SelectItem value="Q4 2024">Q4 2024</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <Label htmlFor="target">Target</Label>
-          <Input
-            id="target"
-            name="target"
-            type="number"
-            placeholder="Enter target"
-            defaultValue={distribution?.target || ""}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="achieved">Achieved</Label>
-          <Input
-            id="achieved"
-            name="achieved"
-            type="number"
-            placeholder="Enter achieved"
-            defaultValue={distribution?.achieved || ""}
-          />
-        </div>
-        <div>
-          <Label htmlFor="units">Units</Label>
-          <Input
-            id="units"
-            name="units"
-            placeholder="kg, bags, packets"
-            maxLength={20}
-            defaultValue={distribution?.units || ""}
-            required
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <Label htmlFor="district">District</Label>
-          <Input
-            id="district"
-            name="district"
-            placeholder="District name"
-            maxLength={100}
-            defaultValue={distribution?.district || ""}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="village">Village</Label>
-          <Input
-            id="village"
-            name="village"
-            placeholder="Village name"
-            maxLength={100}
-            defaultValue={distribution?.village || ""}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="block">Block</Label>
-          <Input
-            id="block"
-            name="block"
-            placeholder="Block name"
-            maxLength={100}
-            defaultValue={distribution?.block || ""}
-            required
-          />
-        </div>
-      </div>
-
-      <div>
-        <Label htmlFor="remarks">Remarks</Label>
-        <Textarea
-          id="remarks"
-          name="remarks"
-          placeholder="Additional remarks (max 300 characters)"
-          maxLength={300}
-          defaultValue={distribution?.remarks || ""}
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="image">Distribution Image</Label>
-        <div className="flex items-center space-x-2">
-          <Button type="button" variant="outline" size="sm">
-            <ImageIcon className="h-4 w-4 mr-2" />
-            Upload Image
+            {isSubmitting
+              ? "Saving..."
+              : isEdit
+              ? "Update Distribution"
+              : "Save Distribution"}
           </Button>
         </div>
-      </div>
-
-      <div className="flex justify-end space-x-2 pt-4">
-        <Button type="button" variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button type="submit" className="bg-green-600 hover:bg-green-700">
-          {isEdit ? "Update Distribution" : "Save Distribution"}
-        </Button>
-      </div>
-    </form>
+      </form>
+    </div>
   );
 }
