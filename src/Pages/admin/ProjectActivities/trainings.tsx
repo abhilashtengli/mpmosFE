@@ -47,7 +47,6 @@ import {
   Edit,
   Upload
 } from "lucide-react";
-
 // Base validation schema
 const baseTrainingSchema = z.object({
   trainingId: z

@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -35,6 +35,7 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { FileText, Plus, Search, Calendar, Eye, Edit } from "lucide-react";
+import { useProjectStore } from "@/stores/useProjectStore";
 
 // TypeScript interfaces
 interface Project {
@@ -44,7 +45,7 @@ interface Project {
   locationState: string;
   director: string;
   budget: number;
-  status: "Active" | "Completed" | "On Hold";
+  status: "Active" | "Completed";
   startDate: string;
   endDate: string;
   createdAt: string;
@@ -120,6 +121,12 @@ export default function ProjectsAdPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [selectedState, setSelectedState] = useState<string>("");
   const [selectedAgency, setSelectedAgency] = useState<string>("");
+  const { fetchProjects } = useProjectStore();
+  // const projects = useProjectStore((state) => state.projects);
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
 
   // Filter projects based on search and filter criteria
   const filteredProjects: Project[] = projects.filter((project: Project) => {

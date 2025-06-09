@@ -8,9 +8,10 @@ type Project = {
   locationState: string;
   director: string;
   budget: number;
-  status: string;
+  status: "Active" | "Completed";
   startDate: string;
   endDate: string;
+  createdAt: string;
 };
 
 type ProjectStore = {
