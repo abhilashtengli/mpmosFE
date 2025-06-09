@@ -18,8 +18,24 @@ import InfrastructureAdPage from "./Pages/admin/ProjectActivities/infrastructure
 import InputDistributionAdPage from "./Pages/admin/ProjectActivities/input_distribution";
 import TrainingAdPage from "./Pages/admin/ProjectActivities/trainings";
 import DashboardAdPage from "./Pages/admin/dashboard";
+import { useProjectStore } from "./stores/useProjectStore";
+import { useEffect } from "react";
+import { useAuthStore } from "./stores/useAuthStore";
 
 function App() {
+  const { fetchProjects } = useProjectStore();
+  const { user, fetchUser } = useAuthStore();
+
+  useEffect(() => {
+    if (!user) {
+      fetchUser();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
   return (
     <>
       <BrowserRouter>
