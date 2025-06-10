@@ -33,7 +33,7 @@ function App() {
     if (isAuthenticated) {
       fetchUser();
     }
-  }, []);
+  }, [fetchUser, isAuthenticated]);
 
   return (
     <>

@@ -153,6 +153,13 @@ export default function ProjectsAdPage() {
     return matchesSearch && matchesStatus && matchesState && matchesAgency;
   });
 
+  const uniqueAgencies = Array.from(
+    new Set(projects.map((project) => project.implementingAgency))
+  );
+  const uniqueStates = Array.from(
+    new Set(projects.map((project) => project.locationState))
+  );
+
   const handleView = (project: Project): void => {
     setSelectedProject(project);
     setIsViewDialogOpen(true);
@@ -220,7 +227,7 @@ export default function ProjectsAdPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-4.5 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="Search projects..."
                   value={searchTerm}
@@ -243,11 +250,14 @@ export default function ProjectsAdPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select State" />
                 </SelectTrigger>
+
                 <SelectContent>
                   <SelectItem value="all">All States</SelectItem>
-                  <SelectItem value="Assam">Assam</SelectItem>
-                  <SelectItem value="West Bengal">West Bengal</SelectItem>
-                  <SelectItem value="Odisha">Odisha</SelectItem>
+                  {uniqueStates.map((state) => (
+                    <SelectItem key={state} value={state}>
+                      {state}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select value={selectedAgency} onValueChange={setSelectedAgency}>
@@ -256,13 +266,11 @@ export default function ProjectsAdPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Agencies</SelectItem>
-                  <SelectItem value="ICAR-NRCB">ICAR-NRCB</SelectItem>
-                  <SelectItem value="State Agriculture Department">
-                    State Agriculture Department
-                  </SelectItem>
-                  <SelectItem value="Agricultural University">
-                    Agricultural University
-                  </SelectItem>
+                  {uniqueAgencies.map((agency) => (
+                    <SelectItem key={agency} value={agency}>
+                      {agency}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -322,7 +330,24 @@ export default function ProjectsAdPage() {
                         <div className="flex items-center space-x-1">
                           <Calendar className="h-3 w-3" />
                           <span>
-                            {project.startDate} to {project.endDate}
+                            {/* {project.startDate} to {project.endDate} */}
+                            {new Date(project.startDate).toLocaleDateString(
+                              "en-IN",
+                              {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric"
+                              }
+                            )}{" "}
+                            to{" "}
+                            {new Date(project.endDate).toLocaleDateString(
+                              "en-IN",
+                              {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric"
+                              }
+                            )}
                           </span>
                         </div>
                       </TableCell>
@@ -459,11 +484,23 @@ function ProjectView({ project }: ProjectViewProps) {
           <Label className="text-sm font-medium text-gray-500">
             Start Date
           </Label>
-          <p>{project.startDate}</p>
+          <p>
+            {new Date(project.startDate).toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric"
+            })}
+          </p>
         </div>
         <div>
           <Label className="text-sm font-medium text-gray-500">End Date</Label>
-          <p>{project.endDate}</p>
+          <p>
+            {new Date(project.endDate).toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric"
+            })}
+          </p>
         </div>
       </div>
 
