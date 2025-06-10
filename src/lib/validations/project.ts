@@ -33,7 +33,7 @@ export const createProjectValidation = z
       .max(9999999999.99, {
         message: "Budget exceeds the maximum allowed value"
       })
-      .transform(val => Number(val.toFixed(2)))
+      .transform((val) => Number(val.toFixed(2)))
       .optional()
       .nullable(),
     status: z.enum(["Active", "Completed"], {
@@ -43,19 +43,19 @@ export const createProjectValidation = z
     }),
     startDate: z
       .string()
-      .refine(date => !isNaN(Date.parse(date)), "Invalid date format")
-      .transform(date => new Date(date))
+      .refine((date) => !isNaN(Date.parse(date)), "Invalid date format")
+      .transform((date) => new Date(date))
       .optional()
       .nullable(),
     endDate: z
       .string()
-      .refine(date => !isNaN(Date.parse(date)), "Invalid date format")
-      .transform(date => new Date(date))
+      .refine((date) => !isNaN(Date.parse(date)), "Invalid date format")
+      .transform((date) => new Date(date))
       .optional()
       .nullable()
   })
   .refine(
-    data => {
+    (data) => {
       if (data.endDate && data.startDate && data.endDate < data.startDate) {
         return false;
       }
@@ -67,7 +67,7 @@ export const createProjectValidation = z
     }
   )
   .refine(
-    data => {
+    (data) => {
       if (data.status === "Completed" && !data.endDate) {
         return false;
       }
@@ -117,7 +117,7 @@ export const updateProjectValidation = z
       .max(9999999999.99, {
         message: "Budget exceeds the maximum allowed value"
       })
-      .transform(val => Number(val.toFixed(2)))
+      .transform((val) => Number(val.toFixed(2)))
       .optional()
       .nullable(),
     status: z
@@ -129,19 +129,19 @@ export const updateProjectValidation = z
       .optional(),
     startDate: z
       .string()
-      .refine(date => !isNaN(Date.parse(date)), "Invalid date format")
-      .transform(date => new Date(date))
+      .refine((date) => !isNaN(Date.parse(date)), "Invalid date format")
+      .transform((date) => new Date(date))
       .optional()
       .nullable(),
     endDate: z
       .string()
-      .refine(date => !isNaN(Date.parse(date)), "Invalid date format")
-      .transform(date => new Date(date))
+      .refine((date) => !isNaN(Date.parse(date)), "Invalid date format")
+      .transform((date) => new Date(date))
       .optional()
       .nullable()
   })
   .refine(
-    data => {
+    (data) => {
       if (data.endDate && data.startDate && data.endDate < data.startDate) {
         return false;
       }

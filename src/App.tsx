@@ -23,6 +23,7 @@ import ProtectedRoute from "./Pages/admin/auth/protectRoute";
 import { useSSEConnection } from "./hooks/useSSEConnection";
 import { useAuthStore } from "./stores/useAuthStore";
 import { useEffect } from "react";
+import { Toaster } from "sonner";
 
 function App() {
   const { isAuthenticated, fetchUser } = useAuthStore();
@@ -38,6 +39,7 @@ function App() {
   return (
     <>
       <BrowserRouter>
+        <Toaster position="top-right" richColors />
         <Routes>
           <Route path="/" element={<Body />}>
             <Route path="/" element={<Home />} />
