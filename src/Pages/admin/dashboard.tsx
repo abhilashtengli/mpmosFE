@@ -37,6 +37,8 @@ import {
   Target,
   Award
 } from "lucide-react";
+import { useProjectStore } from "@/stores/useProjectStore";
+import { useEffect } from "react";
 
 // Mock data for demonstration
 const summaryData = {
@@ -123,6 +125,11 @@ const getActivityIcon = (type: string) => {
 
 export default function DashboardAdPage() {
   //   const [selectedQuarter, setSelectedQuarter] = useState("Q2 2024");
+  const { fetchProjects } = useProjectStore();
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
 
   return (
     <div className="min-h-screen bg-gray-50">

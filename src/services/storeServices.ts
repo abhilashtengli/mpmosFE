@@ -3,9 +3,10 @@ import axios from "axios";
 
 export const fetchProjectsAPI = async () => {
   try {
-    const response = await axios.get(`${Base_Url}/ne/getAll`, {
+    const response = await axios.get(`${Base_Url}/get-user-projects`, {
       withCredentials: true
     });
+    console.log("RE : ", response.data);
     return response.data;
   } catch (error) {
     console.error("Failed to fetch projects:", error);

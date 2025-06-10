@@ -18,17 +18,23 @@ import InfrastructureAdPage from "./Pages/admin/ProjectActivities/infrastructure
 import InputDistributionAdPage from "./Pages/admin/ProjectActivities/input_distribution";
 import TrainingAdPage from "./Pages/admin/ProjectActivities/trainings";
 import DashboardAdPage from "./Pages/admin/dashboard";
-import { useProjectStore } from "./stores/useProjectStore";
-import { useEffect } from "react";
 import SigninPage from "./Pages/admin/auth/signin";
 import ProtectedRoute from "./Pages/admin/auth/protectRoute";
+import { useSSEConnection } from "./hooks/useSSEConnection";
+import { useAuthStore } from "./stores/useAuthStore";
+import { useEffect } from "react";
 
 function App() {
-  const { fetchProjects } = useProjectStore();
+  const { isAuthenticated, fetchUser } = useAuthStore();
+
+  useSSEConnection();
 
   useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
+    if (isAuthenticated) {
+      fetchUser();
+    }
+  }, []);
+
   return (
     <>
       <BrowserRouter>

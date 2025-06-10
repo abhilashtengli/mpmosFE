@@ -29,7 +29,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Base_Url } from "@/lib/constants";
 import { useAuthStore } from "@/stores/useAuthStore";
-
 // Configuration
 
 // Form validation schema
@@ -48,6 +47,7 @@ interface User {
   email: string;
   role: string;
   isVerified: boolean;
+  sessionId: string;
 }
 
 interface SigninResponse {
@@ -75,6 +75,7 @@ export default function SigninPage() {
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const { setUser, isAuthenticated, clearError } = useAuthStore();
+
 
   // Redirect if already authenticated
   useEffect(() => {

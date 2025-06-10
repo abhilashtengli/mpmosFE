@@ -72,44 +72,44 @@ interface ProjectViewProps {
   project: Project;
 }
 
-const projects: Project[] = [
-  {
-    id: "1",
-    implementingAgency: "ICAR-NRCB",
-    title: "Sustainable Agriculture Initiative",
-    locationState: "Assam",
-    director: "Dr. John Smith",
-    budget: 500000.0,
-    status: "Active",
-    startDate: "2024-01-01",
-    endDate: "2024-12-31",
-    createdAt: "2024-01-15"
-  },
-  {
-    id: "2",
-    implementingAgency: "State Agriculture Department",
-    title: "Water Management Project",
-    locationState: "West Bengal",
-    director: "Dr. Jane Doe",
-    budget: 750000.0,
-    status: "Active",
-    startDate: "2024-02-01",
-    endDate: "2024-11-30",
-    createdAt: "2024-02-10"
-  },
-  {
-    id: "3",
-    implementingAgency: "Agricultural University",
-    title: "Crop Diversification Program",
-    locationState: "Odisha",
-    director: "Dr. Robert Johnson",
-    budget: 300000.0,
-    status: "Completed",
-    startDate: "2023-06-01",
-    endDate: "2024-05-31",
-    createdAt: "2023-05-20"
-  }
-];
+// const projects: Project[] = [
+//   {
+//     id: "1",
+//     implementingAgency: "ICAR-NRCB",
+//     title: "Sustainable Agriculture Initiative",
+//     locationState: "Assam",
+//     director: "Dr. John Smith",
+//     budget: 500000.0,
+//     status: "Active",
+//     startDate: "2024-01-01",
+//     endDate: "2024-12-31",
+//     createdAt: "2024-01-15"
+//   },
+//   {
+//     id: "2",
+//     implementingAgency: "State Agriculture Department",
+//     title: "Water Management Project",
+//     locationState: "West Bengal",
+//     director: "Dr. Jane Doe",
+//     budget: 750000.0,
+//     status: "Active",
+//     startDate: "2024-02-01",
+//     endDate: "2024-11-30",
+//     createdAt: "2024-02-10"
+//   },
+//   {
+//     id: "3",
+//     implementingAgency: "Agricultural University",
+//     title: "Crop Diversification Program",
+//     locationState: "Odisha",
+//     director: "Dr. Robert Johnson",
+//     budget: 300000.0,
+//     status: "Completed",
+//     startDate: "2023-06-01",
+//     endDate: "2024-05-31",
+//     createdAt: "2023-05-20"
+//   }
+// ];
 
 export default function ProjectsAdPage() {
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
@@ -121,13 +121,13 @@ export default function ProjectsAdPage() {
   const [selectedState, setSelectedState] = useState<string>("");
   const [selectedAgency, setSelectedAgency] = useState<string>("");
   const { fetchProjects } = useProjectStore();
-  // const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore((state) => state.projects);
 
   useEffect(() => {
     fetchProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
+  // console.log("Projects : ", projects);
   // Filter projects based on search and filter criteria
   const filteredProjects: Project[] = projects.filter((project: Project) => {
     const matchesSearch: boolean =

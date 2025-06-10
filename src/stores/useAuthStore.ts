@@ -9,6 +9,7 @@ export type User = {
   email: string;
   role: string;
   isVerified: boolean;
+  sessionId: string;
 };
 
 type AuthState = {
@@ -71,6 +72,9 @@ export const useAuthStore = create<AuthState>()(
         });
         // Only clear auth-related localStorage
         localStorage.removeItem("auth-storage");
+
+        document.cookie =
+          "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
       },
       clearError: () => set({ error: null })
     }),
