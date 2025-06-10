@@ -20,18 +20,11 @@ import TrainingAdPage from "./Pages/admin/ProjectActivities/trainings";
 import DashboardAdPage from "./Pages/admin/dashboard";
 import { useProjectStore } from "./stores/useProjectStore";
 import { useEffect } from "react";
-import { useAuthStore } from "./stores/useAuthStore";
+import SigninPage from "./Pages/admin/auth/signin";
+import ProtectedRoute from "./Pages/admin/auth/protectRoute";
 
 function App() {
   const { fetchProjects } = useProjectStore();
-  const { user, fetchUser } = useAuthStore();
-
-  useEffect(() => {
-    if (!user) {
-      fetchUser();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
 
   useEffect(() => {
     fetchProjects();
@@ -52,7 +45,14 @@ function App() {
           </Route>
 
           {/* Admin Pages  */}
-          <Route path="/admin" element={<AdminBody />}>
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminBody />
+              </ProtectedRoute>
+            }
+          >
             <Route path="dashboard" element={<DashboardAdPage />} />
             <Route path="reports" element={<ReportsAdPage />} />
             <Route path="gallery" element={<GalleryAdPage />} />
@@ -71,6 +71,10 @@ function App() {
             />
             <Route path="projects" element={<ProjectsAdPage />} />
             <Route path="trainings" element={<TrainingAdPage />} />
+          </Route>
+
+          <Route path="/admin">
+            <Route path="signin" element={<SigninPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
