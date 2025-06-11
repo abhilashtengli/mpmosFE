@@ -347,11 +347,7 @@ interface ApiErrorResponse {
 interface ApiSuccessResponse {
   success: true;
   message: string;
-  data: {
-    id: string;
-    title: string;
-    status: string;
-  };
+  data: Training;
   code: string;
 }
 
@@ -531,6 +527,8 @@ export default function TrainingPage() {
     trainingId?: string
   ): Promise<boolean> => {
     // Input validation
+
+    console.log("DATA : ", formData);
     if (operation === "update" && !trainingId) {
       toast.error("Training ID is required for update operation");
       return false;
@@ -612,67 +610,72 @@ export default function TrainingPage() {
         const data = response.data as ApiSuccessResponse;
 
         // Refresh trainings list
-
+        // fetchTrainings();
         toast.success(data.message || `Training ${operation}d successfully`, {
           description: `${data.data.title} `,
           duration: 6000
         });
 
-        console.log(`Training ${operation}d successfully:`, data.data);
+        console.log(`Training `, data.data);
 
         // Update local state
-        // if (operation === "create") {
-        //   const newTraining: Training = {
-        //     id: data.data.id,
-        //     trainingId: "",
-        //     title: formData.title,
-        //     project: {
-        //       id: formData.projectId.id, // assuming this is coming from the form
-        //       title: formData.project.title // you must get this from `projects` store or from form
-        //     },
-        //     quarter: {
-        //       id: formData.quarter.id,
-        //       number: Number(formData.quarter.number),
-        //       year: Number(formData.quarter.year)
-        //     },
-        //     target: Number.parseInt(formData.target),
-        //     achieved: Number.parseInt(formData.achieved) || 0,
-        //     district: formData.district,
-        //     village: formData.village,
-        //     block: formData.block,
-        //     beneficiaryMale: Number.parseInt(formData.beneficiaryMale) || 0,
-        //     beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
-        //     units: formData.units,
-        //     remarks: formData.remarks,
-        //     createdAt: "",
-        //     updatedAt: ""
-        //   };
-        //   setTrainings((prev) => [newTraining, ...prev]);
-        // } else if (operation === "update" && trainingId) {
-        //   setTrainings((prev) =>
-        //     prev.map((t) =>
-        //       t.id === trainingId
-        //         ? {
-        //             ...t,
-        //             title: formData.title,
-        //             project: formData.project,
-        //             quarterId: formData.quarterId,
-        //             target: Number.parseInt(formData.target),
-        //             achieved: Number.parseInt(formData.achieved) || 0,
-        //             district: formData.district,
-        //             village: formData.village,
-        //             block: formData.block,
-        //             beneficiaryMale:
-        //               Number.parseInt(formData.beneficiaryMale) || 0,
-        //             beneficiaryFemale:
-        //               Number.parseInt(formData.beneficiaryFemale) || 0,
-        //             units: formData.units,
-        //             remarks: formData.remarks
-        //           }
-        //         : t
-        //     )
-        //   );
-        // }
+        if (operation === "create") {
+          const newTraining: Training = {
+            id: data.data.id,
+            trainingId: data.data.trainingId,
+            title: data.data.title,
+            project: {
+              id: data.data.project.id, // assuming this is coming from the form
+              title: data.data.project.title // you must get this from `projects` store or from form
+            },
+            quarter: {
+              id: data.data.quarter.id,
+              number: Number(data.data.quarter.number),
+              year: Number(data.data.quarter.year)
+            },
+            target: data.data.target,
+            achieved: data.data.achieved || 0,
+            district: data.data.district,
+            village: data.data.village,
+            block: data.data.block,
+            beneficiaryMale: data.data.beneficiaryMale || 0,
+            beneficiaryFemale: data.data.beneficiaryFemale || 0,
+            units: data.data.units,
+            remarks: data.data.remarks,
+            createdAt: "",
+            updatedAt: ""
+          };
+          setTrainings((prev) => [newTraining, ...prev]);
+        } else if (operation === "update" && trainingId) {
+          setTrainings((prev) =>
+            prev.map((t) =>
+              t.id === trainingId
+                ? {
+                    ...t,
+                    title: data.data.title,
+                    project: {
+                      id: data.data.project.id, // assuming this is coming from the form
+                      title: data.data.project.title // you must get this from `projects` store or from form
+                    },
+                    quarter: {
+                      id: data.data.quarter.id,
+                      number: Number(data.data.quarter.number),
+                      year: Number(data.data.quarter.year)
+                    },
+                    target: data.data.target,
+                    achieved: data.data.achieved || 0,
+                    district: data.data.district,
+                    village: data.data.village,
+                    block: data.data.block,
+                    beneficiaryMale: data.data.beneficiaryMale || 0,
+                    beneficiaryFemale: data.data.beneficiaryFemale || 0,
+                    units: data.data.units,
+                    remarks: data.data.remarks
+                  }
+                : t
+            )
+          );
+        }
 
         // Close dialogs on success
         setIsDialogOpen(false);
@@ -888,7 +891,7 @@ export default function TrainingPage() {
                 </DialogDescription>
               </DialogHeader>
               <TrainingForm
-                onSave={handleSave}
+                onSave={(formData) => handleSave(formData, "create")}
                 onClose={() => setIsDialogOpen(false)}
               />
             </DialogContent>
@@ -1131,7 +1134,9 @@ export default function TrainingPage() {
             {selectedTraining && (
               <TrainingForm
                 training={selectedTraining}
-                onSave={handleSave}
+                onSave={(formData) =>
+                  handleSave(formData, "update", selectedTraining.id)
+                }
                 onClose={() => setIsEditDialogOpen(false)}
                 isEdit={true}
               />
@@ -1480,7 +1485,7 @@ function TrainingForm({
               // Find the project ID based on the selected title
               const selectedProject = projects.find((p) => p.title === value);
               if (selectedProject) {
-                handleSelectChange("project", selectedProject.id);
+                handleSelectChange("projectId", selectedProject.id);
               }
             }}
           >
