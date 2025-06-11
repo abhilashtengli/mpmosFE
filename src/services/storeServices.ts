@@ -19,7 +19,7 @@ export const fetchloggedInUser = async () => {
     const response = await axios.get(`${Base_Url}/get-me`, {
       withCredentials: true
     });
-    return response.data;
+    return response.data.data;
   } catch (error) {
     console.error("Failed to fetch user:", error);
     throw error;
