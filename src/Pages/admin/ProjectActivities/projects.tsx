@@ -29,6 +29,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger
@@ -531,6 +532,7 @@ function ProjectView({ project }: ProjectViewProps) {
 export default function ProjectsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -605,6 +607,10 @@ export default function ProjectsPage() {
   const handleEdit = (project: Project): void => {
     setSelectedProject(project);
     setIsEditDialogOpen(true);
+  };
+  const handleDelete = (project: Project): void => {
+    setSelectedProject(project);
+    setIsDeleteDialogOpen(true);
   };
 
   const handleSave = async (
@@ -862,6 +868,100 @@ export default function ProjectsPage() {
     setSearchTerm(e.target.value);
   };
 
+  const handleDeleteProject = async () => {
+    if (!selectedProject) {
+      toast.error("No project selected", {
+        description: "Please select a project to delete"
+      });
+      return;
+    }
+
+    const loadingToast = toast.loading(
+      `Deleting "${selectedProject.title}"...`
+    );
+
+    try {
+      const response = await axios.delete(
+        `${Base_Url}/delete-project/${selectedProject.id}`,
+        {
+          withCredentials: true,
+          timeout: 30000
+        }
+      );
+
+      if (response.status === 200 && response.data.success) {
+        const { relatedRecordsDeleted = 0 } = response.data.data;
+
+        toast.success("Project deleted", {
+          description:
+            relatedRecordsDeleted > 0
+              ? `"${
+                  selectedProject.title
+                }" and ${relatedRecordsDeleted} related record${
+                  relatedRecordsDeleted !== 1 ? "s" : ""
+                } deleted`
+              : `"${selectedProject.title}" deleted successfully`,
+          duration: 5000
+        });
+        fetchProjects();
+        setSelectedProject(null);
+        setIsDeleteDialogOpen(false);
+      } else {
+        toast.error("Deletion failed", {
+          description:
+            response.data?.message || "Project deletion was not completed"
+        });
+      }
+    } catch (error: unknown) {
+      console.error("Delete project error:", error);
+
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const message = error.response?.data?.message;
+
+        const errorMap: Record<number, { title: string; fallback: string }> = {
+          400: {
+            title: "Invalid request",
+            fallback: "The project ID is invalid"
+          },
+          401: { title: "Authentication required", fallback: "Please sign in" },
+          403: { title: "Access denied", fallback: "Permission denied" },
+          404: {
+            title: "Project not found",
+            fallback: "Project may already be deleted"
+          },
+          409: {
+            title: "Conflict",
+            fallback: "Cannot delete due to dependencies"
+          },
+          500: {
+            title: "Server error",
+            fallback: "Something went wrong on our end"
+          }
+        };
+
+        if (status && errorMap[status]) {
+          const { title, fallback } = errorMap[status];
+          toast.error(title, { description: message || fallback });
+        } else if (error.code === "ECONNABORTED") {
+          toast.error("Timeout", {
+            description: "Request took too long. Please try again"
+          });
+        } else {
+          toast.error("Network error", {
+            description: "Check your internet connection"
+          });
+        }
+      } else {
+        toast.error("Unexpected error", {
+          description: "Something went wrong. Please try again"
+        });
+      }
+    } finally {
+      toast.dismiss(loadingToast);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 px-6 py-4">
@@ -1070,7 +1170,7 @@ export default function ProjectsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleView(project)}
+                            onClick={() => handleDelete(project)}
                           >
                             <Delete className="h-3 w-3 mr-1 text-red-500" />
                             Delete
@@ -1095,6 +1195,93 @@ export default function ProjectsPage() {
               </DialogDescription>
             </DialogHeader>
             {selectedProject && <ProjectView project={selectedProject} />}
+          </DialogContent>
+        </Dialog>
+
+        {/*Delete project Dialog */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-black">
+                Confirm Project Deletion
+              </DialogTitle>
+              <DialogDescription>
+                <span className="text-sm text-red-600 font-medium">
+                  ⚠️ Note: All activities related to this project will also be
+                  permanently deleted.
+                </span>
+                <br />
+                <span className="block mt-2">
+                  Are you sure you want to delete this project?
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  This action cannot be undone.
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedProject && (
+              <div className="grid gap-2 py-4 text-sm text-muted-foreground">
+                <div>
+                  <span className="font-medium text-foreground">Title : </span>
+                  {selectedProject.title}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">Agency : </span>
+                  {selectedProject.implementingAgency}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">Budget : </span>
+                  ₹{selectedProject.budget.toLocaleString("en-IN")}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">Status : </span>
+                  {selectedProject.status}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">
+                    Duration :{" "}
+                  </span>
+                  {new Date(selectedProject.startDate).toLocaleDateString(
+                    "en-IN",
+                    {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric"
+                    }
+                  )}{" "}
+                  →{" "}
+                  {new Date(selectedProject.endDate).toLocaleDateString(
+                    "en-IN",
+                    {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric"
+                    }
+                  )}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDeleteDialogOpen(false)}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  handleDeleteProject();
+                }}
+                disabled={isLoading}
+                className="cursor-pointer"
+              >
+                {isLoading ? "Deleting..." : "Delete"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
