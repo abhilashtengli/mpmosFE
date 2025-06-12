@@ -33,6 +33,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger
@@ -45,26 +46,23 @@ import {
   // ImageIcon,
   Eye,
   Edit,
-  Upload
+  Upload,
+  Delete
 } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { Base_Url, quarterlyData } from "@/lib/constants";
 import { useAuthStore } from "@/stores/useAuthStore";
 import axios, { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
+import EnhancedShimmerTableRows from "@/components/shimmer-rows";
 // Base validation schema
 const baseTrainingSchema = z.object({
-  trainingId: z
-    .string()
-    .trim()
-    .min(2, { message: "Training ID must be at least 2 characters" })
-    .max(50, { message: "Training ID cannot exceed 50 characters" }),
   title: z
     .string()
     .trim()
     .min(2, { message: "Title must be at least 2 characters" })
     .max(255, { message: "Title cannot exceed 255 characters" }),
-  project: z.string().trim().min(2, { message: "Project must be selected" }),
+  projectId: z.string().trim().min(2, { message: "Project must be selected" }),
   quarterId: z.string().trim().min(2, { message: "Quarter must be selected" }),
   target: z
     .number({ invalid_type_error: "Target must be a number" })
@@ -135,19 +133,13 @@ const createTrainingValidation = baseTrainingSchema.refine(
 // Update training validation - make all fields optional except refinements
 const updateTrainingValidation = z
   .object({
-    trainingId: z
-      .string()
-      .trim()
-      .min(2, { message: "Training ID must be at least 2 characters" })
-      .max(50, { message: "Training ID cannot exceed 50 characters" })
-      .optional(),
     title: z
       .string()
       .trim()
       .min(2, { message: "Title must be at least 2 characters" })
       .max(255, { message: "Title cannot exceed 255 characters" })
       .optional(),
-    project: z
+    projectId: z
       .string()
       .trim()
       .min(2, { message: "Project must be selected" })
@@ -363,12 +355,13 @@ export default function TrainingPage() {
   const [selectedTraining, setSelectedTraining] = useState<Training | null>(
     null
   );
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedYear, setSelectedYear] = useState("");
   const [selectedQuarter, setSelectedQuarter] = useState<string>("");
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const projects = useProjectStore((state) => state.projects);
   const logOut = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
@@ -519,6 +512,10 @@ export default function TrainingPage() {
   const handleEdit = (training: Training): void => {
     setSelectedTraining(training);
     setIsEditDialogOpen(true);
+  };
+  const handleDelete = (training: Training): void => {
+    setSelectedTraining(training);
+    setIsDeleteDialogOpen(true);
   };
 
   const handleSave = async (
@@ -855,6 +852,95 @@ export default function TrainingPage() {
     }
   };
 
+  const handleDeleteTraining = async () => {
+    if (!selectedTraining) {
+      toast.error("No Training selected", {
+        description: "Please select a training to delete"
+      });
+      return;
+    }
+
+    const loadingToast = toast.loading(
+      `Deleting "${selectedTraining.title}"...`
+    );
+
+    try {
+      const response = await axios.delete(
+        `${Base_Url}/delete-training/${selectedTraining.id}`,
+        {
+          withCredentials: true,
+          timeout: 30000
+        }
+      );
+
+      if (response.status === 200 && response.data.success) {
+        toast.success("Training deleted", {
+          description: selectedTraining.title + " deleted successfully",
+          duration: 5000
+        });
+        setTrainings((prevTrainings) =>
+          prevTrainings.filter(
+            (training) => training.id !== selectedTraining.id
+          )
+        );
+        setSelectedTraining(null);
+        setIsDeleteDialogOpen(false);
+      } else {
+        toast.error("Deletion failed", {
+          description:
+            response.data?.message || "Project deletion was not completed"
+        });
+      }
+    } catch (error: unknown) {
+      console.error("Delete project error:", error);
+
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const message = error.response?.data?.message;
+
+        const errorMap: Record<number, { title: string; fallback: string }> = {
+          400: {
+            title: "Invalid request",
+            fallback: "The project ID is invalid"
+          },
+          401: { title: "Authentication required", fallback: "Please sign in" },
+          403: { title: "Access denied", fallback: "Permission denied" },
+          404: {
+            title: "Project not found",
+            fallback: "Project may already be deleted"
+          },
+          409: {
+            title: "Conflict",
+            fallback: "Cannot delete due to dependencies"
+          },
+          500: {
+            title: "Server error",
+            fallback: "Something went wrong on our end"
+          }
+        };
+
+        if (status && errorMap[status]) {
+          const { title, fallback } = errorMap[status];
+          toast.error(title, { description: message || fallback });
+        } else if (error.code === "ECONNABORTED") {
+          toast.error("Timeout", {
+            description: "Request took too long. Please try again"
+          });
+        } else {
+          toast.error("Network error", {
+            description: "Check your internet connection"
+          });
+        }
+      } else {
+        toast.error("Unexpected error", {
+          description: "Something went wrong. Please try again"
+        });
+      }
+    } finally {
+      toast.dismiss(loadingToast);
+    }
+  };
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     setSearchTerm(e.target.value);
   };
@@ -1021,14 +1107,15 @@ export default function TrainingPage() {
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12">
-                      <div className="flex flex-col items-center space-y-4">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-                        <p className="text-gray-500">Loading Trainings...</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  // <TableRow>
+                  //   <TableCell colSpan={8} className="text-center py-12">
+                  //     <div className="flex flex-col items-center space-y-4">
+                  //       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                  //       <p className="text-gray-500">Loading Trainings...</p>
+                  //     </div>
+                  //   </TableCell>
+                  // </TableRow>
+                  <EnhancedShimmerTableRows />
                 ) : filteredTrainings.length === 0 ? (
                   <TableRow>
                     <TableCell
@@ -1099,6 +1186,14 @@ export default function TrainingPage() {
                             <Eye className="h-3 w-3 mr-1" />
                             View
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDelete(training)}
+                          >
+                            <Delete className="h-3 w-3 mr-1 text-red-500" />
+                            Delete
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1143,12 +1238,79 @@ export default function TrainingPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/*Delete project Dialog */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-black">
+                ⚠️ Confirm Training Deletion
+              </DialogTitle>
+              <DialogDescription>
+                <br />
+                <span className="block mt-2">
+                  Are you sure you want to delete this project?
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  This action cannot be undone.
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedProject && (
+              <div className="grid gap-2 py-4 text-sm text-muted-foreground">
+                <div>
+                  <span className="font-medium text-foreground">Title : </span>
+                  {selectedTraining?.title}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">
+                    Project :{" "}
+                  </span>
+                  {selectedTraining?.project.title}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">
+                    District :{" "}
+                  </span>
+                  ₹{selectedTraining?.district}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">Status : </span>
+                  {selectedTraining?.village}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDeleteDialogOpen(false)}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  handleDeleteTraining();
+                }}
+                disabled={isLoading}
+                className="cursor-pointer"
+              >
+                {isLoading ? "Deleting..." : "Delete"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
 }
 
 function TrainingView({ training }: TrainingViewProps) {
+  const projects = useProjectStore((state) => state.projects);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
@@ -1170,11 +1332,18 @@ function TrainingView({ training }: TrainingViewProps) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">Project</Label>
-          <p>{training.project.id}</p>
+          {projects.find((p) => p.id === training.project.id)?.title ||
+            "Unknown project"}
         </div>
         <div>
           <Label className="text-sm font-medium text-gray-500">Quarter</Label>
-          <p>{training.quarter.id}</p>
+          <Badge variant="outline">
+            Q
+            {quarterlyData.find((q) => q.id === training.quarter.id)?.number ||
+              "Unknown"}{" "}
+            {quarterlyData.find((q) => q.id === training.quarter.id)?.year ||
+              ""}
+          </Badge>
         </div>
       </div>
 
@@ -1394,9 +1563,9 @@ function TrainingForm({
   };
 
   const validateForm = (): boolean => {
+    console.log(formData);
     try {
       const dataToValidate = {
-        trainingId: formData.trainingId,
         title: formData.title,
         projectId: formData.projectId,
         quarterId: formData.quarterId,
@@ -1483,7 +1652,10 @@ function TrainingForm({
             })()}
             onValueChange={(value) => {
               // Find the project ID based on the selected title
+              console.log("Selected value:", value);
               const selectedProject = projects.find((p) => p.title === value);
+              console.log("Found project:", selectedProject);
+
               if (selectedProject) {
                 handleSelectChange("projectId", selectedProject.id);
               }
@@ -1495,7 +1667,6 @@ function TrainingForm({
               <SelectValue placeholder="Select project" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Projects</SelectItem>
               {uniqueProjectTitle.map((title) => (
                 <SelectItem key={title} value={title}>
                   {title}
