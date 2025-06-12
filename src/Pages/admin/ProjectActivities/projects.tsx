@@ -54,6 +54,7 @@ import { Base_Url } from "@/lib/constants";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router-dom";
+import EnhancedShimmerTableRows from "@/components/shimmer-rows";
 
 // TypeScript interfaces
 interface Project {
@@ -1085,14 +1086,7 @@ export default function ProjectsPage() {
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12">
-                      <div className="flex flex-col items-center space-y-4">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-                        <p className="text-gray-500">Loading projects...</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <EnhancedShimmerTableRows />
                 ) : filteredProjects.length === 0 ? (
                   <TableRow>
                     <TableCell
@@ -1104,17 +1098,23 @@ export default function ProjectsPage() {
                   </TableRow>
                 ) : (
                   filteredProjects.map((project: Project) => (
-                    <TableRow key={project.id}>
-                      <TableCell className="font-medium">
+                    <TableRow key={project.id} className="">
+                      <TableCell className="font-medium truncate max-w-[150px] whitespace-nowrap overflow-hidden">
                         {project.title}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm truncate max-w-[150px] whitespace-nowrap overflow-hidden">
                         {project.implementingAgency}
                       </TableCell>
-                      <TableCell>{project.director}</TableCell>
-                      <TableCell>{project.locationState}</TableCell>
-                      <TableCell>₹ {project.budget.toLocaleString()}</TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="truncate max-w-[150px] whitespace-nowrap overflow-hidden">
+                        {project.director}
+                      </TableCell>
+                      <TableCell className="truncate max-w-[150px] whitespace-nowrap overflow-hidden">
+                        {project.locationState}
+                      </TableCell>
+                      <TableCell className="truncate max-w-[150px] whitespace-nowrap overflow-hidden">
+                        ₹ {project.budget.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-sm truncate max-w-[150px] whitespace-nowrap overflow-hidden ">
                         <div className="flex items-center space-x-1">
                           <Calendar className="h-3 w-3" />
                           <span>
@@ -1138,7 +1138,7 @@ export default function ProjectsPage() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="">
                         <Badge
                           className={`${
                             project.status === "Completed"

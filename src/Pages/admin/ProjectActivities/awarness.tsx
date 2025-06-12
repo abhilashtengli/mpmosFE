@@ -35,6 +35,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger
@@ -46,7 +47,8 @@ import {
   Eye,
   Edit,
   ImageIcon,
-  UserRound
+  UserRound,
+  Delete
 } from "lucide-react";
 import axios, { AxiosError } from "axios";
 import { Base_Url, quarterlyData } from "@/lib/constants";
@@ -378,6 +380,7 @@ export default function AwarenessPage() {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [selectedYear, setSelectedYear] = useState("");
   const [selectedQuarter, setSelectedQuarter] = useState<string>("");
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const projects = useProjectStore((state) => state.projects);
   const logOut = useAuthStore((state) => state.logout);
@@ -536,6 +539,10 @@ export default function AwarenessPage() {
   const handleEdit = (awareness: AwarenessProgram): void => {
     setSelectedAwareness(awareness);
     setIsEditDialogOpen(true);
+  };
+  const handleDelete = (training: AwarenessProgram): void => {
+    setSelectedAwareness(training);
+    setIsDeleteDialogOpen(true);
   };
 
   const handleSave = async (
@@ -889,6 +896,95 @@ export default function AwarenessPage() {
     setSearchTerm(e.target.value);
   };
 
+  const handleDeleteTraining = async () => {
+    if (!selectedAwareness) {
+      toast.error("No Training selected", {
+        description: "Please select a training to delete"
+      });
+      return;
+    }
+
+    const loadingToast = toast.loading(
+      `Deleting "${selectedAwareness.title}"...`
+    );
+
+    try {
+      const response = await axios.delete(
+        `${Base_Url}/delete-awarness-program/${selectedAwareness.id}`,
+        {
+          withCredentials: true,
+          timeout: 30000
+        }
+      );
+
+      if (response.status === 200 && response.data.success) {
+        toast.success("Training deleted", {
+          description: selectedAwareness.title + " deleted successfully",
+          duration: 5000
+        });
+        setAwarnessProgram((prevTrainings) =>
+          prevTrainings.filter(
+            (training) => training.id !== selectedAwareness.id
+          )
+        );
+        setSelectedAwareness(null);
+        setIsDeleteDialogOpen(false);
+      } else {
+        toast.error("Deletion failed", {
+          description:
+            response.data?.message || "Program deletion was not completed"
+        });
+      }
+    } catch (error: unknown) {
+      console.error("Delete project error:", error);
+
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const message = error.response?.data?.message;
+
+        const errorMap: Record<number, { title: string; fallback: string }> = {
+          400: {
+            title: "Invalid request",
+            fallback: "The project ID is invalid"
+          },
+          401: { title: "Authentication required", fallback: "Please sign in" },
+          403: { title: "Access denied", fallback: "Permission denied" },
+          404: {
+            title: "Awarness program not found",
+            fallback: "Awarness program may already be deleted"
+          },
+          409: {
+            title: "Conflict",
+            fallback: "Cannot delete due to dependencies"
+          },
+          500: {
+            title: "Server error",
+            fallback: "Something went wrong on our end"
+          }
+        };
+
+        if (status && errorMap[status]) {
+          const { title, fallback } = errorMap[status];
+          toast.error(title, { description: message || fallback });
+        } else if (error.code === "ECONNABORTED") {
+          toast.error("Timeout", {
+            description: "Request took too long. Please try again"
+          });
+        } else {
+          toast.error("Network error", {
+            description: "Check your internet connection"
+          });
+        }
+      } else {
+        toast.error("Unexpected error", {
+          description: "Something went wrong. Please try again"
+        });
+      }
+    } finally {
+      toast.dismiss(loadingToast);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 px-6 py-4">
@@ -1067,8 +1163,10 @@ export default function AwarenessPage() {
                       <TableCell className="font-medium">
                         {awareness.awarnessprogramId}
                       </TableCell>
-                      <TableCell>{awareness.title}</TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="truncate max-w-[150px] whitespace-nowrap overflow-hidden">
+                        {awareness.title}
+                      </TableCell>
+                      <TableCell className="text-sm truncate max-w-[150px] whitespace-nowrap overflow-hidden">
                         {awareness.project.title}
                       </TableCell>
                       <TableCell>
@@ -1083,7 +1181,7 @@ export default function AwarenessPage() {
                           })()}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm truncate max-w-[150px] whitespace-nowrap overflow-hidden">
                         {awareness.district}, {awareness.village}
                       </TableCell>
                       <TableCell>
@@ -1132,14 +1230,14 @@ export default function AwarenessPage() {
                             <Eye className="h-3 w-3 mr-1" />
                             View
                           </Button>
-                          {/* <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDelete(awareness)}
-                        >
-                          <Delete className="h-3 w-3 mr-1 text-red-500" />
-                          Delete
-                        </Button> */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDelete(awareness)}
+                          >
+                            <Delete className="h-3 w-3 mr-1 text-red-500" />
+                            Delete
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1184,6 +1282,73 @@ export default function AwarenessPage() {
                 isEdit={true}
               />
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/*Delete awarness Dialog */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-black">
+                ⚠️ Confirm Awarness Program Deletion
+              </DialogTitle>
+              <DialogDescription>
+                <br />
+                <span className="block mt-2">
+                  Are you sure you want to delete this awareness program?
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  This action cannot be undone.
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedAwareness && (
+              <div className="grid gap-2 py-4 text-sm text-muted-foreground">
+                <div>
+                  <span className="font-medium text-foreground">Title : </span>
+                  {selectedAwareness?.title}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">
+                    Project :{" "}
+                  </span>
+                  {selectedAwareness?.project.title}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">
+                    District :{" "}
+                  </span>
+                  {selectedAwareness?.district}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">
+                    Village :{" "}
+                  </span>
+                  {selectedAwareness?.village}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDeleteDialogOpen(false)}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  handleDeleteTraining();
+                }}
+                disabled={isLoading}
+                className="cursor-pointer"
+              >
+                {isLoading ? "Deleting..." : "Delete"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

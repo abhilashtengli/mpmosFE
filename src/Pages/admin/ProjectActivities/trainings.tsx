@@ -47,7 +47,8 @@ import {
   Eye,
   Edit,
   Upload,
-  Delete
+  Delete,
+  UserRound
 } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { Base_Url, quarterlyData } from "@/lib/constants";
@@ -915,7 +916,7 @@ export default function TrainingPage() {
       } else {
         toast.error("Deletion failed", {
           description:
-            response.data?.message || "Project deletion was not completed"
+            response.data?.message || "Training deletion was not completed"
         });
       }
     } catch (error: unknown) {
@@ -933,8 +934,8 @@ export default function TrainingPage() {
           401: { title: "Authentication required", fallback: "Please sign in" },
           403: { title: "Access denied", fallback: "Permission denied" },
           404: {
-            title: "Project not found",
-            fallback: "Project may already be deleted"
+            title: "Training not found",
+            fallback: "Training may already be deleted"
           },
           409: {
             title: "Conflict",
@@ -1150,8 +1151,10 @@ export default function TrainingPage() {
                       <TableCell className="font-medium">
                         {training.trainingId}
                       </TableCell>
-                      <TableCell>{training.title}</TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="truncate max-w-[150px] whitespace-nowrap overflow-hidden">
+                        {training.title}
+                      </TableCell>
+                      <TableCell className="text-sm truncate max-w-[150px] whitespace-nowrap overflow-hidden">
                         {training.project.title}
                       </TableCell>
                       <TableCell>
@@ -1166,7 +1169,7 @@ export default function TrainingPage() {
                           })()}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm truncate max-w-[150px] whitespace-nowrap overflow-hidden">
                         {training.district}, {training.village}
                       </TableCell>
                       <TableCell>
@@ -1181,9 +1184,19 @@ export default function TrainingPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">
-                          <div>M: {training.beneficiaryMale}</div>
-                          <div>F: {training.beneficiaryFemale}</div>
+                        <div className="text-sm flex flex-col gap-y-1">
+                          <Badge variant="outline">
+                            <div className="w-16 flex gap-x-1">
+                              <UserRound className="h-4 w-4 text-blue-500" />
+                              M: {training.beneficiaryMale}
+                            </div>
+                          </Badge>
+                          <Badge variant="outline">
+                            <div className="w-16 flex gap-x-1">
+                              <UserRound className="h-4 w-4 text-pink-500" />
+                              F: {training.beneficiaryFemale}
+                            </div>
+                          </Badge>
                         </div>
                       </TableCell>
 
@@ -1268,7 +1281,7 @@ export default function TrainingPage() {
               <DialogDescription>
                 <br />
                 <span className="block mt-2">
-                  Are you sure you want to delete this project?
+                  Are you sure you want to delete this training?
                 </span>
                 <span className="text-xs text-muted-foreground">
                   This action cannot be undone.
@@ -1276,7 +1289,7 @@ export default function TrainingPage() {
               </DialogDescription>
             </DialogHeader>
 
-            {selectedProject && (
+            {selectedTraining && (
               <div className="grid gap-2 py-4 text-sm text-muted-foreground">
                 <div>
                   <span className="font-medium text-foreground">Title : </span>
@@ -1292,10 +1305,12 @@ export default function TrainingPage() {
                   <span className="font-medium text-foreground">
                     District :{" "}
                   </span>
-                  ₹{selectedTraining?.district}
+                  {selectedTraining?.district}
                 </div>
                 <div>
-                  <span className="font-medium text-foreground">Status : </span>
+                  <span className="font-medium text-foreground">
+                    Village :{" "}
+                  </span>
                   {selectedTraining?.village}
                 </div>
               </div>
