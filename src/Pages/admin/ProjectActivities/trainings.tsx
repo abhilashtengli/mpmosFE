@@ -99,7 +99,15 @@ const baseTrainingSchema = z.object({
     .nonnegative({
       message: "Female beneficiary count must be zero or positive"
     }),
-  units: z.string().trim().min(1, { message: "Units must be specified" }),
+  units: z
+    .string()
+    .trim()
+    .transform((val) => (val === "" ? undefined : val))
+    .optional()
+    .refine((val) => val === undefined || val.length >= 1, {
+      message: "Units must be specified"
+    })
+    .nullable(),
   remarks: z
     .string()
     .trim()
@@ -196,8 +204,12 @@ const updateTrainingValidation = z
     units: z
       .string()
       .trim()
-      .min(1, { message: "Units must be specified" })
-      .optional(),
+      .transform((val) => (val === "" ? undefined : val))
+      .optional()
+      .refine((val) => val === undefined || val.length >= 1, {
+        message: "Units must be specified"
+      })
+      .nullable(),
     remarks: z
       .string()
       .trim()
@@ -439,6 +451,7 @@ export default function TrainingPage() {
       setIsLoading(false);
     }
   };
+
   useEffect(() => {
     fetchTrainings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -639,6 +652,13 @@ export default function TrainingPage() {
             beneficiaryFemale: data.data.beneficiaryFemale || 0,
             units: data.data.units,
             remarks: data.data.remarks,
+            User:
+              data.data.User?.id && data.data.User?.name
+                ? {
+                    id: data.data.User.id,
+                    name: data.data.User.name
+                  }
+                : undefined,
             createdAt: "",
             updatedAt: ""
           };
@@ -667,7 +687,14 @@ export default function TrainingPage() {
                     beneficiaryMale: data.data.beneficiaryMale || 0,
                     beneficiaryFemale: data.data.beneficiaryFemale || 0,
                     units: data.data.units,
-                    remarks: data.data.remarks
+                    remarks: data.data.remarks,
+                    User:
+                      data.data.User?.id && data.data.User?.name
+                        ? {
+                            id: data.data.User.id,
+                            name: data.data.User.name
+                          }
+                        : undefined
                   }
                 : t
             )
@@ -1107,14 +1134,6 @@ export default function TrainingPage() {
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  // <TableRow>
-                  //   <TableCell colSpan={8} className="text-center py-12">
-                  //     <div className="flex flex-col items-center space-y-4">
-                  //       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-                  //       <p className="text-gray-500">Loading Trainings...</p>
-                  //     </div>
-                  //   </TableCell>
-                  // </TableRow>
                   <EnhancedShimmerTableRows />
                 ) : filteredTrainings.length === 0 ? (
                   <TableRow>
@@ -1467,7 +1486,7 @@ function TrainingForm({
     block: training?.block || "",
     beneficiaryMale: training?.beneficiaryMale?.toString() || "0",
     beneficiaryFemale: training?.beneficiaryFemale?.toString() || "0",
-    units: training?.units || "",
+    units: training?.units.trim() || "",
     remarks: training?.remarks || "",
     imageFile: null,
     pdfFile: null
@@ -1591,7 +1610,7 @@ function TrainingForm({
       } else {
         createTrainingValidation.parse(dataToValidate);
       }
-
+      setFormErrors({});
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1652,9 +1671,7 @@ function TrainingForm({
             })()}
             onValueChange={(value) => {
               // Find the project ID based on the selected title
-              console.log("Selected value:", value);
               const selectedProject = projects.find((p) => p.title === value);
-              console.log("Found project:", selectedProject);
 
               if (selectedProject) {
                 handleSelectChange("projectId", selectedProject.id);
@@ -1697,7 +1714,6 @@ function TrainingForm({
           )}
         </div>
       </div>
-
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label>
@@ -1743,9 +1759,7 @@ function TrainingForm({
           )}
         </div>
         <div>
-          <Label htmlFor="units">
-            Units <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="units">Units</Label>
           <Input
             id="units"
             name="units"
@@ -1753,7 +1767,6 @@ function TrainingForm({
             value={formData.units}
             onChange={handleInputChange}
             className={formErrors.units ? "border-red-500" : ""}
-            required
           />
           {formErrors.units && (
             <p className="text-red-500 text-sm mt-1">{formErrors.units}</p>

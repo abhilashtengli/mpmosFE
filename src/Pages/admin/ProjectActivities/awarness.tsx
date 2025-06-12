@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
@@ -39,22 +39,31 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Users, Plus, Search, Eye, Edit, ImageIcon } from "lucide-react";
+import {
+  Users,
+  Plus,
+  Search,
+  Eye,
+  Edit,
+  ImageIcon,
+  UserRound
+} from "lucide-react";
+import axios, { AxiosError } from "axios";
+import { Base_Url, quarterlyData } from "@/lib/constants";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { useProjectStore } from "@/stores/useProjectStore";
+import EnhancedShimmerTableRows from "@/components/shimmer-rows";
+import { useNavigate } from "react-router-dom";
 
 // Add these validation schemas (you'll need to create the validation file)
 const baseAwarenessSchema = z.object({
-  programId: z
-    .string()
-    .trim()
-    .min(2, { message: "Program ID must be at least 2 characters" })
-    .max(50, { message: "Program ID cannot exceed 50 characters" }),
   title: z
     .string()
     .trim()
     .min(2, { message: "Title must be at least 2 characters" })
     .max(100, { message: "Title cannot exceed 100 characters" }),
-  project: z.string().trim().min(1, { message: "Project is required" }),
-  quarter: z.string().trim().min(1, { message: "Quarter is required" }),
+  projectId: z.string().trim().min(1, { message: "Project is required" }),
+  quarterId: z.string().trim().min(1, { message: "Quarter is required" }),
   target: z
     .number({ invalid_type_error: "Target must be a number" })
     .int({ message: "Target must be an integer" })
@@ -68,6 +77,12 @@ const baseAwarenessSchema = z.object({
     .trim()
     .min(2, { message: "District must be at least 2 characters" })
     .max(100, { message: "District cannot exceed 100 characters" }),
+  remarks: z
+    .string()
+    .trim()
+    .max(300, { message: "Remarks cannot exceed 300 characters" })
+    .optional()
+    .nullable(),
   village: z
     .string()
     .trim()
@@ -90,12 +105,15 @@ const baseAwarenessSchema = z.object({
     .nonnegative({
       message: "Female beneficiary count must be zero or positive"
     }),
-  units: z.string().trim().min(1, { message: "Units are required" }),
-  remarks: z
+  units: z
     .string()
     .trim()
-    .max(300, { message: "Remarks cannot exceed 300 characters" })
+    .transform((val) => (val === "" ? undefined : val))
     .optional()
+    .refine((val) => val === undefined || val.length >= 1, {
+      message: "Units must be specified"
+    })
+    .nullable()
 });
 
 const createAwarenessValidation = baseAwarenessSchema.refine(
@@ -146,6 +164,12 @@ const updateAwarenessProgramValidation = z
       .min(2, { message: "Village must be at least 2 characters" })
       .max(100, { message: "Village cannot exceed 100 characters" })
       .optional(),
+    remarks: z
+      .string()
+      .trim()
+      .max(300, { message: "Remarks cannot exceed 300 characters" })
+      .optional()
+      .nullable(),
     block: z
       .string()
       .trim()
@@ -175,7 +199,15 @@ const updateAwarenessProgramValidation = z
       .optional()
       .nullable(),
     imageKey: z.string().trim().optional().nullable(),
-    units: z.string().trim().optional().nullable()
+    units: z
+      .string()
+      .trim()
+      .transform((val) => (val === "" ? undefined : val))
+      .optional()
+      .refine((val) => val === undefined || val.length >= 1, {
+        message: "Units must be specified"
+      })
+      .nullable()
   })
   .refine(
     (data) => {
@@ -215,20 +247,34 @@ const updateAwarenessProgramValidation = z
 
 interface AwarenessProgram {
   id: string;
-  programId: string;
+  awarnessprogramId: string;
   title: string;
-  project: string;
-  quarter: string;
+  project: {
+    id: string;
+    title: string;
+  };
+  quarter: {
+    id: string;
+    number: number;
+    year: number;
+  };
   target: number;
   achieved: number;
   district: string;
   village: string;
   block: string;
+  imageUrl?: string;
+  imageKey?: string;
   beneficiaryMale: number;
   beneficiaryFemale: number;
   units: string;
   remarks: string;
-  status: string;
+  createdAt: string;
+  updatedAt: string;
+  User?: {
+    id: string;
+    name: string;
+  };
 }
 
 interface AwarenessViewProps {
@@ -243,10 +289,9 @@ interface AwarenessFormProps {
 }
 
 interface AwarenessFormData {
-  programId: string;
   title: string;
-  project: string;
-  quarter: string;
+  projectId: string;
+  quarterId: string;
   target: string;
   achieved: string;
   district: string;
@@ -256,84 +301,232 @@ interface AwarenessFormData {
   beneficiaryFemale: string;
   units: string;
   remarks: string;
-  imageFile: File | null;
+  imageFile?: File | null;
 }
 
 type FormErrors = {
   [key: string]: string;
 };
+interface ApiErrorResponse {
+  success: boolean;
+  message: string;
+  code: string;
+  errors?: unknown;
+  path?: string[];
+}
+
+interface ApiSuccessResponse {
+  success: true;
+  message: string;
+  data: AwarenessProgram;
+  code: string;
+}
 
 // Mock awareness program data
-const awarenessPrograms: AwarenessProgram[] = [
-  {
-    id: "1",
-    programId: "AWR-2024-001",
-    title: "Nutrition Awareness Campaign",
-    project: "Sustainable Agriculture Initiative",
-    quarter: "Q2 2024",
-    target: 100,
-    achieved: 85,
-    district: "Guwahati",
-    village: "Khanapara",
-    block: "Dispur",
-    beneficiaryMale: 45,
-    beneficiaryFemale: 40,
-    units: "Participants",
-    remarks: "Successful awareness campaign on nutrition and health",
-    status: "Completed"
-  },
-  {
-    id: "2",
-    programId: "AWR-2024-002",
-    title: "Climate Change Awareness",
-    project: "Water Management Project",
-    quarter: "Q2 2024",
-    target: 75,
-    achieved: 70,
-    district: "Jorhat",
-    village: "Teok",
-    block: "Jorhat",
-    beneficiaryMale: 35,
-    beneficiaryFemale: 35,
-    units: "Participants",
-    remarks: "Awareness program on climate change adaptation",
-    status: "Completed"
-  }
-];
+// const awarenessPrograms: AwarenessProgram[] = [
+//   {
+//     id: "1",
+//     programId: "AWR-2024-001",
+//     title: "Nutrition Awareness Campaign",
+//     project: "Sustainable Agriculture Initiative",
+//     quarter: "Q2 2024",
+//     target: 100,
+//     achieved: 85,
+//     district: "Guwahati",
+//     village: "Khanapara",
+//     block: "Dispur",
+//     beneficiaryMale: 45,
+//     beneficiaryFemale: 40,
+//     units: "Participants",
+//     remarks: "Successful awareness campaign on nutrition and health",
+//     status: "Completed"
+//   },
+//   {
+//     id: "2",
+//     programId: "AWR-2024-002",
+//     title: "Climate Change Awareness",
+//     project: "Water Management Project",
+//     quarter: "Q2 2024",
+//     target: 75,
+//     achieved: 70,
+//     district: "Jorhat",
+//     village: "Teok",
+//     block: "Jorhat",
+//     beneficiaryMale: 35,
+//     beneficiaryFemale: 35,
+//     units: "Participants",
+//     remarks: "Awareness program on climate change adaptation",
+//     status: "Completed"
+//   }
+// ];
 
+//Get project data
+//Get awarness data
+// submit new created data
+// submit updated data
 export default function AwarenessPage() {
+  const [awarenessPrograms, setAwarnessProgram] = useState<AwarenessProgram[]>(
+    []
+  );
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState<boolean>(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
   const [selectedAwareness, setSelectedAwareness] =
     useState<AwarenessProgram | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [selectedQuarter, setSelectedQuarter] = useState<string>("");
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
+  const [selectedYear, setSelectedYear] = useState("");
+  const [selectedQuarter, setSelectedQuarter] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
+  const projects = useProjectStore((state) => state.projects);
+  const logOut = useAuthStore((state) => state.logout);
+  const navigate = useNavigate();
+
+  const userRole = useAuthStore((state) => state.user);
+
+  //Fetch training Data
+  const fetchAwarnessPrograms = async () => {
+    try {
+      setIsLoading(true);
+
+      const endpoint =
+        userRole?.role === "admin" // Changed from userRole?.role
+          ? "get-admin-awarness-programs"
+          : "get-user-awarness-programs";
+      const response = await axios.get(`${Base_Url}/${endpoint}`, {
+        withCredentials: true
+      });
+
+      const data = response.data;
+
+      if (!data.success || response.status !== 200) {
+        throw new Error(data.message || "Failed to fetch Awarness programs");
+      }
+      console.log("data : ", data.data);
+      const mappedAwarnessPrograms: AwarenessProgram[] = (data.data || []).map(
+        (item: AwarenessProgram) => ({
+          id: item.id,
+          awarnessprogramId: item.awarnessprogramId,
+          title: item.title,
+          project: {
+            id: item.project.id,
+            title: item.project.title
+          },
+          quarter: {
+            id: item.quarter.id,
+            number: item.quarter.number,
+            year: item.quarter.year
+          },
+          target: item.target,
+          achieved: item.achieved,
+          district: item.district,
+          village: item.village,
+          block: item.block,
+          beneficiaryMale: item.beneficiaryMale,
+          beneficiaryFemale: item.beneficiaryFemale,
+          units: item.units,
+          remarks: item.remarks,
+          imageUrl: item.imageUrl ?? undefined,
+          user: item.User
+            ? { id: item.User.id, name: item.User.name }
+            : undefined
+        })
+      );
+      console.log("MAPPEDDAT : ", mappedAwarnessPrograms);
+      setAwarnessProgram(mappedAwarnessPrograms || []);
+    } catch (error: unknown) {
+      // console.error("Error fetching trainings:", error);
+
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const message = error.response?.data?.message;
+
+        toast.error("Failed", {
+          description:
+            message ||
+            `Axios error occurred${status ? ` (Status: ${status})` : ""}`
+        });
+      } else {
+        toast.error("Failed", {
+          description:
+            "An unexpected error occurred while fetching Awarness programm"
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAwarnessPrograms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRole]);
 
   // Filter awareness programs based on search and filter criteria
-  const filteredAwareness = awarenessPrograms.filter((awareness) => {
-    const matchesSearch =
-      awareness.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      awareness.programId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      awareness.project.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredAwareness: AwarenessProgram[] = awarenessPrograms.filter(
+    (awareness) => {
+      const matchesSearch =
+        awareness.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        awareness.awarnessprogramId
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        awareness.project.title
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase());
 
-    const matchesQuarter =
-      !selectedQuarter ||
-      selectedQuarter === "all" ||
-      awareness.quarter === selectedQuarter;
-    const matchesProject =
-      !selectedProject ||
-      selectedProject === "all" ||
-      awareness.project === selectedProject;
-    const matchesDistrict =
-      !selectedDistrict ||
-      selectedDistrict === "all" ||
-      awareness.district === selectedDistrict;
+      // Get quarter IDs based on year and quarter selection
+      let matchesYearQuarter: boolean = true;
 
-    return matchesSearch && matchesQuarter && matchesProject && matchesDistrict;
-  });
+      if (
+        (selectedYear && selectedYear !== "all") ||
+        (selectedQuarter && selectedQuarter !== "all")
+      ) {
+        // Find matching quarter IDs from quarterlyData
+        const matchingQuarterIds = quarterlyData
+          .filter((q) => {
+            const yearMatch =
+              !selectedYear ||
+              selectedYear === "all" ||
+              q.year === parseInt(selectedYear);
+            const quarterMatch =
+              !selectedQuarter ||
+              selectedQuarter === "all" ||
+              q.number === parseInt(selectedQuarter);
+            return yearMatch && quarterMatch;
+          })
+          .map((q) => q.id);
+
+        // Check if training's quarterId matches any of the filtered quarter IDs
+        matchesYearQuarter = matchingQuarterIds.includes(awareness.quarter.id);
+      }
+
+      const matchesProject =
+        !selectedProject ||
+        selectedProject === "all" ||
+        awareness.project.title === selectedProject;
+      const matchesDistrict =
+        !selectedDistrict ||
+        selectedDistrict === "all" ||
+        awareness.district === selectedDistrict;
+
+      return (
+        matchesSearch && matchesYearQuarter && matchesProject && matchesDistrict
+      );
+    }
+  );
+
+  const uniqueProjectTitle = useMemo(() => {
+    if (!projects || projects.length === 0) return [];
+    return Array.from(new Set(projects.map((project) => project.title)));
+  }, [projects]);
+
+  const uniqueDistrict = useMemo(() => {
+    if (!awarenessPrograms || awarenessPrograms.length === 0) return [];
+    return Array.from(
+      new Set(awarenessPrograms.map((program) => program.district))
+    );
+  }, [awarenessPrograms]);
 
   const handleView = (awareness: AwarenessProgram): void => {
     setSelectedAwareness(awareness);
@@ -345,13 +538,355 @@ export default function AwarenessPage() {
     setIsEditDialogOpen(true);
   };
 
-  const handleSave = (formData: AwarenessFormData): void => {
-    console.log("Saving awareness program:", formData);
-    setIsDialogOpen(false);
-    setIsEditDialogOpen(false);
-    toast.success("Awareness Program Saved", {
-      description: `${formData.title} has been saved successfully.`
-    });
+  const handleSave = async (
+    formData: AwarenessFormData,
+    operation: "create" | "update" = "create",
+    awarnessId?: string
+  ): Promise<boolean> => {
+    // Input validation
+
+    console.log("DATA : ", formData);
+    if (operation === "update" && !awarnessId) {
+      toast.error("Awarness program ID is required for update operation");
+      return false;
+    }
+
+    // Validate required fields
+    if (!formData.title?.trim()) {
+      toast.error("Awarness program title is required");
+      return false;
+    }
+
+    if (!formData.projectId?.trim()) {
+      toast.error("Project is required");
+      return false;
+    }
+
+    if (!formData.quarterId?.trim()) {
+      toast.error("Quarter is required");
+      return false;
+    }
+
+    if (!formData.target || Number.parseInt(formData.target) <= 0) {
+      toast.error("Valid target number is required");
+      return false;
+    }
+
+    // Show loading toast
+    const loadingToast = toast.loading(
+      `${operation === "create" ? "Creating" : "Updating"} Awarness program...`
+    );
+
+    try {
+      let response;
+      const config = {
+        withCredentials: true,
+        timeout: 30000, // 30 second timeout
+        headers: {
+          "Content-Type": "application/json"
+        }
+      };
+
+      // Prepare request data
+      const requestData = {
+        projectId: formData.projectId,
+        quarterId: formData.quarterId,
+        title: formData.title,
+        target: Number.parseInt(formData.target),
+        achieved: Number.parseInt(formData.achieved) || 0,
+        district: formData.district,
+        village: formData.village,
+        block: formData.block,
+        beneficiaryMale: Number.parseInt(formData.beneficiaryMale) || 0,
+        beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
+        units: formData.units,
+        remarks: formData.remarks
+
+        // Add these later on...
+        // imageUrl: formData.imageUrl || null,
+        // imageKey: formData.imageKey || null,
+      };
+
+      if (operation === "create") {
+        response = await axios.post(
+          `${Base_Url}/create-awareness-program`,
+          requestData,
+          config
+        );
+      } else {
+        response = await axios.put(
+          `${Base_Url}/update-awareness-program/${awarnessId}`,
+          requestData,
+          config
+        );
+      }
+
+      // Handle successful response
+      if (response?.status === 201 || response?.status === 200) {
+        const data = response.data as ApiSuccessResponse;
+
+        // Refresh trainings list
+        // fetchTrainings();
+        toast.success(data.message || `Training ${operation}d successfully`, {
+          description: `${data.data.title} `,
+          duration: 6000
+        });
+
+        console.log(`Training `, data.data);
+
+        // Update local state
+        if (operation === "create") {
+          const newTraining: AwarenessProgram = {
+            id: data.data.id,
+            awarnessprogramId: data.data.awarnessprogramId,
+            title: data.data.title,
+            project: {
+              id: data.data.project.id, // assuming this is coming from the form
+              title: data.data.project.title // you must get this from `projects` store or from form
+            },
+            quarter: {
+              id: data.data.quarter.id,
+              number: Number(data.data.quarter.number),
+              year: Number(data.data.quarter.year)
+            },
+            target: data.data.target,
+            achieved: data.data.achieved || 0,
+            district: data.data.district,
+            village: data.data.village,
+            block: data.data.block,
+            beneficiaryMale: data.data.beneficiaryMale || 0,
+            beneficiaryFemale: data.data.beneficiaryFemale || 0,
+            units: data.data.units,
+            remarks: data.data.remarks,
+            createdAt: "",
+            updatedAt: "",
+            User:
+              data.data.User?.id && data.data.User?.name
+                ? {
+                    id: data.data.User.id,
+                    name: data.data.User.name
+                  }
+                : undefined
+          };
+          setAwarnessProgram((prev) => [newTraining, ...prev]);
+        } else if (operation === "update" && awarnessId) {
+          setAwarnessProgram((prev) =>
+            prev.map((t) =>
+              t.id === awarnessId
+                ? {
+                    ...t,
+                    title: data.data.title,
+                    project: {
+                      id: data.data.project.id, // assuming this is coming from the form
+                      title: data.data.project.title // you must get this from `projects` store or from form
+                    },
+                    quarter: {
+                      id: data.data.quarter.id,
+                      number: Number(data.data.quarter.number),
+                      year: Number(data.data.quarter.year)
+                    },
+                    target: data.data.target,
+                    achieved: data.data.achieved || 0,
+                    district: data.data.district,
+                    village: data.data.village,
+                    block: data.data.block,
+                    beneficiaryMale: data.data.beneficiaryMale || 0,
+                    beneficiaryFemale: data.data.beneficiaryFemale || 0,
+                    units: data.data.units,
+                    remarks: data.data.remarks,
+                    User:
+                      data.data.User?.id && data.data.User?.name
+                        ? {
+                            id: data.data.User.id,
+                            name: data.data.User.name
+                          }
+                        : undefined
+                  }
+                : t
+            )
+          );
+        }
+
+        // Close dialogs on success
+        setIsDialogOpen(false);
+        setIsEditDialogOpen(false);
+        setSelectedAwareness(null);
+
+        return true;
+      }
+
+      // Handle unexpected success status codes
+      toast.error(`Unexpected response status: ${response?.status}`);
+      return false;
+    } catch (error) {
+      console.error(`Error ${operation}ing training:`, error);
+
+      // Comprehensive error handling for production
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError<ApiErrorResponse>;
+
+        if (axiosError.response) {
+          // Server responded with error status
+          const { status, data } = axiosError.response;
+
+          switch (status) {
+            case 400:
+              // Validation errors or invalid input
+              if (data?.code === "VALIDATION_ERROR" && data.errors) {
+                toast.error("Validation Error", {
+                  description:
+                    "There no data to update or Please check your input and try again",
+                  duration: 5000
+                });
+                console.error("Validation errors:", data.errors);
+              } else if (data?.code === "INVALID_INPUT") {
+                toast.error("Invalid Input", {
+                  description: data.message || "Please check your input",
+                  duration: 5000
+                });
+              } else {
+                toast.error(data?.message || "Invalid input provided");
+              }
+              break;
+
+            case 401:
+              toast.error("Authentication Required", {
+                description: "Please sign in to continue",
+                duration: 5000
+              });
+              // Handle logout and redirect
+              if (typeof logOut === "function") {
+                logOut();
+              }
+              if (typeof navigate === "function") {
+                navigate("/signin");
+              }
+              break;
+
+            case 403:
+              toast.error("Access Denied", {
+                description: "You don't have permission to perform this action",
+                duration: 5000
+              });
+              break;
+
+            case 404:
+              if (data?.code === "RESOURCE_NOT_FOUND") {
+                if (data.message?.toLowerCase().includes("project")) {
+                  toast.error("Project Not Found", {
+                    description: "The selected project doesn't exist",
+                    duration: 5000
+                  });
+                } else if (data.message?.toLowerCase().includes("quarter")) {
+                  toast.error("Quarter Not Found", {
+                    description: "The selected quarter doesn't exist",
+                    duration: 5000
+                  });
+                } else if (data.message?.toLowerCase().includes("training")) {
+                  toast.error("Training Not Found", {
+                    description:
+                      "The training you're trying to update doesn't exist",
+                    duration: 5000
+                  });
+                } else {
+                  toast.error("Resource Not Found", {
+                    description:
+                      data.message || "The requested resource doesn't exist",
+                    duration: 5000
+                  });
+                }
+              } else {
+                toast.error("Not Found", {
+                  description: "The requested resource was not found",
+                  duration: 5000
+                });
+              }
+              break;
+
+            case 409:
+              toast.error("Duplicate Training", {
+                description:
+                  data?.message || "A training with this title already exists",
+                duration: 5000
+              });
+              break;
+
+            case 422:
+              toast.error("Invalid Data", {
+                description: data?.message || "The provided data is invalid",
+                duration: 5000
+              });
+              break;
+
+            case 429:
+              toast.error("Too Many Requests", {
+                description: "Please wait a moment before trying again",
+                duration: 5000
+              });
+              break;
+
+            case 500:
+            case 502:
+            case 503:
+            case 504:
+              toast.error("Server Error", {
+                description:
+                  "Something went wrong on our end. Please try again later",
+                duration: 5000
+              });
+              break;
+
+            default:
+              toast.error("Unexpected Error", {
+                description:
+                  data?.message || `Error ${status}: Something went wrong`,
+                duration: 5000
+              });
+          }
+        } else if (axiosError.request) {
+          // Network error - no response received
+          if (axiosError.code === "ECONNABORTED") {
+            toast.error("Request Timeout", {
+              description: "The request took too long. Please try again",
+              duration: 5000
+            });
+          } else if (axiosError.code === "ERR_NETWORK") {
+            toast.error("Network Error", {
+              description:
+                "Please check your internet connection and try again",
+              duration: 5000
+            });
+          } else {
+            toast.error("Connection Error", {
+              description:
+                "Unable to connect to the server. Please try again later",
+              duration: 5000
+            });
+          }
+        } else {
+          // Something else happened during request setup
+          toast.error("Request Error", {
+            description:
+              "An unexpected error occurred while making the request",
+            duration: 5000
+          });
+        }
+      } else {
+        // Non-Axios error (JavaScript errors, etc.)
+        toast.error("Unexpected Error", {
+          description: "An unexpected error occurred. Please try again",
+          duration: 5000
+        });
+      }
+
+      return false;
+    } finally {
+      // Always dismiss loading toast
+      toast.dismiss(loadingToast);
+    }
+  };
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    setSearchTerm(e.target.value);
   };
 
   return (
@@ -385,7 +920,7 @@ export default function AwarenessPage() {
                 </DialogDescription>
               </DialogHeader>
               <AwarenessForm
-                onSave={handleSave}
+                onSave={(formData) => handleSave(formData, "create")}
                 onClose={() => setIsDialogOpen(false)}
               />
             </DialogContent>
@@ -400,15 +935,13 @@ export default function AwarenessPage() {
             <CardTitle className="text-lg">Filters & Search</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-4.5 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search programs..."
+                  placeholder="Search trainings..."
                   value={searchTerm}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setSearchTerm(e.target.value)
-                  }
+                  onChange={handleSearchChange}
                   className="pl-10"
                 />
               </div>
@@ -421,10 +954,34 @@ export default function AwarenessPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Quarters</SelectItem>
-                  <SelectItem value="Q1 2024">Q1 2024</SelectItem>
-                  <SelectItem value="Q2 2024">Q2 2024</SelectItem>
-                  <SelectItem value="Q3 2024">Q3 2024</SelectItem>
-                  <SelectItem value="Q4 2024">Q4 2024</SelectItem>
+                  <SelectItem value="1">Q1</SelectItem>
+                  <SelectItem value="2">Q2 </SelectItem>
+                  <SelectItem value="3">Q3 </SelectItem>
+                  <SelectItem value="4">Q4 </SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Year" />
+                </SelectTrigger>
+                <SelectContent className="h-52">
+                  <SelectItem value="all">All Years</SelectItem>
+                  <SelectItem value="2020">2020</SelectItem>
+                  <SelectItem value="2021">2021</SelectItem>
+                  <SelectItem value="2022">2022</SelectItem>
+                  <SelectItem value="2023">2023</SelectItem>
+                  <SelectItem value="2024">2024</SelectItem>
+                  <SelectItem value="2025">2025</SelectItem>
+                  <SelectItem value="2026">2026</SelectItem>
+                  <SelectItem value="2027">2027</SelectItem>
+                  <SelectItem value="2028">2028</SelectItem>
+                  <SelectItem value="2029">2029</SelectItem>
+                  <SelectItem value="2030">2030</SelectItem>
+                  <SelectItem value="2031">2031</SelectItem>
+                  <SelectItem value="2032">2032</SelectItem>
+                  <SelectItem value="2033">2033</SelectItem>
+                  <SelectItem value="2034">2034</SelectItem>
+                  <SelectItem value="2035">2035</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -436,15 +993,11 @@ export default function AwarenessPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Projects</SelectItem>
-                  <SelectItem value="Sustainable Agriculture Initiative">
-                    Sustainable Agriculture Initiative
-                  </SelectItem>
-                  <SelectItem value="Water Management Project">
-                    Water Management Project
-                  </SelectItem>
-                  <SelectItem value="Crop Diversification Program">
-                    Crop Diversification Program
-                  </SelectItem>
+                  {uniqueProjectTitle.map((title) => (
+                    <SelectItem key={title} value={title}>
+                      {title}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select
@@ -456,9 +1009,11 @@ export default function AwarenessPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Districts</SelectItem>
-                  <SelectItem value="Guwahati">Guwahati</SelectItem>
-                  <SelectItem value="Jorhat">Jorhat</SelectItem>
-                  <SelectItem value="Dibrugarh">Dibrugarh</SelectItem>
+                  {uniqueDistrict.map((district) => (
+                    <SelectItem key={district} value={district}>
+                      {district}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -491,12 +1046,13 @@ export default function AwarenessPage() {
                   <TableHead>Location</TableHead>
                   <TableHead>Target/Achieved</TableHead>
                   <TableHead>Beneficiaries</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAwareness.length === 0 ? (
+                {isLoading ? (
+                  <EnhancedShimmerTableRows />
+                ) : filteredAwareness.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={9}
@@ -509,14 +1065,23 @@ export default function AwarenessPage() {
                   filteredAwareness.map((awareness) => (
                     <TableRow key={awareness.id}>
                       <TableCell className="font-medium">
-                        {awareness.programId}
+                        {awareness.awarnessprogramId}
                       </TableCell>
                       <TableCell>{awareness.title}</TableCell>
                       <TableCell className="text-sm">
-                        {awareness.project}
+                        {awareness.project.title}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{awareness.quarter}</Badge>
+                        <Badge variant="outline">
+                          {(() => {
+                            const quarterInfo = quarterlyData.find(
+                              (q) => q.id === awareness.quarter.id
+                            );
+                            return quarterInfo
+                              ? `Q${quarterInfo.number} ${quarterInfo.year}`
+                              : "Unknown Quarter";
+                          })()}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-sm">
                         {awareness.district}, {awareness.village}
@@ -533,22 +1098,22 @@ export default function AwarenessPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">
-                          <div>M: {awareness.beneficiaryMale}</div>
-                          <div>F: {awareness.beneficiaryFemale}</div>
+                        <div className="text-sm flex flex-col gap-y-1">
+                          <Badge variant="outline">
+                            <div className="w-16 flex gap-x-1">
+                              <UserRound className="h-4 w-4 text-blue-500" />
+                              M: {awareness.beneficiaryMale}
+                            </div>
+                          </Badge>
+                          <Badge variant="outline">
+                            <div className="w-16 flex gap-x-1">
+                              <UserRound className="h-4 w-4 text-pink-500" />
+                              F: {awareness.beneficiaryFemale}
+                            </div>
+                          </Badge>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            awareness.status === "Completed"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {awareness.status}
-                        </Badge>
-                      </TableCell>
+
                       <TableCell>
                         <div className="flex space-x-2">
                           <Button
@@ -567,6 +1132,14 @@ export default function AwarenessPage() {
                             <Eye className="h-3 w-3 mr-1" />
                             View
                           </Button>
+                          {/* <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDelete(awareness)}
+                        >
+                          <Delete className="h-3 w-3 mr-1 text-red-500" />
+                          Delete
+                        </Button> */}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -604,7 +1177,9 @@ export default function AwarenessPage() {
             {selectedAwareness && (
               <AwarenessForm
                 awareness={selectedAwareness}
-                onSave={handleSave}
+                onSave={(formData) =>
+                  handleSave(formData, "update", selectedAwareness.id)
+                }
                 onClose={() => setIsEditDialogOpen(false)}
                 isEdit={true}
               />
@@ -617,6 +1192,8 @@ export default function AwarenessPage() {
 }
 
 function AwarenessView({ awareness }: AwarenessViewProps) {
+  const projects = useProjectStore((state) => state.projects);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
@@ -624,16 +1201,7 @@ function AwarenessView({ awareness }: AwarenessViewProps) {
           <Label className="text-sm font-medium text-gray-500">
             Program ID
           </Label>
-          <p className="text-lg font-semibold">{awareness.programId}</p>
-        </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Status</Label>
-          <Badge
-            variant={awareness.status === "Completed" ? "default" : "secondary"}
-            className="mt-1"
-          >
-            {awareness.status}
-          </Badge>
+          <p className="text-lg font-semibold">{awareness.awarnessprogramId}</p>
         </div>
       </div>
 
@@ -647,11 +1215,18 @@ function AwarenessView({ awareness }: AwarenessViewProps) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">Project</Label>
-          <p>{awareness.project}</p>
+          {projects.find((p) => p.id === awareness.project.id)?.title ||
+            "Unknown project"}
         </div>
         <div>
           <Label className="text-sm font-medium text-gray-500">Quarter</Label>
-          <p>{awareness.quarter}</p>
+          <Badge variant="outline">
+            Q
+            {quarterlyData.find((q) => q.id === awareness.quarter.id)?.number ||
+              "Unknown"}{" "}
+            {quarterlyData.find((q) => q.id === awareness.quarter.id)?.year ||
+              ""}
+          </Badge>
         </div>
       </div>
 
@@ -727,10 +1302,9 @@ function AwarenessForm({
   isEdit = false
 }: AwarenessFormProps) {
   const [formData, setFormData] = useState<AwarenessFormData>({
-    programId: awareness?.programId || "",
     title: awareness?.title || "",
-    project: awareness?.project || "",
-    quarter: awareness?.quarter || "",
+    projectId: awareness?.project.id || "",
+    quarterId: awareness?.quarter.id || "",
     target: awareness?.target?.toString() || "",
     achieved: awareness?.achieved?.toString() || "",
     district: awareness?.district || "",
@@ -744,6 +1318,12 @@ function AwarenessForm({
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const projects = useProjectStore((state) => state.projects);
+
+  const uniqueProjectTitle = useMemo(() => {
+    if (!projects || projects.length === 0) return [];
+    return Array.from(new Set(projects.map((project) => project.title)));
+  }, [projects]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -816,10 +1396,9 @@ function AwarenessForm({
   const validateForm = (): boolean => {
     try {
       const validationData = {
-        programId: formData.programId,
         title: formData.title,
-        project: formData.project,
-        quarter: formData.quarter,
+        projectId: formData.projectId,
+        quarterId: formData.quarterId,
         target: Number.parseInt(formData.target) || 0,
         achieved: Number.parseInt(formData.achieved) || 0,
         district: formData.district,
@@ -836,7 +1415,6 @@ function AwarenessForm({
         createAwarenessValidation.parse(validationData);
       }
 
-      createAwarenessValidation.parse(validationData);
       setFormErrors({});
       return true;
     } catch (error) {
@@ -891,26 +1469,38 @@ function AwarenessForm({
           <Label>
             Project <span className="text-red-500">*</span>
           </Label>
+
           <Select
-            value={formData.project}
-            onValueChange={(value) => handleSelectChange("project", value)}
+            value={(() => {
+              const projectInfo = projects.find(
+                (p) => p.id === formData.projectId
+              );
+              return projectInfo ? projectInfo.title : "";
+            })()}
+            onValueChange={(value) => {
+              // Find the project ID based on the selected title
+              const selectedProject = projects.find((p) => p.title === value);
+
+              if (selectedProject) {
+                handleSelectChange("projectId", selectedProject.id);
+              }
+            }}
           >
             <SelectTrigger
-              className={formErrors.project ? "border-red-500" : ""}
+              className={formErrors.projectId ? "border-red-500" : ""}
             >
               <SelectValue placeholder="Select project" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Sustainable Agriculture Initiative">
-                Sustainable Agriculture Initiative
-              </SelectItem>
-              <SelectItem value="Water Management Project">
-                Water Management Project
-              </SelectItem>
+              {uniqueProjectTitle.map((title) => (
+                <SelectItem key={title} value={title}>
+                  {title}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          {formErrors.project && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.project}</p>
+          {formErrors.projectId && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.projectId}</p>
           )}
         </div>
       </div>
@@ -940,29 +1530,46 @@ function AwarenessForm({
             Quarter <span className="text-red-500">*</span>
           </Label>
           <Select
-            value={formData.quarter}
-            onValueChange={(value) => handleSelectChange("quarter", value)}
+            value={(() => {
+              const quarterInfo = quarterlyData.find(
+                (q) => q.id === formData.quarterId
+              );
+              return quarterInfo
+                ? `Q${quarterInfo.number} ${quarterInfo.year}`
+                : "";
+            })()}
+            onValueChange={(value) => {
+              // Find the quarter ID based on the selected display value
+              const selectedQuarter = quarterlyData.find(
+                (q) => `Q${q.number} ${q.year}` === value
+              );
+              if (selectedQuarter) {
+                handleSelectChange("quarterId", selectedQuarter.id);
+              }
+            }}
           >
             <SelectTrigger
-              className={formErrors.quarter ? "border-red-500" : ""}
+              className={formErrors.quarterId ? "border-red-500" : ""}
             >
               <SelectValue placeholder="Select quarter" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Q1 2024">Q1 2024</SelectItem>
-              <SelectItem value="Q2 2024">Q2 2024</SelectItem>
-              <SelectItem value="Q3 2024">Q3 2024</SelectItem>
-              <SelectItem value="Q4 2024">Q4 2024</SelectItem>
+            <SelectContent className="h-52">
+              {quarterlyData.map((quarter) => (
+                <SelectItem
+                  key={quarter.id}
+                  value={`Q${quarter.number} ${quarter.year}`}
+                >
+                  Q{quarter.number} {quarter.year}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          {formErrors.quarter && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.quarter}</p>
+          {formErrors.quarterId && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.quarterId}</p>
           )}
         </div>
         <div>
-          <Label htmlFor="units">
-            Units <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="units">Units</Label>
           <Input
             id="units"
             name="units"
@@ -970,7 +1577,6 @@ function AwarenessForm({
             value={formData.units}
             onChange={handleInputChange}
             className={formErrors.units ? "border-red-500" : ""}
-            required
           />
           {formErrors.units && (
             <p className="text-red-500 text-sm mt-1">{formErrors.units}</p>
