@@ -110,11 +110,11 @@ const baseAwarenessSchema = z.object({
   units: z
     .string()
     .trim()
-    .transform((val) => (val === "" ? undefined : val))
-    .optional()
-    .refine((val) => val === undefined || val.length >= 1, {
-      message: "Units must be specified"
+    .refine((val) => val === "" || val.length >= 1, {
+      message: "Units must be specified if provided"
     })
+    .transform((val) => (val === "" ? null : val))
+    .optional()
     .nullable()
 });
 
@@ -204,11 +204,11 @@ const updateAwarenessProgramValidation = z
     units: z
       .string()
       .trim()
-      .transform((val) => (val === "" ? undefined : val))
-      .optional()
-      .refine((val) => val === undefined || val.length >= 1, {
-        message: "Units must be specified"
+      .refine((val) => val === "" || val.length >= 1, {
+        message: "Units must be specified if provided"
       })
+      .transform((val) => (val === "" ? null : val))
+      .optional()
       .nullable()
   })
   .refine(
@@ -323,44 +323,6 @@ interface ApiSuccessResponse {
   data: AwarenessProgram;
   code: string;
 }
-
-// Mock awareness program data
-// const awarenessPrograms: AwarenessProgram[] = [
-//   {
-//     id: "1",
-//     programId: "AWR-2024-001",
-//     title: "Nutrition Awareness Campaign",
-//     project: "Sustainable Agriculture Initiative",
-//     quarter: "Q2 2024",
-//     target: 100,
-//     achieved: 85,
-//     district: "Guwahati",
-//     village: "Khanapara",
-//     block: "Dispur",
-//     beneficiaryMale: 45,
-//     beneficiaryFemale: 40,
-//     units: "Participants",
-//     remarks: "Successful awareness campaign on nutrition and health",
-//     status: "Completed"
-//   },
-//   {
-//     id: "2",
-//     programId: "AWR-2024-002",
-//     title: "Climate Change Awareness",
-//     project: "Water Management Project",
-//     quarter: "Q2 2024",
-//     target: 75,
-//     achieved: 70,
-//     district: "Jorhat",
-//     village: "Teok",
-//     block: "Jorhat",
-//     beneficiaryMale: 35,
-//     beneficiaryFemale: 35,
-//     units: "Participants",
-//     remarks: "Awareness program on climate change adaptation",
-//     status: "Completed"
-//   }
-// ];
 
 //Get project data
 //Get awarness data
@@ -1623,7 +1585,12 @@ function AwarenessForm({
         description: "Failed to save awareness program. Please try again."
       });
     } finally {
-      setIsSubmitting(false);
+      const timer = setTimeout(() => {
+        setIsSubmitting(false);
+      }, 30000); // 30000 milliseconds = 30 seconds
+
+      // Optional: cleanup in case the component unmounts before 15s
+      clearTimeout(timer);
     }
   };
 

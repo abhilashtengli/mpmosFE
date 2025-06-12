@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
@@ -32,26 +32,23 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Sprout, Plus, Search, Eye, Edit, ImageIcon } from "lucide-react";
+import { Sprout, Plus, Search, Eye, Edit, Delete } from "lucide-react";
+import { useProjectStore } from "@/stores/useProjectStore";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { useNavigate } from "react-router-dom";
+import { Base_Url, quarterlyData } from "@/lib/constants";
+import axios, { AxiosError } from "axios";
+import EnhancedShimmerTableRows from "@/components/shimmer-rows";
 
 // Validation schemas
 const baseFLDSchema = z.object({
-  fldId: z
-    .string()
-    .trim()
-    .min(2, { message: "FLD ID must be at least 2 characters" })
-    .max(50, { message: "FLD ID cannot exceed 50 characters" }),
-  title: z
-    .string()
-    .trim()
-    .min(2, { message: "Title must be at least 2 characters" })
-    .max(255, { message: "Title cannot exceed 255 characters" }),
-  project: z.string().trim().min(1, { message: "Project is required" }),
-  quarter: z.string().trim().min(1, { message: "Quarter is required" }),
+  projectId: z.string().trim().min(1, { message: "Project is required" }),
+  quarterId: z.string().trim().min(1, { message: "Quarter is required" }),
   target: z
     .number({ invalid_type_error: "Target must be a number" })
     .int({ message: "Target must be an integer" })
@@ -75,28 +72,21 @@ const baseFLDSchema = z.object({
     .trim()
     .min(2, { message: "Block must be at least 2 characters" })
     .max(100, { message: "Block cannot exceed 100 characters" }),
-  beneficiaryMale: z
-    .number({ invalid_type_error: "Male beneficiary count must be a number" })
-    .int({ message: "Male beneficiary count must be an integer" })
-    .nonnegative({
-      message: "Male beneficiary count must be zero or positive"
-    }),
-  beneficiaryFemale: z
-    .number({ invalid_type_error: "Female beneficiary count must be a number" })
-    .int({ message: "Female beneficiary count must be an integer" })
-    .nonnegative({
-      message: "Female beneficiary count must be zero or positive"
-    }),
-  units: z.string().trim().min(1, { message: "Units are required" }),
+
+  units: z
+    .string()
+    .trim()
+    .refine((val) => val === "" || val.length >= 1, {
+      message: "Units must be specified if provided"
+    })
+    .transform((val) => (val === "" ? null : val))
+    .optional()
+    .nullable(),
   remarks: z
     .string()
     .trim()
     .max(300, { message: "Remarks cannot exceed 300 characters" })
-    .optional(),
-  cropType: z.string().trim().min(1, { message: "Crop type is required" }),
-  area: z
-    .number({ invalid_type_error: "Area must be a number" })
-    .positive({ message: "Area must be positive" })
+    .optional()
 });
 
 const createFLDValidation = baseFLDSchema.refine(
@@ -107,36 +97,79 @@ const createFLDValidation = baseFLDSchema.refine(
   }
 );
 
-const updateFLDValidation = baseFLDSchema.partial().refine(
-  (data) => {
-    if (data.target !== undefined && data.achieved !== undefined) {
+const updateFLDValidation = z
+  .object({
+    projectId: z
+      .string()
+      .uuid({ message: "Valid project ID is required" })
+      .optional(),
+    quarterId: z
+      .string()
+      .uuid({ message: "Valid quarter ID is required" })
+      .optional(),
+    remarks: z
+      .string()
+      .trim()
+      .max(300, { message: "Remarks cannot exceed 300 characters" })
+      .optional()
+      .nullable(),
+    district: z
+      .string()
+      .max(100, { message: "District must be 100 characters or less" })
+      .optional(),
+    village: z
+      .string()
+      .max(100, { message: "Village must be 100 characters or less" })
+      .optional(),
+    block: z
+      .string()
+      .max(100, { message: "Block must be 100 characters or less" })
+      .optional(),
+    target: z
+      .number()
+      .int()
+      .positive({ message: "Target must be a positive integer" })
+      .optional(),
+    achieved: z
+      .number()
+      .int()
+      .nonnegative({ message: "Achieved must be a non-negative integer" })
+      .optional(),
+    units: z
+      .string()
+      .trim()
+      .refine((val) => val === "" || val.length >= 1, {
+        message: "Units must be specified if provided"
+      })
+      .transform((val) => (val === "" ? null : val))
+      .optional()
+      .nullable()
+  })
+  .refine(
+    (data) => {
+      // Skip refinement if we don't have both target and achieved
+      if (data.target === undefined || data.achieved === undefined) {
+        return true;
+      }
+      // For update validation, we need to compare the values only if both are provided
       return data.achieved <= data.target;
+    },
+    {
+      message: "Achieved count cannot exceed target count",
+      path: ["achieved"]
     }
-    return true;
-  },
-  {
-    message: "Achieved count cannot exceed target count",
-    path: ["achieved"]
-  }
-);
+  );
 
 interface FLDFormData {
-  fldId: string;
-  title: string;
-  project: string;
-  quarter: string;
+  projectId: string;
+  quarterId: string;
   target: string;
   achieved: string;
   district: string;
   village: string;
   block: string;
-  beneficiaryMale: string;
-  beneficiaryFemale: string;
   units: string;
   remarks: string;
-  cropType: string;
-  area: string;
-  imageFile: File | null;
 }
 
 type FormErrors = {
@@ -146,21 +179,26 @@ type FormErrors = {
 interface FLD {
   id: string;
   fldId: string;
-  title: string;
-  project: string;
-  quarter: string;
+  project: {
+    id: string;
+    title: string;
+  };
+  quarter: {
+    id: string;
+    number: number;
+    year: number;
+  };
   target: number;
   achieved: number;
   district: string;
   village: string;
   block: string;
-  beneficiaryMale: number;
-  beneficiaryFemale: number;
   units: string;
   remarks: string;
-  status: string;
-  cropType: string;
-  area: number;
+  User?: {
+    id: string;
+    name: string;
+  };
 }
 
 interface FLDViewProps {
@@ -171,90 +209,166 @@ interface FLDFormProps {
   fld?: FLD;
   onSave: (data: FLDFormData) => void;
   onClose: () => void;
-  formErrors: FormErrors; // 👈 add this
-  validateForm: (data: FLDFormData, isEdit?: boolean) => boolean;
-  isSubmitting: boolean;
-  setIsSubmitting: React.Dispatch<React.SetStateAction<boolean>>;
   isEdit?: boolean;
 }
-
-// Mock FLD data
-const flds: FLD[] = [
-  {
-    id: "1",
-    fldId: "FLD-2024-001",
-    title: "Rice Cultivation Demonstration",
-    project: "Sustainable Agriculture Initiative",
-    quarter: "Q2 2024",
-    target: 10,
-    achieved: 8,
-    district: "Guwahati",
-    village: "Khanapara",
-    block: "Dispur",
-    beneficiaryMale: 15,
-    beneficiaryFemale: 10,
-    units: "Plots",
-    remarks: "Successful demonstration of improved rice varieties",
-    status: "Completed",
-    cropType: "Rice",
-    area: 2.5
-  },
-  {
-    id: "2",
-    fldId: "FLD-2024-002",
-    title: "Vegetable Farming Demo",
-    project: "Water Management Project",
-    quarter: "Q2 2024",
-    target: 8,
-    achieved: 7,
-    district: "Jorhat",
-    village: "Teok",
-    block: "Jorhat",
-    beneficiaryMale: 12,
-    beneficiaryFemale: 8,
-    units: "Plots",
-    remarks: "Demonstration of organic vegetable farming",
-    status: "Completed",
-    cropType: "Vegetables",
-    area: 1.8
-  }
-];
+interface ApiErrorResponse {
+  success: boolean;
+  message: string;
+  code: string;
+  errors?: unknown;
+  path?: string[];
+}
+interface ApiSuccessResponse {
+  success: true;
+  message: string;
+  data: FLD;
+  code: string;
+}
 
 export default function FLDPage() {
+  const [flds, setFlds] = useState<FLD[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState<boolean>(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
   const [selectedFLD, setSelectedFLD] = useState<FLD | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [selectedYear, setSelectedYear] = useState("");
   const [selectedQuarter, setSelectedQuarter] = useState<string>("");
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const projects = useProjectStore((state) => state.projects);
+  const logOut = useAuthStore((state) => state.logout);
+  const navigate = useNavigate();
+  const userRole = useAuthStore((state) => state.user);
+
+  //Fetch training Data
+  const fetchFlds = async () => {
+    try {
+      setIsLoading(true);
+
+      const endpoint =
+        userRole?.role === "admin" // Changed from userRole?.role
+          ? "get-admin-fld"
+          : "get-user-fld";
+      const response = await axios.get(`${Base_Url}/${endpoint}`, {
+        withCredentials: true
+      });
+
+      const data = response.data;
+
+      if (!data.success || response.status !== 200) {
+        throw new Error(data.message || "Failed to fetch Fld's");
+      }
+      // console.log("data : ", data.data);
+      const mappedFld: FLD[] = (data.data || []).map((item: FLD) => ({
+        id: item.id,
+        fldId: item.fldId,
+        project: {
+          id: item.project.id,
+          title: item.project.title
+        },
+        quarter: {
+          id: item.quarter.id,
+          number: item.quarter.number,
+          year: item.quarter.year
+        },
+        target: item.target,
+        achieved: item.achieved,
+        district: item.district,
+        village: item.village,
+        block: item.block,
+
+        units: item.units,
+        remarks: item.remarks,
+
+        user: item.User ? { id: item.User.id, name: item.User.name } : undefined
+      }));
+      console.log("MP : ", mappedFld);
+      setFlds(mappedFld || []);
+    } catch (error: unknown) {
+      // console.error("Error fetching trainings:", error);
+
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const message = error.response?.data?.message;
+
+        toast.error("Failed", {
+          description:
+            message ||
+            `Axios error occurred${status ? ` (Status: ${status})` : ""}`
+        });
+      } else {
+        toast.error("Failed", {
+          description: "An unexpected error occurred while fetching Fld's"
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFlds();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRole]);
 
   // Filter FLDs based on search and filter criteria
-  const filteredFLDs = flds.filter((fld) => {
-    const matchesSearch =
-      fld.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      fld.fldId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      fld.project.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      fld.cropType.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredFLDs: FLD[] = flds.filter((training: FLD) => {
+    const matchesSearch: boolean = training.project.title
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
 
-    const matchesQuarter =
-      !selectedQuarter ||
-      selectedQuarter === "all" ||
-      fld.quarter === selectedQuarter;
-    const matchesProject =
+    // Get quarter IDs based on year and quarter selection
+    let matchesYearQuarter: boolean = true;
+
+    if (
+      (selectedYear && selectedYear !== "all") ||
+      (selectedQuarter && selectedQuarter !== "all")
+    ) {
+      // Find matching quarter IDs from quarterlyData
+      const matchingQuarterIds = quarterlyData
+        .filter((q) => {
+          const yearMatch =
+            !selectedYear ||
+            selectedYear === "all" ||
+            q.year === parseInt(selectedYear);
+          const quarterMatch =
+            !selectedQuarter ||
+            selectedQuarter === "all" ||
+            q.number === parseInt(selectedQuarter);
+          return yearMatch && quarterMatch;
+        })
+        .map((q) => q.id);
+
+      // Check if training's quarterId matches any of the filtered quarter IDs
+      matchesYearQuarter = matchingQuarterIds.includes(training.quarter.id);
+    }
+
+    const matchesProject: boolean =
       !selectedProject ||
       selectedProject === "all" ||
-      fld.project === selectedProject;
-    const matchesDistrict =
+      training.project.title === selectedProject;
+
+    const matchesDistrict: boolean =
       !selectedDistrict ||
       selectedDistrict === "all" ||
-      fld.district === selectedDistrict;
+      training.district === selectedDistrict;
 
-    return matchesSearch && matchesQuarter && matchesProject && matchesDistrict;
+    return (
+      matchesSearch && matchesYearQuarter && matchesProject && matchesDistrict
+    );
   });
+  const uniqueProjectTitle = useMemo(() => {
+    if (!projects || projects.length === 0) return [];
+    return Array.from(new Set(projects.map((project) => project.title)));
+  }, [projects]);
+
+  const uniqueDistrict = useMemo(() => {
+    if (!flds || flds.length === 0) return [];
+    return Array.from(new Set(flds.map((fld) => fld.district)));
+  }, [flds]);
 
   const handleView = (fld: FLD): void => {
     setSelectedFLD(fld);
@@ -265,56 +379,418 @@ export default function FLDPage() {
     setSelectedFLD(fld);
     setIsEditDialogOpen(true);
   };
-
-  const handleSave = (formData: FLDFormData): void => {
-    console.log("Saving FLD:", formData);
-    setIsDialogOpen(false);
-    setIsEditDialogOpen(false);
-    toast.success("FLD Program Saved", {
-      description: `${formData.title} has been saved successfully.`
-    });
+  const handleDelete = (training: FLD): void => {
+    setSelectedFLD(training);
+    setIsDeleteDialogOpen(true);
   };
 
-  const validateForm = (data: FLDFormData, isEdit = false): boolean => {
+  const handleDeleteFLD = async () => {
+    if (!selectedFLD) {
+      toast.error("No FLD selected", {
+        description: "Please select a FLD to delete"
+      });
+      return;
+    }
+
+    const loadingToast = toast.loading(`Deleting FLD...`);
+
     try {
-      const validationData = {
-        fldId: data.fldId,
-        title: data.title,
-        project: data.project,
-        quarter: data.quarter,
-        target: Number.parseInt(data.target) || 0,
-        achieved: Number.parseInt(data.achieved) || 0,
-        district: data.district,
-        village: data.village,
-        block: data.block,
-        beneficiaryMale: Number.parseInt(data.beneficiaryMale) || 0,
-        beneficiaryFemale: Number.parseInt(data.beneficiaryFemale) || 0,
-        units: data.units,
-        remarks: data.remarks,
-        cropType: data.cropType,
-        area: Number.parseFloat(data.area) || 0
+      const response = await axios.delete(
+        `${Base_Url}/delete-fld/${selectedFLD.id}`,
+        {
+          withCredentials: true,
+          timeout: 30000
+        }
+      );
+
+      if (response.status === 200 && response.data.success) {
+        toast.success("FLD deleted", {
+          description: "FLD deleted successfully",
+          duration: 5000
+        });
+        setFlds((prevTrainings) =>
+          prevTrainings.filter((fld) => fld.id !== selectedFLD.id)
+        );
+        setSelectedFLD(null);
+        setIsDeleteDialogOpen(false);
+      } else {
+        toast.error("Deletion failed", {
+          description:
+            response.data?.message || "FLD deletion was not completed"
+        });
+      }
+    } catch (error: unknown) {
+      console.error("Delete FLD error:", error);
+
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const message = error.response?.data?.message;
+
+        const errorMap: Record<number, { title: string; fallback: string }> = {
+          400: {
+            title: "Invalid request",
+            fallback: "The FLD ID is invalid"
+          },
+          401: { title: "Authentication required", fallback: "Please sign in" },
+          403: { title: "Access denied", fallback: "Permission denied" },
+          404: {
+            title: "FLD not found",
+            fallback: "FLD may already be deleted"
+          },
+          409: {
+            title: "Conflict",
+            fallback: "Cannot delete due to dependencies"
+          },
+          500: {
+            title: "Server error",
+            fallback: "Something went wrong on our end"
+          }
+        };
+
+        if (status && errorMap[status]) {
+          const { title, fallback } = errorMap[status];
+          toast.error(title, { description: message || fallback });
+        } else if (error.code === "ECONNABORTED") {
+          toast.error("Timeout", {
+            description: "Request took too long. Please try again"
+          });
+        } else {
+          toast.error("Network error", {
+            description: "Check your internet connection"
+          });
+        }
+      } else {
+        toast.error("Unexpected error", {
+          description: "Something went wrong. Please try again"
+        });
+      }
+    } finally {
+      toast.dismiss(loadingToast);
+    }
+  };
+
+  const handleSave = async (
+    formData: FLDFormData,
+    operation: "create" | "update" = "create",
+    fldId?: string
+  ): Promise<boolean> => {
+    // Input validation
+
+    console.log("DATA : ", formData);
+    if (operation === "update" && !fldId) {
+      toast.error("Training ID is required for update operation");
+      return false;
+    }
+
+    // Validate required fields
+
+    if (!formData.projectId?.trim()) {
+      toast.error("Project is required");
+      return false;
+    }
+
+    if (!formData.quarterId?.trim()) {
+      toast.error("Quarter is required");
+      return false;
+    }
+
+    if (!formData.target || Number.parseInt(formData.target) <= 0) {
+      toast.error("Valid target number is required");
+      return false;
+    }
+
+    // Show loading toast
+    const loadingToast = toast.loading(
+      `${operation === "create" ? "Creating" : "Updating"} training...`
+    );
+
+    try {
+      let response;
+      const config = {
+        withCredentials: true,
+        timeout: 30000, // 30 second timeout
+        headers: {
+          "Content-Type": "application/json"
+        }
       };
 
-      if (isEdit) {
-        updateFLDValidation.parse(validationData);
+      // Prepare request data
+      const requestData = {
+        projectId: formData.projectId,
+        quarterId: formData.quarterId,
+        target: Number.parseInt(formData.target),
+        achieved: Number.parseInt(formData.achieved) || 0,
+        district: formData.district,
+        village: formData.village,
+        block: formData.block,
+        units: formData.units,
+        remarks: formData.remarks
+      };
+
+      if (operation === "create") {
+        response = await axios.post(
+          `${Base_Url}/create-fld`,
+          requestData,
+          config
+        );
       } else {
-        createFLDValidation.parse(validationData);
+        response = await axios.put(
+          `${Base_Url}/update-fld/${fldId}`,
+          requestData,
+          config
+        );
       }
 
-      setFormErrors({});
-      return true;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const newErrors: FormErrors = {};
-        error.errors.forEach((err) => {
-          const path = err.path[0]?.toString();
-          if (path) {
-            newErrors[path] = err.message;
-          }
+      // Handle successful response
+      if (response?.status === 201 || response?.status === 200) {
+        const data = response.data as ApiSuccessResponse;
+
+        // Refresh trainings list
+        toast.success(data.message || `FLD ${operation}d successfully`, {
+          description: `FLD ${operation}d successfully`,
+          duration: 6000
         });
-        setFormErrors(newErrors);
+
+        // Update local state
+        if (operation === "create") {
+          const newTraining: FLD = {
+            id: data.data.id,
+            fldId: data.data.fldId,
+            project: {
+              id: data.data.project.id, // assuming this is coming from the form
+              title: data.data.project.title // you must get this from `projects` store or from form
+            },
+            quarter: {
+              id: data.data.quarter.id,
+              number: Number(data.data.quarter.number),
+              year: Number(data.data.quarter.year)
+            },
+            target: data.data.target,
+            achieved: data.data.achieved || 0,
+            district: data.data.district,
+            village: data.data.village,
+            block: data.data.block,
+            units: data.data.units,
+            remarks: data.data.remarks,
+            User:
+              data.data.User?.id && data.data.User?.name
+                ? {
+                    id: data.data.User.id,
+                    name: data.data.User.name
+                  }
+                : undefined
+          };
+          setFlds((prev) => [newTraining, ...prev]);
+        } else if (operation === "update" && fldId) {
+          setFlds((prev) =>
+            prev.map((t) =>
+              t.id === fldId
+                ? {
+                    ...t,
+                    project: {
+                      id: data.data.project.id, // assuming this is coming from the form
+                      title: data.data.project.title // you must get this from `projects` store or from form
+                    },
+                    quarter: {
+                      id: data.data.quarter.id,
+                      number: Number(data.data.quarter.number),
+                      year: Number(data.data.quarter.year)
+                    },
+                    target: data.data.target,
+                    achieved: data.data.achieved || 0,
+                    district: data.data.district,
+                    village: data.data.village,
+                    block: data.data.block,
+                    units: data.data.units,
+                    remarks: data.data.remarks,
+                    User:
+                      data.data.User?.id && data.data.User?.name
+                        ? {
+                            id: data.data.User.id,
+                            name: data.data.User.name
+                          }
+                        : undefined
+                  }
+                : t
+            )
+          );
+        }
+
+        // Close dialogs on success
+        setIsDialogOpen(false);
+        setIsEditDialogOpen(false);
+        setSelectedFLD(null);
+
+        return true;
       }
+
+      // Handle unexpected success status codes
+      toast.error(`Unexpected response status: ${response?.status}`);
       return false;
+    } catch (error) {
+      console.error(`Error ${operation}ing training:`, error);
+
+      // Comprehensive error handling for production
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError<ApiErrorResponse>;
+
+        if (axiosError.response) {
+          // Server responded with error status
+          const { status, data } = axiosError.response;
+
+          switch (status) {
+            case 400:
+              // Validation errors or invalid input
+              if (data?.code === "VALIDATION_ERROR" && data.errors) {
+                toast.error("Validation Error", {
+                  description: "Please check your input and try again",
+                  duration: 5000
+                });
+                console.error("Validation errors:", data.errors);
+              } else if (data?.code === "INVALID_INPUT") {
+                toast.error("Invalid Input", {
+                  description: data.message || "Please check your input",
+                  duration: 5000
+                });
+              } else {
+                toast.error(data?.message || "Invalid input provided");
+              }
+              break;
+
+            case 401:
+              toast.error("Authentication Required", {
+                description: "Please sign in to continue",
+                duration: 5000
+              });
+              // Handle logout and redirect
+              if (typeof logOut === "function") {
+                logOut();
+              }
+              if (typeof navigate === "function") {
+                navigate("/signin");
+              }
+              break;
+
+            case 403:
+              toast.error("Access Denied", {
+                description: "You don't have permission to perform this action",
+                duration: 5000
+              });
+              break;
+
+            case 404:
+              if (data?.code === "RESOURCE_NOT_FOUND") {
+                if (data.message?.toLowerCase().includes("project")) {
+                  toast.error("Project Not Found", {
+                    description: "The selected project doesn't exist",
+                    duration: 5000
+                  });
+                } else if (data.message?.toLowerCase().includes("quarter")) {
+                  toast.error("Quarter Not Found", {
+                    description: "The selected quarter doesn't exist",
+                    duration: 5000
+                  });
+                } else if (data.message?.toLowerCase().includes("training")) {
+                  toast.error("Training Not Found", {
+                    description:
+                      "The training you're trying to update doesn't exist",
+                    duration: 5000
+                  });
+                } else {
+                  toast.error("Resource Not Found", {
+                    description:
+                      data.message || "The requested resource doesn't exist",
+                    duration: 5000
+                  });
+                }
+              } else {
+                toast.error("Not Found", {
+                  description: "The requested resource was not found",
+                  duration: 5000
+                });
+              }
+              break;
+
+            case 409:
+              toast.error("Duplicate Training", {
+                description:
+                  data?.message || "A training with this title already exists",
+                duration: 5000
+              });
+              break;
+
+            case 422:
+              toast.error("Invalid Data", {
+                description: data?.message || "The provided data is invalid",
+                duration: 5000
+              });
+              break;
+
+            case 429:
+              toast.error("Too Many Requests", {
+                description: "Please wait a moment before trying again",
+                duration: 5000
+              });
+              break;
+
+            case 500:
+            case 502:
+            case 503:
+            case 504:
+              toast.error("Server Error", {
+                description:
+                  "Something went wrong on our end. Please try again later",
+                duration: 5000
+              });
+              break;
+
+            default:
+              toast.error("Unexpected Error", {
+                description:
+                  data?.message || `Error ${status}: Something went wrong`,
+                duration: 5000
+              });
+          }
+        } else if (axiosError.request) {
+          // Network error - no response received
+          if (axiosError.code === "ECONNABORTED") {
+            toast.error("Request Timeout", {
+              description: "The request took too long. Please try again",
+              duration: 5000
+            });
+          } else if (axiosError.code === "ERR_NETWORK") {
+            toast.error("Network Error", {
+              description:
+                "Please check your internet connection and try again",
+              duration: 5000
+            });
+          } else {
+            toast.error("Connection Error", {
+              description:
+                "Unable to connect to the server. Please try again later",
+              duration: 5000
+            });
+          }
+        } else {
+          // Something else happened during request setup
+          toast.error("Request Error", {
+            description:
+              "An unexpected error occurred while making the request",
+            duration: 5000
+          });
+        }
+      } else {
+        // Non-Axios error (JavaScript errors, etc.)
+        toast.error("Unexpected Error", {
+          description: "An unexpected error occurred. Please try again",
+          duration: 5000
+        });
+      }
+
+      return false;
+    } finally {
+      // Always dismiss loading toast
+      toast.dismiss(loadingToast);
     }
   };
 
@@ -349,12 +825,8 @@ export default function FLDPage() {
                 </DialogDescription>
               </DialogHeader>
               <FLDForm
-                onSave={handleSave}
+                onSave={(formData) => handleSave(formData, "create")}
                 onClose={() => setIsDialogOpen(false)}
-                formErrors={formErrors}
-                validateForm={validateForm}
-                isSubmitting={isSubmitting}
-                setIsSubmitting={setIsSubmitting}
               />
             </DialogContent>
           </Dialog>
@@ -363,16 +835,17 @@ export default function FLDPage() {
 
       <div className="p-6">
         {/* Filters and Search */}
+
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-lg">Filters & Search</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-4.5 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search FLDs..."
+                  placeholder="Search trainings..."
                   value={searchTerm}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setSearchTerm(e.target.value)
@@ -389,10 +862,34 @@ export default function FLDPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Quarters</SelectItem>
-                  <SelectItem value="Q1 2024">Q1 2024</SelectItem>
-                  <SelectItem value="Q2 2024">Q2 2024</SelectItem>
-                  <SelectItem value="Q3 2024">Q3 2024</SelectItem>
-                  <SelectItem value="Q4 2024">Q4 2024</SelectItem>
+                  <SelectItem value="1">Q1</SelectItem>
+                  <SelectItem value="2">Q2 </SelectItem>
+                  <SelectItem value="3">Q3 </SelectItem>
+                  <SelectItem value="4">Q4 </SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Year" />
+                </SelectTrigger>
+                <SelectContent className="h-52">
+                  <SelectItem value="all">All Years</SelectItem>
+                  <SelectItem value="2020">2020</SelectItem>
+                  <SelectItem value="2021">2021</SelectItem>
+                  <SelectItem value="2022">2022</SelectItem>
+                  <SelectItem value="2023">2023</SelectItem>
+                  <SelectItem value="2024">2024</SelectItem>
+                  <SelectItem value="2025">2025</SelectItem>
+                  <SelectItem value="2026">2026</SelectItem>
+                  <SelectItem value="2027">2027</SelectItem>
+                  <SelectItem value="2028">2028</SelectItem>
+                  <SelectItem value="2029">2029</SelectItem>
+                  <SelectItem value="2030">2030</SelectItem>
+                  <SelectItem value="2031">2031</SelectItem>
+                  <SelectItem value="2032">2032</SelectItem>
+                  <SelectItem value="2033">2033</SelectItem>
+                  <SelectItem value="2034">2034</SelectItem>
+                  <SelectItem value="2035">2035</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -404,15 +901,11 @@ export default function FLDPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Projects</SelectItem>
-                  <SelectItem value="Sustainable Agriculture Initiative">
-                    Sustainable Agriculture Initiative
-                  </SelectItem>
-                  <SelectItem value="Water Management Project">
-                    Water Management Project
-                  </SelectItem>
-                  <SelectItem value="Crop Diversification Program">
-                    Crop Diversification Program
-                  </SelectItem>
+                  {uniqueProjectTitle.map((title) => (
+                    <SelectItem key={title} value={title}>
+                      {title}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select
@@ -424,15 +917,16 @@ export default function FLDPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Districts</SelectItem>
-                  <SelectItem value="Guwahati">Guwahati</SelectItem>
-                  <SelectItem value="Jorhat">Jorhat</SelectItem>
-                  <SelectItem value="Dibrugarh">Dibrugarh</SelectItem>
+                  {uniqueDistrict.map((district) => (
+                    <SelectItem key={district} value={district}>
+                      {district}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </CardContent>
         </Card>
-
         {/* FLD List */}
         <Card>
           <CardHeader>
@@ -452,20 +946,17 @@ export default function FLDPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>FLD ID</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Crop Type</TableHead>
                   <TableHead>Project</TableHead>
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Target/Achieved</TableHead>
-                  <TableHead>Area (Acres)</TableHead>
-                  <TableHead>Beneficiaries</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredFLDs.length === 0 ? (
+                {isLoading ? (
+                  <EnhancedShimmerTableRows />
+                ) : filteredFLDs.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={11}
@@ -478,15 +969,23 @@ export default function FLDPage() {
                   filteredFLDs.map((fld) => (
                     <TableRow key={fld.id}>
                       <TableCell className="font-medium">{fld.fldId}</TableCell>
-                      <TableCell>{fld.title}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{fld.cropType}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">{fld.project}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{fld.quarter}</Badge>
-                      </TableCell>
+
                       <TableCell className="text-sm">
+                        {fld.project.title}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {(() => {
+                            const quarterInfo = quarterlyData.find(
+                              (q) => q.id === fld.quarter.id
+                            );
+                            return quarterInfo
+                              ? `Q${quarterInfo.number} ${quarterInfo.year}`
+                              : "Unknown Quarter";
+                          })()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm truncate max-w-[150px] whitespace-nowrap overflow-hidden">
                         {fld.district}, {fld.village}
                       </TableCell>
                       <TableCell>
@@ -497,22 +996,7 @@ export default function FLDPage() {
                           <span className="text-gray-400"> / {fld.target}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{fld.area}</TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div>M: {fld.beneficiaryMale}</div>
-                          <div>F: {fld.beneficiaryFemale}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            fld.status === "Completed" ? "default" : "secondary"
-                          }
-                        >
-                          {fld.status}
-                        </Badge>
-                      </TableCell>
+
                       <TableCell>
                         <div className="flex space-x-2">
                           <Button
@@ -530,6 +1014,14 @@ export default function FLDPage() {
                           >
                             <Eye className="h-3 w-3 mr-1" />
                             View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDelete(fld)}
+                          >
+                            <Delete className="h-3 w-3 mr-1 text-red-500" />
+                            Delete
                           </Button>
                         </div>
                       </TableCell>
@@ -566,15 +1058,76 @@ export default function FLDPage() {
             {selectedFLD && (
               <FLDForm
                 fld={selectedFLD}
-                onSave={handleSave}
+                onSave={(formData) =>
+                  handleSave(formData, "update", selectedFLD.id)
+                }
                 onClose={() => setIsEditDialogOpen(false)}
                 isEdit={true}
-                formErrors={formErrors}
-                validateForm={validateForm}
-                isSubmitting={isSubmitting}
-                setIsSubmitting={setIsSubmitting}
               />
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/*Delete project Dialog */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-black">
+                ⚠️ Confirm FLD Deletion
+              </DialogTitle>
+              <DialogDescription>
+                <br />
+                <span className="block mt-2">
+                  Are you sure you want to delete this FLD?
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  This action cannot be undone.
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedFLD && (
+              <div className="grid gap-2 py-4 text-sm text-muted-foreground">
+                <div>
+                  <span className="font-medium text-foreground">
+                    Project :{" "}
+                  </span>
+                  {selectedFLD?.project.title}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">
+                    District :{" "}
+                  </span>
+                  {selectedFLD?.district}
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">
+                    Village :{" "}
+                  </span>
+                  {selectedFLD?.village}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDeleteDialogOpen(false)}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  handleDeleteFLD();
+                }}
+                disabled={isLoading}
+                className="cursor-pointer"
+              >
+                {isLoading ? "Deleting..." : "Delete"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -583,6 +1136,8 @@ export default function FLDPage() {
 }
 
 function FLDView({ fld }: FLDViewProps) {
+  const projects = useProjectStore((state) => state.projects);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
@@ -590,43 +1145,25 @@ function FLDView({ fld }: FLDViewProps) {
           <Label className="text-sm font-medium text-gray-500">FLD ID</Label>
           <p className="text-lg font-semibold">{fld.fldId}</p>
         </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Status</Label>
-          <Badge
-            variant={fld.status === "Completed" ? "default" : "secondary"}
-            className="mt-1"
-          >
-            {fld.status}
-          </Badge>
-        </div>
-      </div>
-
-      <div>
-        <Label className="text-sm font-medium text-gray-500">FLD Title</Label>
-        <p className="text-lg">{fld.title}</p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Crop Type</Label>
-          <p>{fld.cropType}</p>
-        </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">
-            Area (Acres)
-          </Label>
-          <p>{fld.area}</p>
-        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">Project</Label>
-          <p>{fld.project}</p>
+          <p>
+            {" "}
+            {projects.find((p) => p.id === fld.project.id)?.title ||
+              "Unknown FLD"}
+          </p>
         </div>
         <div>
           <Label className="text-sm font-medium text-gray-500">Quarter</Label>
-          <p>{fld.quarter}</p>
+          <Badge variant="outline">
+            Q
+            {quarterlyData.find((q) => q.id === fld.quarter.id)?.number ||
+              "Unknown"}{" "}
+            {quarterlyData.find((q) => q.id === fld.quarter.id)?.year || ""}
+          </Badge>
         </div>
       </div>
 
@@ -660,25 +1197,6 @@ function FLDView({ fld }: FLDViewProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label className="text-sm font-medium text-gray-500">
-            Male Beneficiaries
-          </Label>
-          <p className="text-lg font-semibold text-blue-600">
-            {fld.beneficiaryMale}
-          </p>
-        </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">
-            Female Beneficiaries
-          </Label>
-          <p className="text-lg font-semibold text-pink-600">
-            {fld.beneficiaryFemale}
-          </p>
-        </div>
-      </div>
-
       {fld.remarks && (
         <div>
           <Label className="text-sm font-medium text-gray-500">Remarks</Label>
@@ -693,26 +1211,25 @@ function FLDView({ fld }: FLDViewProps) {
 
 function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
   const [formData, setFormData] = useState<FLDFormData>({
-    fldId: fld?.fldId || "",
-    title: fld?.title || "",
-    project: fld?.project || "",
-    quarter: fld?.quarter || "",
+    projectId: fld?.project.id || "",
+    quarterId: fld?.quarter.id || "",
     target: fld?.target?.toString() || "",
     achieved: fld?.achieved?.toString() || "",
     district: fld?.district || "",
     village: fld?.village || "",
     block: fld?.block || "",
-    beneficiaryMale: fld?.beneficiaryMale?.toString() || "0",
-    beneficiaryFemale: fld?.beneficiaryFemale?.toString() || "0",
     units: fld?.units || "",
-    remarks: fld?.remarks || "",
-    cropType: fld?.cropType || "",
-    area: fld?.area?.toString() || "",
-    imageFile: null
+    remarks: fld?.remarks || ""
   });
 
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const projects = useProjectStore((state) => state.projects);
+
+  const uniqueProjectTitle = useMemo(() => {
+    if (!projects || projects.length === 0) return [];
+    return Array.from(new Set(projects.map((project) => project.title)));
+  }, [projects]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -743,78 +1260,36 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = e.target.files?.[0] || null;
-
-    if (!file) return;
-
-    // Validate file size (20MB max)
-    if (file.size > 20 * 1024 * 1024) {
-      setFormErrors((prev) => ({
-        ...prev,
-        imageFile: "File size must be less than 20MB"
-      }));
-      return;
-    }
-
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      setFormErrors((prev) => ({
-        ...prev,
-        imageFile: "Please select a valid image file"
-      }));
-      return;
-    }
-
-    setFormData((prev) => ({ ...prev, imageFile: file }));
-
-    // Clear error for this field
-    if (formErrors.imageFile) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors.imageFile;
-        return newErrors;
-      });
-    }
-
-    toast.success("Image selected", {
-      description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`
-    });
-  };
-
   const validateForm = (): boolean => {
     try {
-      const dataToValidate = {
-        fldId: formData.fldId,
-        title: formData.title,
-        project: formData.project,
-        quarter: formData.quarter,
+      const validationData = {
+        projectId: formData.projectId,
+        quarterId: formData.quarterId,
         target: Number.parseInt(formData.target) || 0,
         achieved: Number.parseInt(formData.achieved) || 0,
         district: formData.district,
         village: formData.village,
         block: formData.block,
-        beneficiaryMale: Number.parseInt(formData.beneficiaryMale) || 0,
-        beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
         units: formData.units,
-        remarks: formData.remarks,
-        cropType: formData.cropType,
-        area: Number.parseFloat(formData.area) || 0
+        remarks: formData.remarks
       };
 
       if (isEdit) {
-        updateFLDValidation.parse(dataToValidate);
+        updateFLDValidation.parse(validationData);
       } else {
-        createFLDValidation.parse(dataToValidate);
+        createFLDValidation.parse(validationData);
       }
 
+      setFormErrors({});
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
         const newErrors: FormErrors = {};
         error.errors.forEach((err) => {
-          const path = err.path[0].toString();
-          newErrors[path] = err.message;
+          const path = err.path[0]?.toString();
+          if (path) {
+            newErrors[path] = err.message;
+          }
         });
         setFormErrors(newErrors);
       }
@@ -826,7 +1301,7 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
     e: React.FormEvent<HTMLFormElement>
   ): Promise<void> => {
     e.preventDefault();
-
+    // console.log("FORMDATA : ", formData);
     if (!validateForm()) {
       toast.error("Validation Error", {
         description: "Please fix the errors in the form before submitting."
@@ -837,18 +1312,18 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
     setIsSubmitting(true);
 
     try {
-      // Simulate file upload delay
-      if (formData.imageFile) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-
       onSave(formData);
     } catch {
       toast.error("Error", {
         description: "Failed to save FLD program. Please try again."
       });
     } finally {
-      setIsSubmitting(false);
+      const timer = setTimeout(() => {
+        setIsSubmitting(false);
+      }, 30000); // 30000 milliseconds = 30 seconds
+
+      // Optional: cleanup in case the component unmounts before 15s
+      clearTimeout(timer);
     }
   };
 
@@ -860,43 +1335,36 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
             Project <span className="text-red-500">*</span>
           </Label>
           <Select
-            value={formData.project}
-            onValueChange={(value) => handleSelectChange("project", value)}
+            value={(() => {
+              const projectInfo = projects.find(
+                (p) => p.id === formData.projectId
+              );
+              return projectInfo ? projectInfo.title : "";
+            })()}
+            onValueChange={(value) => {
+              // Find the project ID based on the selected title
+              const selectedProject = projects.find((p) => p.title === value);
+
+              if (selectedProject) {
+                handleSelectChange("projectId", selectedProject.id);
+              }
+            }}
           >
             <SelectTrigger
-              className={formErrors.project ? "border-red-500" : ""}
+              className={formErrors.projectId ? "border-red-500" : ""}
             >
               <SelectValue placeholder="Select project" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Sustainable Agriculture Initiative">
-                Sustainable Agriculture Initiative
-              </SelectItem>
-              <SelectItem value="Water Management Project">
-                Water Management Project
-              </SelectItem>
+              {uniqueProjectTitle.map((title) => (
+                <SelectItem key={title} value={title}>
+                  {title}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          {formErrors.project && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.project}</p>
-          )}
-        </div>
-        <div>
-          <Label htmlFor="title">
-            FLD Title <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="title"
-            name="title"
-            placeholder="Enter FLD title (max 255 characters)"
-            value={formData.title}
-            onChange={handleInputChange}
-            maxLength={255}
-            className={formErrors.title ? "border-red-500" : ""}
-            required
-          />
-          {formErrors.title && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.title}</p>
+          {formErrors.projectId && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.projectId}</p>
           )}
         </div>
       </div>
@@ -907,62 +1375,45 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
             Quarter <span className="text-red-500">*</span>
           </Label>
           <Select
-            value={formData.quarter}
-            onValueChange={(value) => handleSelectChange("quarter", value)}
+            value={(() => {
+              const quarterInfo = quarterlyData.find(
+                (q) => q.id === formData.quarterId
+              );
+              return quarterInfo
+                ? `Q${quarterInfo.number} ${quarterInfo.year}`
+                : "";
+            })()}
+            onValueChange={(value) => {
+              // Find the quarter ID based on the selected display value
+              const selectedQuarter = quarterlyData.find(
+                (q) => `Q${q.number} ${q.year}` === value
+              );
+              if (selectedQuarter) {
+                handleSelectChange("quarterId", selectedQuarter.id);
+              }
+            }}
           >
             <SelectTrigger
-              className={formErrors.quarter ? "border-red-500" : ""}
+              className={formErrors.quarterId ? "border-red-500" : ""}
             >
               <SelectValue placeholder="Select quarter" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Q1 2024">Q1 2024</SelectItem>
-              <SelectItem value="Q2 2024">Q2 2024</SelectItem>
-              <SelectItem value="Q3 2024">Q3 2024</SelectItem>
-              <SelectItem value="Q4 2024">Q4 2024</SelectItem>
+            <SelectContent className="h-52">
+              {quarterlyData.map((quarter) => (
+                <SelectItem
+                  key={quarter.id}
+                  value={`Q${quarter.number} ${quarter.year}`}
+                >
+                  Q{quarter.number} {quarter.year}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          {formErrors.quarter && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.quarter}</p>
+          {formErrors.quarterId && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.quarterId}</p>
           )}
         </div>
-        <div>
-          <Label htmlFor="cropType">
-            Crop Type <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="cropType"
-            name="cropType"
-            placeholder="e.g., Rice, Wheat, Vegetables"
-            value={formData.cropType}
-            onChange={handleInputChange}
-            className={formErrors.cropType ? "border-red-500" : ""}
-            required
-          />
-          {formErrors.cropType && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.cropType}</p>
-          )}
-        </div>
-        <div>
-          <Label htmlFor="area">
-            Area (Acres) <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="area"
-            name="area"
-            type="number"
-            step="0.1"
-            placeholder="Enter area in acres"
-            value={formData.area}
-            onChange={handleInputChange}
-            className={formErrors.area ? "border-red-500" : ""}
-            min="0"
-            required
-          />
-          {formErrors.area && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.area}</p>
-          )}
-        </div>
+
         <div>
           <Label htmlFor="target">
             Target <span className="text-red-500">*</span>
@@ -1002,9 +1453,7 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
           )}
         </div>
         <div>
-          <Label htmlFor="units">
-            Units <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="units">Units</Label>
           <Input
             id="units"
             name="units"
@@ -1012,7 +1461,6 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
             value={formData.units}
             onChange={handleInputChange}
             className={formErrors.units ? "border-red-500" : ""}
-            required
           />
           {formErrors.units && (
             <p className="text-red-500 text-sm mt-1">{formErrors.units}</p>
@@ -1074,51 +1522,6 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="beneficiaryMale">
-            Male Beneficiaries <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="beneficiaryMale"
-            name="beneficiaryMale"
-            type="number"
-            placeholder="0"
-            value={formData.beneficiaryMale}
-            onChange={handleInputChange}
-            className={formErrors.beneficiaryMale ? "border-red-500" : ""}
-            min="0"
-            required
-          />
-          {formErrors.beneficiaryMale && (
-            <p className="text-red-500 text-sm mt-1">
-              {formErrors.beneficiaryMale}
-            </p>
-          )}
-        </div>
-        <div>
-          <Label htmlFor="beneficiaryFemale">
-            Female Beneficiaries <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="beneficiaryFemale"
-            name="beneficiaryFemale"
-            type="number"
-            placeholder="0"
-            value={formData.beneficiaryFemale}
-            onChange={handleInputChange}
-            className={formErrors.beneficiaryFemale ? "border-red-500" : ""}
-            min="0"
-            required
-          />
-          {formErrors.beneficiaryFemale && (
-            <p className="text-red-500 text-sm mt-1">
-              {formErrors.beneficiaryFemale}
-            </p>
-          )}
-        </div>
-      </div>
-
       <div>
         <Label htmlFor="remarks">Remarks</Label>
         <Textarea
@@ -1128,48 +1531,11 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
           value={formData.remarks}
           onChange={handleInputChange}
           maxLength={300}
-          className={formErrors.remarks ? "border-red-500" : ""}
+          className={formErrors.remarks ? "border-red-500 mt-2" : "mt-2"}
         />
         {formErrors.remarks && (
           <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
         )}
-      </div>
-
-      <div>
-        <Label htmlFor="imageFile">FLD Image</Label>
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <Input
-              id="imageFile"
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className={`cursor-pointer ${
-                formErrors.imageFile ? "border-red-500" : ""
-              }`}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-            >
-              <ImageIcon className="h-4 w-4 mr-2" />
-              Browse
-            </Button>
-          </div>
-          {formErrors.imageFile ? (
-            <p className="text-red-500 text-sm">{formErrors.imageFile}</p>
-          ) : (
-            <p className="text-sm text-gray-500">Max file size: 20MB</p>
-          )}
-          {formData.imageFile && (
-            <p className="text-sm text-green-600">
-              Selected: {formData.imageFile.name} (
-              {(formData.imageFile.size / (1024 * 1024)).toFixed(2)} MB)
-            </p>
-          )}
-        </div>
       </div>
 
       <div className="flex justify-end space-x-2 pt-4">

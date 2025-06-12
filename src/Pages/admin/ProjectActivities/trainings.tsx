@@ -102,12 +102,11 @@ const baseTrainingSchema = z.object({
     }),
   units: z
     .string()
-    .trim()
-    .transform((val) => (val === "" ? undefined : val))
-    .optional()
-    .refine((val) => val === undefined || val.length >= 1, {
-      message: "Units must be specified"
+    .refine((val) => val === "" || val.length >= 1, {
+      message: "Units must be specified "
     })
+    .transform((val) => (val === "" ? null : val))
+    .optional()
     .nullable(),
   remarks: z
     .string()
@@ -204,12 +203,11 @@ const updateTrainingValidation = z
       .optional(),
     units: z
       .string()
-      .trim()
-      .transform((val) => (val === "" ? undefined : val))
-      .optional()
-      .refine((val) => val === undefined || val.length >= 1, {
+      .refine((val) => val === "" || val.length >= 1, {
         message: "Units must be specified"
       })
+      .transform((val) => (val === "" ? null : val))
+      .optional()
       .nullable(),
     remarks: z
       .string()
@@ -1501,7 +1499,7 @@ function TrainingForm({
     block: training?.block || "",
     beneficiaryMale: training?.beneficiaryMale?.toString() || "0",
     beneficiaryFemale: training?.beneficiaryFemale?.toString() || "0",
-    units: training?.units.trim() || "",
+    units: training?.units || "",
     remarks: training?.remarks || "",
     imageFile: null,
     pdfFile: null
@@ -1666,7 +1664,12 @@ function TrainingForm({
         description: "Failed to save training. Please try again."
       });
     } finally {
-      setIsSubmitting(false);
+      const timer = setTimeout(() => {
+        setIsSubmitting(false);
+      }, 30000); // 30000 milliseconds = 30 seconds
+
+      // Optional: cleanup in case the component unmounts before 15s
+      clearTimeout(timer);
     }
   };
 
@@ -1694,7 +1697,7 @@ function TrainingForm({
             }}
           >
             <SelectTrigger
-              className={formErrors.project ? "border-red-500" : ""}
+              className={formErrors.projectId ? "border-red-500" : ""}
             >
               <SelectValue placeholder="Select project" />
             </SelectTrigger>
@@ -1706,8 +1709,8 @@ function TrainingForm({
               ))}
             </SelectContent>
           </Select>
-          {formErrors.project && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.project}</p>
+          {formErrors.projectId && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.projectId}</p>
           )}
         </div>
         <div>
@@ -1754,7 +1757,7 @@ function TrainingForm({
             }}
           >
             <SelectTrigger
-              className={formErrors.quarter ? "border-red-500" : ""}
+              className={formErrors.quarterId ? "border-red-500" : ""}
             >
               <SelectValue placeholder="Select quarter" />
             </SelectTrigger>
@@ -1769,8 +1772,8 @@ function TrainingForm({
               ))}
             </SelectContent>
           </Select>
-          {formErrors.quarter && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.quarter}</p>
+          {formErrors.quarterId && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.quarterId}</p>
           )}
         </div>
         <div>
