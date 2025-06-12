@@ -41,7 +41,7 @@ import {
   Calendar,
   Eye,
   Edit,
-  Delete
+  Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -1172,7 +1172,7 @@ export default function ProjectsPage() {
                             variant="outline"
                             onClick={() => handleDelete(project)}
                           >
-                            <Delete className="h-3 w-3 mr-1 text-red-500" />
+                            <Trash2 className="h-3 w-3 mr-1 text-red-600" />
                             Delete
                           </Button>
                         </div>

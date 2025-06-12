@@ -37,7 +37,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Sprout, Plus, Search, Eye, Edit, Delete } from "lucide-react";
+import { Sprout, Plus, Search, Eye, Edit, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router-dom";
@@ -872,24 +872,15 @@ export default function FLDPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select Year" />
                 </SelectTrigger>
-                <SelectContent className="h-52">
+                <SelectContent className="max-h-60">
                   <SelectItem value="all">All Years</SelectItem>
-                  <SelectItem value="2020">2020</SelectItem>
-                  <SelectItem value="2021">2021</SelectItem>
-                  <SelectItem value="2022">2022</SelectItem>
-                  <SelectItem value="2023">2023</SelectItem>
-                  <SelectItem value="2024">2024</SelectItem>
-                  <SelectItem value="2025">2025</SelectItem>
-                  <SelectItem value="2026">2026</SelectItem>
-                  <SelectItem value="2027">2027</SelectItem>
-                  <SelectItem value="2028">2028</SelectItem>
-                  <SelectItem value="2029">2029</SelectItem>
-                  <SelectItem value="2030">2030</SelectItem>
-                  <SelectItem value="2031">2031</SelectItem>
-                  <SelectItem value="2032">2032</SelectItem>
-                  <SelectItem value="2033">2033</SelectItem>
-                  <SelectItem value="2034">2034</SelectItem>
-                  <SelectItem value="2035">2035</SelectItem>
+                  {Array.from({ length: 16 }, (_, i) => 2020 + i).map(
+                    (year) => (
+                      <SelectItem key={year} value={String(year)}>
+                        {year}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
               <Select
@@ -1020,7 +1011,7 @@ export default function FLDPage() {
                             variant="outline"
                             onClick={() => handleDelete(fld)}
                           >
-                            <Delete className="h-3 w-3 mr-1 text-red-500" />
+                            <Trash2 className="h-3 w-3 mr-1 text-red-600" />
                             Delete
                           </Button>
                         </div>

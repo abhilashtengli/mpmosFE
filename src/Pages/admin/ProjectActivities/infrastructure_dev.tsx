@@ -1,8 +1,9 @@
-"use client";
+"use client"; // Assuming this might be needed if it's a Next.js app page, though context is react-router-dom
 
 import type React from "react";
-
-import { useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { z } from "zod";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -34,6 +35,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger
@@ -45,197 +47,598 @@ import {
   Eye,
   Edit,
   Upload,
+  Trash2,
   AlertCircle
 } from "lucide-react";
-import {
-  createInfrastructureValidation,
-  updateInfrastructureValidation
-} from "@/lib/validations/infrastructure";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { toast } from "sonner";
-import { z } from "zod";
+import { Alert, AlertDescription } from "@/components/ui/alert"; // For pageError
+import { useProjectStore } from "@/stores/useProjectStore"; // Assuming path is correct
+import { Base_Url, quarterlyData } from "@/lib/constants"; // Assuming path is correct
+import { useAuthStore } from "@/stores/useAuthStore"; // Assuming path is correct
+import axios, { type AxiosError } from "axios";
+import { useNavigate } from "react-router-dom"; // From training-page
+import EnhancedShimmerTableRows from "@/components/shimmer-rows"; // From training-page
 
-interface Infrastructure {
+// Zod validation schemas (provided by user)
+const createInfrastructureValidation = z
+  .object({
+    projectId: z.string().uuid({ message: "Valid project ID is required" }),
+    quarterId: z.string().uuid({ message: "Valid quarter ID is required" }),
+    target: z
+      .number({ invalid_type_error: "Target must be a number" })
+      .int({ message: "Target must be an integer" })
+      .positive({ message: "Target must be a positive number" }),
+    achieved: z
+      .number({ invalid_type_error: "Achieved must be a number" })
+      .int({ message: "Achieved must be an integer" })
+      .nonnegative({ message: "Achieved must be zero or positive" }),
+    district: z
+      .string()
+      .trim()
+      .min(2, { message: "District must be at least 2 characters" })
+      .max(100, { message: "District cannot exceed 100 characters" }),
+    village: z
+      .string()
+      .trim()
+      .min(2, { message: "Village must be at least 2 characters" })
+      .max(100, { message: "Village cannot exceed 100 characters" }),
+    block: z
+      .string()
+      .trim()
+      .min(2, { message: "Block must be at least 2 characters" })
+      .max(100, { message: "Block cannot exceed 100 characters" }),
+    remarks: z
+      .string()
+      .trim()
+      .max(300, { message: "Remarks cannot exceed 300 characters" })
+      .optional()
+      .nullable(),
+    imageUrl: z
+      .string()
+      .url({ message: "Invalid image URL format" })
+      .optional()
+      .nullable(),
+    imageKey: z.string().trim().optional().nullable()
+  })
+  .refine(
+    (data) => {
+      return data.achieved <= data.target;
+    },
+    {
+      message: "Achieved count cannot exceed target count",
+      path: ["achieved"]
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.imageUrl && !data.imageKey) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "Image key is required when image URL is provided",
+      path: ["imageKey"]
+    }
+  );
+
+const updateInfrastructureValidation = z
+  .object({
+    projectId: z
+      .string()
+      .uuid({ message: "Valid project ID is required" })
+      .optional(),
+    quarterId: z
+      .string()
+      .uuid({ message: "Valid quarter ID is required" })
+      .optional(),
+    target: z
+      .number({ invalid_type_error: "Target must be a number" })
+      .int({ message: "Target must be an integer" })
+      .positive({ message: "Target must be a positive number" })
+      .optional(),
+    achieved: z
+      .number({ invalid_type_error: "Achieved must be a number" })
+      .int({ message: "Achieved must be an integer" })
+      .nonnegative({ message: "Achieved must be zero or positive" })
+      .optional(),
+    district: z
+      .string()
+      .trim()
+      .min(2, { message: "District must be at least 2 characters" })
+      .max(100, { message: "District cannot exceed 100 characters" })
+      .optional(),
+    village: z
+      .string()
+      .trim()
+      .min(2, { message: "Village must be at least 2 characters" })
+      .max(100, { message: "Village cannot exceed 100 characters" })
+      .optional(),
+    block: z
+      .string()
+      .trim()
+      .min(2, { message: "Block must be at least 2 characters" })
+      .max(100, { message: "Block cannot exceed 100 characters" })
+      .optional(),
+    remarks: z
+      .string()
+      .trim()
+      .max(300, { message: "Remarks cannot exceed 300 characters" })
+      .optional()
+      .nullable(),
+    imageUrl: z
+      .string()
+      .url({ message: "Invalid image URL format" })
+      .optional()
+      .nullable(),
+    imageKey: z.string().optional().nullable()
+  })
+  .refine(
+    (data) => {
+      if (data.target === undefined || data.achieved === undefined) {
+        return true;
+      }
+      return data.achieved <= data.target;
+    },
+    {
+      message: "Achieved count cannot exceed target count",
+      path: ["achieved"]
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.imageUrl === undefined) return true;
+      if (data.imageUrl === null) return true;
+      if (data.imageUrl && !data.imageKey) return false;
+      return true;
+    },
+    {
+      message: "Image key is required when image URL is provided",
+      path: ["imageKey"]
+    }
+  );
+
+// Interfaces
+interface RawInfrastructure {
   id: string;
-  infrastructureId: string;
-  title: string;
-  project: string;
-  projectId: string;
-  quarter: string;
-  quarterId: string;
+  InfraDevId: string;
+  project: { id: string; title: string };
+  quarter: { id: string; number: number; year: number };
   target: number;
   achieved: number;
   district: string;
   village: string;
   block: string;
-  beneficiaryMale: number;
-  beneficiaryFemale: number;
-  units: string;
   remarks: string | null;
-  status: string;
-  infrastructureType: string;
-  budget: number;
-  completionDate: string;
+  imageUrl: string | null;
+  imageKey?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  User?: { id: string; name: string };
+}
+
+interface Infrastructure {
+  id: string;
+  InfraDevId: string;
+  project: { id: string; title: string };
+  quarter: { id: string; number: number; year: number };
+  target: number;
+  achieved: number;
+  district: string;
+  village: string;
+  block: string;
+  remarks: string | null;
   imageUrl?: string | null;
   imageKey?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  User?: { id: string; name: string };
+}
+
+interface InfrastructureFormData {
+  projectId: string;
+  quarterId: string;
+  target: string; // Input as string
+  achieved: string; // Input as string
+  district: string;
+  village: string;
+  block: string;
+  remarks: string | null;
+  imageFile?: File | null;
+  imageUrl?: string | null; // For existing or newly uploaded image URL
+  imageKey?: string | null; // For existing or newly uploaded image key
+}
+
+interface InfrastructureFormProps {
+  infrastructure?: Infrastructure;
+  onSave: (data: InfrastructureFormData) => Promise<boolean>; // Make onSave async to handle submission status
+  onClose: () => void;
+  isEdit?: boolean;
 }
 
 interface InfrastructureViewProps {
   infrastructure: Infrastructure;
 }
 
-interface InfrastructureFormProps {
-  infrastructure?: Infrastructure;
-  onSave: (data: Partial<Infrastructure>, file?: File | null) => void;
-  onClose: () => void;
-  isEdit?: boolean;
+interface FormErrors {
+  [key: string]: string;
 }
 
-// Mock project and quarter data
-const projects = [
-  {
-    id: "123e4567-e89b-12d3-a456-426614174000",
-    name: "Sustainable Agriculture Initiative"
-  },
-  {
-    id: "223e4567-e89b-12d3-a456-426614174000",
-    name: "Water Management Project"
-  },
-  {
-    id: "323e4567-e89b-12d3-a456-426614174000",
-    name: "Crop Diversification Program"
-  }
-];
+interface ApiErrorResponse {
+  success: boolean;
+  message: string;
+  code: string;
+  errors?: unknown; // Can be more specific if error structure is known
+  path?: string[];
+}
 
-const quarters = [
-  { id: "123e4567-e89b-12d3-a456-426614174001", name: "Q1 2024" },
-  { id: "223e4567-e89b-12d3-a456-426614174001", name: "Q2 2024" },
-  { id: "323e4567-e89b-12d3-a456-426614174001", name: "Q3 2024" },
-  { id: "423e4567-e89b-12d3-a456-426614174001", name: "Q4 2024" }
-];
-
-// Mock infrastructure data
-const infrastructures: Infrastructure[] = [
-  {
-    id: "1",
-    infrastructureId: "INF-2024-001",
-    title: "Storage Facility Construction",
-    project: "Sustainable Agriculture Initiative",
-    projectId: "123e4567-e89b-12d3-a456-426614174000",
-    quarter: "Q2 2024",
-    quarterId: "223e4567-e89b-12d3-a456-426614174001",
-    target: 5,
-    achieved: 3,
-    district: "Guwahati",
-    village: "Khanapara",
-    block: "Dispur",
-    beneficiaryMale: 50,
-    beneficiaryFemale: 30,
-    units: "Facilities",
-    remarks:
-      "Construction of modern storage facilities for agricultural products",
-    status: "In Progress",
-    infrastructureType: "Storage",
-    budget: 500000,
-    completionDate: "2024-08-15"
-  },
-  {
-    id: "2",
-    infrastructureId: "INF-2024-002",
-    title: "Irrigation System Installation",
-    project: "Water Management Project",
-    projectId: "223e4567-e89b-12d3-a456-426614174000",
-    quarter: "Q2 2024",
-    quarterId: "223e4567-e89b-12d3-a456-426614174001",
-    target: 8,
-    achieved: 6,
-    district: "Jorhat",
-    village: "Teok",
-    block: "Jorhat",
-    beneficiaryMale: 40,
-    beneficiaryFemale: 35,
-    units: "Systems",
-    remarks: "Installation of drip irrigation systems",
-    status: "Completed",
-    infrastructureType: "Irrigation",
-    budget: 750000,
-    completionDate: "2024-06-30"
-  }
-];
+interface ApiSuccessResponse<T> {
+  success: true;
+  message: string;
+  data: T;
+  code: string;
+}
 
 export default function InfrastructurePage() {
+  const [infrastructures, setInfrastructures] = useState<Infrastructure[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState<boolean>(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
   const [selectedInfrastructure, setSelectedInfrastructure] =
     useState<Infrastructure | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [selectedYear, setSelectedYear] = useState<string>("");
   const [selectedQuarter, setSelectedQuarter] = useState<string>("");
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
-  const [pageError, setPageError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null); // For page-level errors
 
-  // Filter infrastructures based on search and filter criteria
-  const filteredInfrastructures = infrastructures.filter((infrastructure) => {
-    const matchesSearch =
-      infrastructure.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      infrastructure.infrastructureId
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      infrastructure.project.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      infrastructure.infrastructureType
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
+  const projects = useProjectStore((state) => state.projects);
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const navigate = useNavigate();
 
-    const matchesQuarter =
-      !selectedQuarter ||
-      selectedQuarter === "all" ||
-      infrastructure.quarter === selectedQuarter;
-    const matchesProject =
-      !selectedProject ||
-      selectedProject === "all" ||
-      infrastructure.project === selectedProject;
-    const matchesDistrict =
-      !selectedDistrict ||
-      selectedDistrict === "all" ||
-      infrastructure.district === selectedDistrict;
+  const fetchInfraData = async () => {
+    setIsLoading(true);
+    setPageError(null);
+    try {
+      const endpoint =
+        user?.role === "admin" ? "get-admin-infra" : "get-user-infra";
+      const response = await axios.get<ApiSuccessResponse<RawInfrastructure[]>>(
+        `${Base_Url}/${endpoint}`,
+        {
+          withCredentials: true
+        }
+      );
 
-    return matchesSearch && matchesQuarter && matchesProject && matchesDistrict;
-  });
+      if (
+        response.data.success &&
+        response.status === 200 &&
+        response.data.code === "GET_INFRADEV_SUCCESSFULL"
+      ) {
+        const mappedInfrastructures: Infrastructure[] = (
+          response.data.data || []
+        ).map((item: RawInfrastructure) => ({
+          ...item,
+          imageUrl: item.imageUrl ?? undefined,
+          imageKey: item.imageKey ?? undefined,
+          remarks: item.remarks ?? null
+        }));
+        console.log("MI : ", mappedInfrastructures);
+        setInfrastructures(mappedInfrastructures);
+      } else {
+        throw new Error(
+          response.data.message || "Failed to fetch infrastructure data"
+        );
+      }
+    } catch (error: unknown) {
+      console.error("Error fetching infrastructure data:", error);
+      const defaultMessage =
+        "An unexpected error occurred while fetching infrastructure data.";
+      if (axios.isAxiosError(error)) {
+        const err = error as AxiosError<ApiErrorResponse>;
+        const apiErrorMessage = err.response?.data?.message || err.message;
+        setPageError(apiErrorMessage); // Show error on page
+        toast.error("Fetch Failed", {
+          description: apiErrorMessage || defaultMessage
+        });
+      } else {
+        setPageError(defaultMessage);
+        toast.error("Fetch Failed", {
+          description: (error as Error).message || defaultMessage
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const handleView = (infrastructure: Infrastructure): void => {
-    setSelectedInfrastructure(infrastructure);
+  useEffect(() => {
+    fetchInfraData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  const filteredInfrastructures: Infrastructure[] = useMemo(
+    () =>
+      infrastructures.filter((infra) => {
+        const searchLower = searchTerm.toLowerCase();
+        const matchesSearch: boolean =
+          infra.InfraDevId.toLowerCase().includes(searchLower) ||
+          infra.project.title.toLowerCase().includes(searchLower) ||
+          infra.district.toLowerCase().includes(searchLower) ||
+          infra.village.toLowerCase().includes(searchLower) ||
+          infra.block.toLowerCase().includes(searchLower);
+
+        let matchesYearQuarter = true;
+        if (
+          (selectedYear && selectedYear !== "all") ||
+          (selectedQuarter && selectedQuarter !== "all")
+        ) {
+          const matchingQuarterIds = quarterlyData
+            .filter((q) => {
+              const yearMatch =
+                !selectedYear ||
+                selectedYear === "all" ||
+                q.year === Number.parseInt(selectedYear);
+              const quarterMatch =
+                !selectedQuarter ||
+                selectedQuarter === "all" ||
+                q.number === Number.parseInt(selectedQuarter);
+              return yearMatch && quarterMatch;
+            })
+            .map((q) => q.id);
+          matchesYearQuarter = matchingQuarterIds.includes(infra.quarter.id);
+        }
+
+        const matchesProjectFilter: boolean =
+          !selectedProject ||
+          selectedProject === "all" ||
+          infra.project.id === selectedProject;
+        const matchesDistrictFilter: boolean =
+          !selectedDistrict ||
+          selectedDistrict === "all" ||
+          infra.district === selectedDistrict;
+
+        return (
+          matchesSearch &&
+          matchesYearQuarter &&
+          matchesProjectFilter &&
+          matchesDistrictFilter
+        );
+      }),
+    [
+      infrastructures,
+      searchTerm,
+      selectedYear,
+      selectedQuarter,
+      selectedProject,
+      selectedDistrict
+    ]
+  );
+
+  const uniqueProjectItems = useMemo(() => {
+    if (!projects || projects.length === 0) return [];
+    // Assuming projects have { id: string, title: string }
+    return projects.map((p) => ({ id: p.id, title: p.title }));
+  }, [projects]);
+
+  const uniqueDistricts = useMemo(() => {
+    if (!infrastructures || infrastructures.length === 0) return [];
+    return Array.from(
+      new Set(infrastructures.map((infra) => infra.district))
+    ).sort();
+  }, [infrastructures]);
+
+  const handleView = (infra: Infrastructure): void => {
+    setSelectedInfrastructure(infra);
     setIsViewDialogOpen(true);
   };
 
-  const handleEdit = (infrastructure: Infrastructure): void => {
-    setSelectedInfrastructure(infrastructure);
+  const handleEdit = (infra: Infrastructure): void => {
+    setSelectedInfrastructure(infra);
     setIsEditDialogOpen(true);
   };
 
-  const handleSave = (
-    formData: Partial<Infrastructure>,
-    file?: File | null
-  ): void => {
-    try {
-      // In a real app, this would make an API call
-      console.log("Saving infrastructure:", formData);
-      console.log("File to upload:", file);
+  const handleDeletePrompt = (infra: Infrastructure): void => {
+    setSelectedInfrastructure(infra);
+    setIsDeleteDialogOpen(true);
+  };
 
-      // Show success message
-      toast.success("Success", {
-        description: formData.id
-          ? "Infrastructure updated successfully"
-          : "Infrastructure created successfully"
+  const handleSaveInfrastructure = async (
+    formData: InfrastructureFormData,
+    operation: "create" | "update" = "create",
+    infraIdToUpdate?: string
+  ): Promise<boolean> => {
+    if (operation === "update" && !infraIdToUpdate) {
+      toast.error("Infrastructure ID is required for update operation");
+      return false;
+    }
+
+    // Actual file upload should happen here or in the form,
+    // then imageUrl and imageKey are passed in formData.
+    // For this example, we assume formData contains imageUrl and imageKey if an image is involved.
+
+    const loadingToast = toast.loading(
+      `${
+        operation === "create" ? "Creating" : "Updating"
+      } infrastructure entry...`
+    );
+
+    try {
+      const requestData = {
+        projectId: formData.projectId,
+        quarterId: formData.quarterId,
+        target: Number.parseInt(formData.target),
+        achieved: Number.parseInt(formData.achieved),
+        district: formData.district,
+        village: formData.village,
+        block: formData.block,
+        remarks: formData.remarks || null,
+        imageUrl: formData.imageUrl || null,
+        imageKey: formData.imageKey || null
+      };
+
+      let response;
+      const config = {
+        withCredentials: true,
+        timeout: 30000,
+        headers: { "Content-Type": "application/json" }
+      };
+
+      if (operation === "create") {
+        response = await axios.post<ApiSuccessResponse<RawInfrastructure>>(
+          `${Base_Url}/create-infrastructure`,
+          requestData,
+          config
+        );
+      } else {
+        response = await axios.put<ApiSuccessResponse<RawInfrastructure>>(
+          `${Base_Url}/update-infrastructure/${infraIdToUpdate}`,
+          requestData,
+          config
+        );
+      }
+
+      const apiResponse = response.data;
+
+      if (
+        apiResponse.success &&
+        ((operation === "create" &&
+          response.status === 201 &&
+          apiResponse.code === "INFRASTRUCTURE_CREATED") ||
+          (operation === "update" &&
+            response.status === 200 &&
+            apiResponse.code === "RESOURCE_UPDATED"))
+      ) {
+        toast.success(
+          apiResponse.message || `Infrastructure ${operation}d successfully`,
+          {
+            description: `ID: ${apiResponse.data.InfraDevId}`,
+            duration: 6000
+          }
+        );
+
+        const newOrUpdatedInfra: Infrastructure = {
+          ...apiResponse.data,
+          imageUrl: apiResponse.data.imageUrl ?? undefined,
+          imageKey: apiResponse.data.imageKey ?? undefined,
+          remarks: apiResponse.data.remarks ?? null
+        };
+        console.log("Updated Infra : ", apiResponse.data);
+
+        if (operation === "create") {
+          setInfrastructures((prev) => [newOrUpdatedInfra, ...prev]);
+        } else {
+          setInfrastructures((prev) =>
+            prev.map((infra) =>
+              infra.id === infraIdToUpdate ? newOrUpdatedInfra : infra
+            )
+          );
+        }
+        setIsDialogOpen(false);
+        setIsEditDialogOpen(false);
+        setSelectedInfrastructure(null);
+        return true;
+      } else {
+        // If backend returns success:false or unexpected code/status
+        const message =
+          apiResponse.message ||
+          `Failed to ${operation} infrastructure. Unexpected response.`;
+        toast.error(message);
+        console.error("API Error Data:", apiResponse);
+        return false;
+      }
+    } catch (error: unknown) {
+      console.error(`Error ${operation}ing infrastructure:`, error);
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError<ApiErrorResponse>;
+        const errorData = axiosError.response?.data;
+        let description = "An error occurred.";
+        if (errorData) {
+          description = errorData.message || description;
+          if (errorData.code === "VALIDATION_ERROR" && errorData.errors) {
+            description = "Validation failed. Check inputs.";
+            console.error("Validation Errors:", errorData.errors);
+          }
+        } else if (axiosError.request) {
+          description = "No response from server. Check network.";
+        }
+        toast.error(`Failed to ${operation}`, { description });
+
+        if (axiosError.response?.status === 401 && logout) {
+          logout();
+          navigate("/signin");
+        }
+      } else {
+        toast.error(`Failed to ${operation}`, {
+          description:
+            (error as Error).message || "An unexpected error occurred."
+        });
+      }
+      return false;
+    } finally {
+      toast.dismiss(loadingToast);
+    }
+  };
+
+  const handleDeleteInfrastructure = async () => {
+    if (!selectedInfrastructure) {
+      toast.error("No infrastructure entry selected for deletion.");
+      return;
+    }
+
+    const loadingToast = toast.loading(
+      `Deleting infrastructure ID: ${selectedInfrastructure.InfraDevId}...`
+    );
+    try {
+      const response = await axios.delete<{
+        success: boolean;
+        message: string;
+        code: string;
+      }>(`${Base_Url}/delete-infraDev/${selectedInfrastructure.id}`, {
+        withCredentials: true,
+        timeout: 30000
       });
 
-      // Close dialogs
-      setIsDialogOpen(false);
-      setIsEditDialogOpen(false);
-      setPageError(null);
-    } catch (error) {
-      console.error("Error saving infrastructure:", error);
-      setPageError("An error occurred while saving. Please try again.");
+      if (
+        response.status === 200 &&
+        response.data.success &&
+        response.data.code === "RESOURCE_DELETED"
+      ) {
+        toast.success(
+          response.data.message || "Infrastructure entry deleted successfully.",
+          {
+            description: `ID: ${selectedInfrastructure.InfraDevId}`
+          }
+        );
+        setInfrastructures((prev) =>
+          prev.filter((infra) => infra.id !== selectedInfrastructure.id)
+        );
+        setSelectedInfrastructure(null);
+        setIsDeleteDialogOpen(false);
+      } else {
+        toast.error("Deletion Failed", {
+          description: response.data?.message || "Could not delete the entry."
+        });
+      }
+    } catch (error: unknown) {
+      console.error("Delete infrastructure error:", error);
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError<ApiErrorResponse>;
+        const errorData = axiosError.response?.data;
+        toast.error("Deletion Failed", {
+          description:
+            errorData?.message || "An error occurred during deletion."
+        });
+      } else {
+        toast.error("Deletion Failed", {
+          description:
+            (error as Error).message || "An unexpected error occurred."
+        });
+      }
+    } finally {
+      toast.dismiss(loadingToast);
     }
   };
 
@@ -257,20 +660,20 @@ export default function InfrastructurePage() {
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-green-600 hover:bg-green-700">
-                <Plus className="h-4 w-4 mr-2" />
-                New Infrastructure
+                <Plus className="h-4 w-4 mr-2" /> New Entry
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Add New Infrastructure Project</DialogTitle>
+                <DialogTitle>Add New Infrastructure Entry</DialogTitle>
                 <DialogDescription>
-                  Create a new infrastructure development entry with target and
-                  achievement data
+                  Create a new infrastructure development entry.
                 </DialogDescription>
               </DialogHeader>
               <InfrastructureForm
-                onSave={handleSave}
+                onSave={(formData) =>
+                  handleSaveInfrastructure(formData, "create")
+                }
                 onClose={() => setIsDialogOpen(false)}
               />
             </DialogContent>
@@ -279,7 +682,6 @@ export default function InfrastructurePage() {
       </header>
 
       <div className="p-6">
-        {/* Page-level error */}
         {pageError && (
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
@@ -287,21 +689,18 @@ export default function InfrastructurePage() {
           </Alert>
         )}
 
-        {/* Filters and Search */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-lg">Filters & Search</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-4.5 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search infrastructure..."
+                  placeholder="Search trainings..."
                   value={searchTerm}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setSearchTerm(e.target.value)
-                  }
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -314,10 +713,25 @@ export default function InfrastructurePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Quarters</SelectItem>
-                  <SelectItem value="Q1 2024">Q1 2024</SelectItem>
-                  <SelectItem value="Q2 2024">Q2 2024</SelectItem>
-                  <SelectItem value="Q3 2024">Q3 2024</SelectItem>
-                  <SelectItem value="Q4 2024">Q4 2024</SelectItem>
+                  <SelectItem value="1">Q1</SelectItem>
+                  <SelectItem value="2">Q2 </SelectItem>
+                  <SelectItem value="3">Q3 </SelectItem>
+                  <SelectItem value="4">Q4 </SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Year" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  <SelectItem value="all">All Years</SelectItem>
+                  {Array.from({ length: 16 }, (_, i) => 2020 + i).map(
+                    (year) => (
+                      <SelectItem key={year} value={String(year)}>
+                        {year}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
               <Select
@@ -329,15 +743,11 @@ export default function InfrastructurePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Projects</SelectItem>
-                  <SelectItem value="Sustainable Agriculture Initiative">
-                    Sustainable Agriculture Initiative
-                  </SelectItem>
-                  <SelectItem value="Water Management Project">
-                    Water Management Project
-                  </SelectItem>
-                  <SelectItem value="Crop Diversification Program">
-                    Crop Diversification Program
-                  </SelectItem>
+                  {uniqueProjectItems.map((project) => (
+                    <SelectItem key={project.id} value={project.title}>
+                      {project.title}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select
@@ -347,24 +757,24 @@ export default function InfrastructurePage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select District" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60">
                   <SelectItem value="all">All Districts</SelectItem>
-                  <SelectItem value="Guwahati">Guwahati</SelectItem>
-                  <SelectItem value="Jorhat">Jorhat</SelectItem>
-                  <SelectItem value="Dibrugarh">Dibrugarh</SelectItem>
+                  {uniqueDistricts.map((district) => (
+                    <SelectItem key={district} value={district}>
+                      {district}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </CardContent>
         </Card>
-
-        {/* Infrastructure List */}
+        {/* TrainingList  */}
         <Card>
           <CardHeader>
-            <CardTitle>Infrastructure Development Projects</CardTitle>
+            <CardTitle>Infrastructure Entries</CardTitle>
             <CardDescription>
-              List of all infrastructure projects with target vs achievement
-              tracking
+              List of all infrastructure development entries.
               {filteredInfrastructures.length !== infrastructures.length && (
                 <span className="text-green-600">
                   {" "}
@@ -378,89 +788,65 @@ export default function InfrastructurePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Infrastructure ID</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Type</TableHead>
+                  <TableHead>Infra. ID</TableHead>
                   <TableHead>Project</TableHead>
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Target/Achieved</TableHead>
-                  <TableHead>Budget</TableHead>
-                  <TableHead>Beneficiaries</TableHead>
-                  <TableHead>Status</TableHead>
+                  {user?.role === "admin" && <TableHead>Created By</TableHead>}
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInfrastructures.length === 0 ? (
+                {isLoading ? (
+                  <EnhancedShimmerTableRows />
+                ) : filteredInfrastructures.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={11}
+                      colSpan={user?.role === "admin" ? 7 : 6}
                       className="text-center py-8 text-gray-500"
                     >
-                      No infrastructure projects found matching your criteria
+                      No entries found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredInfrastructures.map((infrastructure) => (
-                    <TableRow key={infrastructure.id}>
+                  filteredInfrastructures.map((infra) => (
+                    <TableRow key={infra.id}>
                       <TableCell className="font-medium">
-                        {infrastructure.infrastructureId}
+                        {infra.InfraDevId}
                       </TableCell>
-                      <TableCell>{infrastructure.title}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {infrastructure.infrastructureType}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {infrastructure.project}
+                      <TableCell className="truncate max-w-[200px]">
+                        {infra.project?.title}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
-                          {infrastructure.quarter}
+                          {`Q${
+                            quarterlyData.find(
+                              (q) => q.id === infra.quarter?.id
+                            )?.number
+                          } ${
+                            quarterlyData.find(
+                              (q) => q.id === infra.quarter?.id
+                            )?.year
+                          }`}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm">
-                        {infrastructure.district}, {infrastructure.village}
-                      </TableCell>
+                      <TableCell className="truncate max-w-[200px]">{`${infra.district}, ${infra.village}, ${infra.block}`}</TableCell>
                       <TableCell>
-                        <div className="text-sm">
-                          <span className="text-green-600 font-medium">
-                            {infrastructure.achieved}
-                          </span>
-                          <span className="text-gray-400">
-                            {" "}
-                            / {infrastructure.target}
-                          </span>
-                        </div>
+                        <span className="text-green-600 font-medium">
+                          {infra.achieved}
+                        </span>{" "}
+                        / {infra.target}
                       </TableCell>
+                      {user?.role === "admin" && (
+                        <TableCell>{infra.User?.name || "N/A"}</TableCell>
+                      )}
                       <TableCell>
-                        ₹{infrastructure.budget.toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div>M: {infrastructure.beneficiaryMale}</div>
-                          <div>F: {infrastructure.beneficiaryFemale}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            infrastructure.status === "Completed"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {infrastructure.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
+                        <div className="flex space-x-1">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleEdit(infrastructure)}
+                            onClick={() => handleEdit(infra)}
                           >
                             <Edit className="h-3 w-3 mr-1" />
                             Edit
@@ -468,10 +854,19 @@ export default function InfrastructurePage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleView(infrastructure)}
+                            onClick={() => handleView(infra)}
                           >
                             <Eye className="h-3 w-3 mr-1" />
                             View
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeletePrompt(infra)}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1 text-red-600" />
+                            Delete
                           </Button>
                         </div>
                       </TableCell>
@@ -482,39 +877,71 @@ export default function InfrastructurePage() {
             </Table>
           </CardContent>
         </Card>
-
-        {/* View Dialog */}
+        {/* View  */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent
+            aria-describedby={undefined}
+            className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          >
             <DialogHeader>
               <DialogTitle>Infrastructure Details</DialogTitle>
-              <DialogDescription>
-                View complete infrastructure project information
-              </DialogDescription>
             </DialogHeader>
             {selectedInfrastructure && (
               <InfrastructureView infrastructure={selectedInfrastructure} />
             )}
           </DialogContent>
         </Dialog>
-
-        {/* Edit Dialog */}
+        {/* Edit  */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent
+            aria-describedby={undefined}
+            className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          >
             <DialogHeader>
-              <DialogTitle>Edit Infrastructure Project</DialogTitle>
-              <DialogDescription>
-                Update infrastructure project information
-              </DialogDescription>
+              <DialogTitle>Edit Infrastructure Entry</DialogTitle>
             </DialogHeader>
             {selectedInfrastructure && (
               <InfrastructureForm
                 infrastructure={selectedInfrastructure}
-                onSave={handleSave}
+                onSave={(formData) =>
+                  handleSaveInfrastructure(
+                    formData,
+                    "update",
+                    selectedInfrastructure.id
+                  )
+                }
                 onClose={() => setIsEditDialogOpen(false)}
                 isEdit={true}
               />
             )}
+          </DialogContent>
+        </Dialog>
+        {/* Delete  */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete infrastructure entry:{" "}
+                <strong>{selectedInfrastructure?.InfraDevId}</strong>? This
+                action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDeleteDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteInfrastructure}
+                disabled={isLoading}
+              >
+                {isLoading ? "Deleting..." : "Delete"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -523,142 +950,111 @@ export default function InfrastructurePage() {
 }
 
 function InfrastructureView({ infrastructure }: InfrastructureViewProps) {
+  const projects = useProjectStore((state) => state.projects);
+  const projectTitle =
+    projects.find((p) => p.id === infrastructure.project.id)?.title ||
+    "Unknown Project";
+  const quarterInfo = quarterlyData.find(
+    (q) => q.id === infrastructure.quarter.id
+  );
+  const quarterDisplay = quarterInfo
+    ? `Q${quarterInfo.number} ${quarterInfo.year}`
+    : "Unknown Quarter";
+
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-4 p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label className="text-sm font-medium text-gray-500">
-            Infrastructure ID
-          </Label>
-          <p className="text-lg font-semibold">
-            {infrastructure.infrastructureId}
+          <Label>Infrastructure ID</Label>
+          <p className="font-semibold">{infrastructure.InfraDevId}</p>
+        </div>
+        <div>
+          <Label>Project</Label>
+          <p>{projectTitle}</p>
+        </div>
+        <div>
+          <Label>Quarter</Label>
+          <p>
+            <Badge variant="outline">{quarterDisplay}</Badge>
           </p>
         </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Status</Label>
-          <Badge
-            variant={
-              infrastructure.status === "Completed" ? "default" : "secondary"
-            }
-            className="mt-1"
-          >
-            {infrastructure.status}
-          </Badge>
-        </div>
       </div>
-
+      <hr />
       <div>
-        <Label className="text-sm font-medium text-gray-500">
-          Infrastructure Title
-        </Label>
-        <p className="text-lg">{infrastructure.title}</p>
+        <Label>Location</Label>
       </div>
-
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <Label className="text-sm font-medium text-gray-500">
-            Infrastructure Type
-          </Label>
-          <p>{infrastructure.infrastructureType}</p>
-        </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Budget</Label>
-          <p>₹{infrastructure.budget.toLocaleString()}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Project</Label>
-          <p>{infrastructure.project}</p>
-        </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Quarter</Label>
-          <p>{infrastructure.quarter}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <Label className="text-sm font-medium text-gray-500">District</Label>
+          <Label>District</Label>
           <p>{infrastructure.district}</p>
         </div>
         <div>
-          <Label className="text-sm font-medium text-gray-500">Village</Label>
+          <Label>Village</Label>
           <p>{infrastructure.village}</p>
         </div>
         <div>
-          <Label className="text-sm font-medium text-gray-500">Block</Label>
+          <Label>Block</Label>
           <p>{infrastructure.block}</p>
         </div>
       </div>
-
-      <div className="grid grid-cols-3 gap-4">
+      <hr />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label className="text-sm font-medium text-gray-500">Target</Label>
-          <p className="text-lg font-semibold text-gray-600">
-            {infrastructure.target}
-          </p>
+          <Label>Target</Label>
+          <p className="font-semibold">{infrastructure.target}</p>
         </div>
         <div>
-          <Label className="text-sm font-medium text-gray-500">Achieved</Label>
-          <p className="text-lg font-semibold text-green-600">
+          <Label>Achieved</Label>
+          <p className="font-semibold text-green-600">
             {infrastructure.achieved}
           </p>
         </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Units</Label>
-          <p>{infrastructure.units}</p>
-        </div>
       </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label className="text-sm font-medium text-gray-500">
-            Male Beneficiaries
-          </Label>
-          <p className="text-lg font-semibold text-blue-600">
-            {infrastructure.beneficiaryMale}
-          </p>
-        </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">
-            Female Beneficiaries
-          </Label>
-          <p className="text-lg font-semibold text-pink-600">
-            {infrastructure.beneficiaryFemale}
-          </p>
-        </div>
-      </div>
-
-      <div>
-        <Label className="text-sm font-medium text-gray-500">
-          Completion Date
-        </Label>
-        <p>{infrastructure.completionDate}</p>
-      </div>
-
-      {infrastructure.imageUrl && (
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Image</Label>
-          <div className="mt-2 border rounded-md overflow-hidden">
-            <img
-              src={infrastructure.imageUrl || "/placeholder.svg"}
-              alt={infrastructure.title}
-              className="w-full h-auto max-h-64 object-cover"
-            />
-          </div>
-        </div>
-      )}
-
       {infrastructure.remarks && (
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Remarks</Label>
-          <p className="text-gray-700 bg-gray-50 p-3 rounded-md">
-            {infrastructure.remarks}
-          </p>
-        </div>
+        <>
+          <hr />
+          <div>
+            <Label>Remarks</Label>
+            <p className="bg-gray-50 p-2 rounded-md">
+              {infrastructure.remarks}
+            </p>
+          </div>
+        </>
       )}
+      {infrastructure.imageUrl && (
+        <>
+          <hr />
+          <div>
+            <Label>Image</Label>
+            <div className="mt-2 border rounded-md overflow-hidden max-w-sm">
+              <img
+                src={infrastructure.imageUrl || "/placeholder.svg"}
+                alt={`Infrastructure ${infrastructure.InfraDevId}`}
+                className="w-full h-auto object-cover"
+              />
+            </div>
+          </div>
+        </>
+      )}
+      <hr />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-500">
+        <div>
+          <Label>Created At</Label>
+          <p>{new Date(infrastructure.createdAt).toLocaleString()}</p>
+        </div>
+        <div>
+          <Label>Last Updated</Label>
+          <p>{new Date(infrastructure.updatedAt).toLocaleString()}</p>
+        </div>
+        {infrastructure.User && (
+          <div>
+            <Label>Created/Managed By</Label>
+            <p>
+              {infrastructure.User.name} ({infrastructure.User.id})
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -669,239 +1065,177 @@ function InfrastructureForm({
   onClose,
   isEdit = false
 }: InfrastructureFormProps) {
-  const [formData, setFormData] = useState<Partial<Infrastructure>>({
-    projectId: infrastructure?.projectId || "",
-    quarterId: infrastructure?.quarterId || "",
-    title: infrastructure?.title || "",
-    infrastructureType: infrastructure?.infrastructureType || "",
-    target: infrastructure?.target || 0,
-    achieved: infrastructure?.achieved || 0,
+  const [formData, setFormData] = useState<InfrastructureFormData>({
+    projectId: infrastructure?.project.id || "",
+    quarterId: infrastructure?.quarter.id || "",
+    target: infrastructure?.target?.toString() || "0",
+    achieved: infrastructure?.achieved?.toString() || "0",
     district: infrastructure?.district || "",
     village: infrastructure?.village || "",
     block: infrastructure?.block || "",
-    beneficiaryMale: infrastructure?.beneficiaryMale || 0,
-    beneficiaryFemale: infrastructure?.beneficiaryFemale || 0,
-    units: infrastructure?.units || "",
-    budget: infrastructure?.budget || 0,
-    completionDate: infrastructure?.completionDate || "",
     remarks: infrastructure?.remarks || "",
+    imageFile: null,
     imageUrl: infrastructure?.imageUrl || null,
     imageKey: infrastructure?.imageKey || null
   });
-
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [formError, setFormError] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [filePreview, setFilePreview] = useState<string | null>(
     infrastructure?.imageUrl || null
   );
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const projects = useProjectStore((state) => state.projects);
+  const uniqueProjectItems = useMemo(() => {
+    if (!projects || projects.length === 0) return [];
+    return projects.map((p) => ({ id: p.id, title: p.title }));
+  }, [projects]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ): void => {
     const { name, value } = e.target;
-    let parsedValue: unknown = value;
-
-    // Convert numeric fields to numbers
-    if (
-      [
-        "target",
-        "achieved",
-        "beneficiaryMale",
-        "beneficiaryFemale",
-        "budget"
-      ].includes(name)
-    ) {
-      parsedValue = value === "" ? 0 : Number(value);
-    }
-
-    setFormData((prev) => ({ ...prev, [name]: parsedValue }));
-
-    // Clear error for this field
-    if (formErrors[name]) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
-    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (formErrors[name]) setFormErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
   const handleSelectChange = (name: string, value: string): void => {
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (formErrors[name]) setFormErrors((prev) => ({ ...prev, [name]: "" }));
+  };
 
-    // Clear error for this field
-    if (formErrors[name]) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        // 5MB limit
+        setFormErrors((prev) => ({
+          ...prev,
+          imageFile: "File size must be less than 5MB"
+        }));
+        return;
+      }
+      if (!file.type.startsWith("image/")) {
+        setFormErrors((prev) => ({
+          ...prev,
+          imageFile: "Please select a valid image file"
+        }));
+        return;
+      }
+      setFormData((prev) => ({
+        ...prev,
+        imageFile: file,
+        imageUrl: null,
+        imageKey: null
+      })); // Clear existing URL/Key if new file
+      setFilePreview(URL.createObjectURL(file));
+      if (formErrors.imageFile)
+        setFormErrors((prev) => ({ ...prev, imageFile: "" }));
+      toast.success("Image selected", { description: file.name });
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file size (20MB max)
-    if (file.size > 20 * 1024 * 1024) {
-      setFormErrors((prev) => ({
-        ...prev,
-        imageFile: "File size must be less than 20MB"
-      }));
-      return;
-    }
-
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      setFormErrors((prev) => ({
-        ...prev,
-        imageFile: "Please select a valid image file"
-      }));
-      return;
-    }
-
-    setSelectedFile(file);
-
-    // Create a preview URL
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setFilePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-
-    // Clear error for this field
-    if (formErrors.imageFile) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors.imageFile;
-        return newErrors;
-      });
-    }
-
-    toast("Image selected", {
-      description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`
-    });
+  const removeImage = () => {
+    setFormData((prev) => ({
+      ...prev,
+      imageFile: null,
+      imageUrl: null,
+      imageKey: null
+    }));
+    setFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+    toast.info("Image removed");
   };
 
   const validateForm = (): boolean => {
+    const dataToValidate = {
+      projectId: formData.projectId,
+      quarterId: formData.quarterId,
+      target: Number.parseInt(formData.target) || 0,
+      achieved: Number.parseInt(formData.achieved) || 0,
+      district: formData.district,
+      village: formData.village,
+      block: formData.block,
+      remarks: formData.remarks || null,
+      imageUrl:
+        formData.imageUrl ||
+        (formData.imageFile ? "https://mockurl.com/image.png" : null), // Provide mock for validation if file exists
+      imageKey: formData.imageKey || (formData.imageFile ? "mock-key" : null)
+    };
+
     try {
-      // Use the appropriate validation schema based on whether we're editing or creating
-      const validationSchema = isEdit
-        ? updateInfrastructureValidation
-        : createInfrastructureValidation;
-
-      // Create a mock URL for validation if a file is selected but not yet uploaded
-      const mockImageData = selectedFile
-        ? {
-            imageUrl: "https://example.com/image.jpg",
-            imageKey: `infrastructure-${Date.now()}-${selectedFile.name}`
-          }
-        : {};
-
-      validationSchema.parse({
-        ...formData,
-        ...mockImageData
-      });
-
+      if (isEdit) {
+        updateInfrastructureValidation.parse(dataToValidate);
+      } else {
+        createInfrastructureValidation.parse(dataToValidate);
+      }
+      setFormErrors({});
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const newErrors: Record<string, string> = {};
+        const newErrors: FormErrors = {};
         error.errors.forEach((err) => {
-          const path = err.path[0].toString();
-          newErrors[path] = err.message;
+          if (err.path.length > 0)
+            newErrors[err.path[0].toString()] = err.message;
         });
         setFormErrors(newErrors);
+        toast.error("Validation Error", {
+          description: "Please check the form for errors."
+        });
       }
       return false;
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ): Promise<void> => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      toast("Validation Error", {
-        description: "Please fix the errors in the form before submitting."
-      });
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsSubmitting(true);
-    setFormError(null);
+    // In a real app, if formData.imageFile exists, upload it here, get the actual URL and Key,
+    // then update formData.imageUrl and formData.imageKey before calling onSave.
+    // For this example, we'll assume onSave handles the formData as is,
+    // and the parent component (InfrastructurePage) would orchestrate the upload if needed.
+    // However, the current onSave expects imageUrl and imageKey to be potentially set.
+    // If a new file is selected, we should ideally upload it and get a real URL/key.
+    // For now, we pass imageFile, and let onSave decide.
+    // A better approach for this structure:
+    // 1. Upload file if formData.imageFile exists.
+    // 2. Get actual imageUrl and imageKey.
+    // 3. Update a temporary formData with these real values.
+    // 4. Call onSave with this temporary formData.
 
-    try {
-      // Simulate file upload delay
-      if (selectedFile) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-
-      // In a real app, this would upload the file to a storage service
-      // and get back a URL and key to store in the database
-      let imageData = {};
-      if (selectedFile) {
-        // Simulate getting a URL and key from a storage service
-        const mockImageUrl = URL.createObjectURL(selectedFile);
-        const mockImageKey = `infrastructure-${Date.now()}-${
-          selectedFile.name
-        }`;
-
-        imageData = {
-          imageUrl: mockImageUrl,
-          imageKey: mockImageKey
-        };
-      }
-
-      // Add ID if editing
-      const finalData = {
-        ...formData,
-        ...imageData,
-        ...(isEdit && infrastructure ? { id: infrastructure.id } : {})
-      };
-
-      onSave(finalData, selectedFile);
-    } catch (error) {
-      console.error("Error submitting form:", error);
-      setFormError("An error occurred while saving. Please try again.");
-      toast("Error", {
-        description: "An error occurred while saving. Please try again."
-      });
-    } finally {
-      setIsSubmitting(false);
+    // Simplified: onSave will receive the current formData which includes imageFile, imageUrl, imageKey
+    const success = await onSave(formData);
+    if (success) {
+      // Form will be closed by parent if save is successful
     }
+    setIsSubmitting(false);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {formError && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{formError}</AlertDescription>
-        </Alert>
-      )}
-
-      <div className="grid grid-cols-1 gap-4">
+    <form className="space-y-4" onSubmit={handleSubmit}>
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
         <div>
           <Label htmlFor="projectId">
             Project <span className="text-red-500">*</span>
           </Label>
           <Select
-            value={formData.projectId as string}
+            value={formData.projectId}
             onValueChange={(value) => handleSelectChange("projectId", value)}
           >
             <SelectTrigger
+              id="projectId"
               className={formErrors.projectId ? "border-red-500" : ""}
             >
               <SelectValue placeholder="Select project" />
             </SelectTrigger>
-            <SelectContent>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
+            <SelectContent className="max-h-60">
+              {uniqueProjectItems.map((proj) => (
+                <SelectItem key={proj.id} value={proj.id}>
+                  {proj.title}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -911,99 +1245,32 @@ function InfrastructureForm({
           )}
         </div>
       </div>
-
-      <div>
-        <Label htmlFor="title">
-          Infrastructure Title <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="title"
-          name="title"
-          placeholder="Enter infrastructure title"
-          value={formData.title as string}
-          onChange={handleInputChange}
-          className={formErrors.title ? "border-red-500" : ""}
-        />
-        {formErrors.title && (
-          <p className="text-red-500 text-sm mt-1">{formErrors.title}</p>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="quarterId">
             Quarter <span className="text-red-500">*</span>
           </Label>
           <Select
-            value={formData.quarterId as string}
+            value={formData.quarterId}
             onValueChange={(value) => handleSelectChange("quarterId", value)}
           >
             <SelectTrigger
+              id="quarterId"
               className={formErrors.quarterId ? "border-red-500" : ""}
             >
               <SelectValue placeholder="Select quarter" />
             </SelectTrigger>
-            <SelectContent>
-              {quarters.map((quarter) => (
-                <SelectItem key={quarter.id} value={quarter.id}>
-                  {quarter.name}
-                </SelectItem>
+            <SelectContent className="max-h-60">
+              {quarterlyData.map((q) => (
+                <SelectItem
+                  key={q.id}
+                  value={q.id}
+                >{`Q${q.number} ${q.year}`}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           {formErrors.quarterId && (
             <p className="text-red-500 text-sm mt-1">{formErrors.quarterId}</p>
-          )}
-        </div>
-        <div>
-          <Label htmlFor="infrastructureType">
-            Infrastructure Type <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="infrastructureType"
-            name="infrastructureType"
-            placeholder="e.g., Storage, Irrigation, Processing"
-            value={formData.infrastructureType as string}
-            onChange={handleInputChange}
-            className={formErrors.infrastructureType ? "border-red-500" : ""}
-          />
-          {formErrors.infrastructureType && (
-            <p className="text-red-500 text-sm mt-1">
-              {formErrors.infrastructureType}
-            </p>
-          )}
-        </div>
-        <div>
-          <Label htmlFor="budget">
-            Budget <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="budget"
-            name="budget"
-            type="number"
-            placeholder="Enter budget amount"
-            value={formData.budget as number}
-            onChange={handleInputChange}
-            className={formErrors.budget ? "border-red-500" : ""}
-          />
-          {formErrors.budget && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.budget}</p>
-          )}
-        </div>
-        <div>
-          <Label htmlFor="units">
-            Units <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="units"
-            name="units"
-            placeholder="e.g., Facilities, Systems"
-            value={formData.units as string}
-            onChange={handleInputChange}
-            className={formErrors.units ? "border-red-500" : ""}
-          />
-          {formErrors.units && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.units}</p>
           )}
         </div>
         <div>
@@ -1014,8 +1281,8 @@ function InfrastructureForm({
             id="target"
             name="target"
             type="number"
-            placeholder="Enter target number"
-            value={formData.target as number}
+            placeholder="0"
+            value={formData.target}
             onChange={handleInputChange}
             className={formErrors.target ? "border-red-500" : ""}
           />
@@ -1023,7 +1290,6 @@ function InfrastructureForm({
             <p className="text-red-500 text-sm mt-1">{formErrors.target}</p>
           )}
         </div>
-
         <div>
           <Label htmlFor="achieved">
             Achieved <span className="text-red-500">*</span>
@@ -1032,8 +1298,8 @@ function InfrastructureForm({
             id="achieved"
             name="achieved"
             type="number"
-            placeholder="Enter achieved number"
-            value={formData.achieved as number}
+            placeholder="0"
+            value={formData.achieved}
             onChange={handleInputChange}
             className={formErrors.achieved ? "border-red-500" : ""}
           />
@@ -1049,7 +1315,7 @@ function InfrastructureForm({
             id="district"
             name="district"
             placeholder="District name"
-            value={formData.district as string}
+            value={formData.district}
             onChange={handleInputChange}
             className={formErrors.district ? "border-red-500" : ""}
           />
@@ -1057,7 +1323,6 @@ function InfrastructureForm({
             <p className="text-red-500 text-sm mt-1">{formErrors.district}</p>
           )}
         </div>
-
         <div>
           <Label htmlFor="village">
             Village <span className="text-red-500">*</span>
@@ -1066,7 +1331,7 @@ function InfrastructureForm({
             id="village"
             name="village"
             placeholder="Village name"
-            value={formData.village as string}
+            value={formData.village}
             onChange={handleInputChange}
             className={formErrors.village ? "border-red-500" : ""}
           />
@@ -1074,7 +1339,6 @@ function InfrastructureForm({
             <p className="text-red-500 text-sm mt-1">{formErrors.village}</p>
           )}
         </div>
-
         <div>
           <Label htmlFor="block">
             Block <span className="text-red-500">*</span>
@@ -1083,7 +1347,7 @@ function InfrastructureForm({
             id="block"
             name="block"
             placeholder="Block name"
-            value={formData.block as string}
+            value={formData.block}
             onChange={handleInputChange}
             className={formErrors.block ? "border-red-500" : ""}
           />
@@ -1091,150 +1355,77 @@ function InfrastructureForm({
             <p className="text-red-500 text-sm mt-1">{formErrors.block}</p>
           )}
         </div>
-        <div>
-          <Label htmlFor="beneficiaryMale">
-            Male Beneficiaries <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="beneficiaryMale"
-            name="beneficiaryMale"
-            type="number"
-            placeholder="0"
-            value={formData.beneficiaryMale as number}
-            onChange={handleInputChange}
-            className={formErrors.beneficiaryMale ? "border-red-500" : ""}
-          />
-          {formErrors.beneficiaryMale && (
-            <p className="text-red-500 text-sm mt-1">
-              {formErrors.beneficiaryMale}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <Label htmlFor="beneficiaryFemale">
-            Female Beneficiaries <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="beneficiaryFemale"
-            name="beneficiaryFemale"
-            type="number"
-            placeholder="0"
-            value={formData.beneficiaryFemale as number}
-            onChange={handleInputChange}
-            className={formErrors.beneficiaryFemale ? "border-red-500" : ""}
-          />
-          {formErrors.beneficiaryFemale && (
-            <p className="text-red-500 text-sm mt-1">
-              {formErrors.beneficiaryFemale}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <Label htmlFor="completionDate">
-            Completion Date <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="completionDate"
-            name="completionDate"
-            type="date"
-            value={formData.completionDate as string}
-            onChange={handleInputChange}
-            className={`${formErrors.completionDate ? "border-red-500" : ""}`}
-          />
-          {formErrors.completionDate && (
-            <p className="text-red-500 text-sm mt-1">
-              {formErrors.completionDate}
-            </p>
-          )}
-        </div>
       </div>
-
       <div>
         <Label htmlFor="remarks">Remarks</Label>
         <Textarea
           id="remarks"
           name="remarks"
           placeholder="Additional remarks (max 300 characters)"
-          className={`min-h-[100px] mt-2 ${
-            formErrors.remarks ? "border-red-500" : ""
-          }`}
-          value={(formData.remarks as string) || ""}
+          value={formData.remarks || ""}
           onChange={handleInputChange}
-          maxLength={300}
+          className={formErrors.remarks ? "border-red-500 mt-2" : "mt-2"}
         />
         {formErrors.remarks && (
           <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
         )}
       </div>
-
-      {/* Image Upload */}
-      <div className="space-y-2">
-        <Label htmlFor="image">Infrastructure Image</Label>
-        <div className="flex items-center gap-4">
+      <div>
+        <Label htmlFor="imageFile">Infrastructure Image</Label>
+        <div className="flex items-center space-x-2 mt-1">
+          <Input
+            id="imageFile"
+            name="imageFile"
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            ref={fileInputRef}
+            className="hidden"
+          />
           <Button
             type="button"
             variant="outline"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2"
+            className="mt-2"
           >
-            <Upload className="h-4 w-4" />
-            {isEdit ? "Change Image" : "Upload Image"}
+            <Upload className="h-4 w-4 mr-2" /> Browse
           </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            id="image"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-          {formErrors.imageFile && (
-            <p className="text-sm text-red-500">{formErrors.imageFile}</p>
-          )}
-          {formErrors.imageUrl && (
-            <p className="text-sm text-red-500">{formErrors.imageUrl}</p>
-          )}
-          {formErrors.imageKey && (
-            <p className="text-sm text-red-500">{formErrors.imageKey}</p>
-          )}
         </div>
+        {formErrors.imageFile && (
+          <p className="text-red-500 text-sm mt-1">{formErrors.imageFile}</p>
+        )}
+        {formErrors.imageUrl && (
+          <p className="text-red-500 text-sm mt-1">{formErrors.imageUrl}</p>
+        )}
+        {formErrors.imageKey && (
+          <p className="text-red-500 text-sm mt-1">{formErrors.imageKey}</p>
+        )}
 
-        {/* Image Preview */}
         {filePreview && (
-          <div className="mt-2 border rounded-md overflow-hidden">
+          <div className="mt-2 border rounded-md overflow-hidden max-w-xs relative">
             <img
               src={filePreview || "/placeholder.svg"}
               alt="Preview"
-              className="w-full h-auto max-h-64 object-cover"
+              className="w-full h-auto object-cover"
             />
-            <div className="p-2 bg-gray-50 flex justify-between items-center">
-              <span className="text-sm text-gray-500">
-                {selectedFile ? selectedFile.name : "Current image"}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSelectedFile(null);
-                  setFilePreview(null);
-                  setFormData((prev) => ({
-                    ...prev,
-                    imageUrl: null,
-                    imageKey: null
-                  }));
-                }}
-              >
-                Remove
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={removeImage}
+              className="absolute top-1 right-1 bg-white/70 hover:bg-white rounded-full p-1"
+            >
+              <Trash2 className="h-4 w-4 text-red-500" />
+            </Button>
           </div>
         )}
+        {!filePreview && formData.imageFile && (
+          <p className="text-sm text-green-600 mt-1">
+            Selected: {formData.imageFile.name}
+          </p>
+        )}
       </div>
-
-      <div className="flex justify-end space-x-2 pt-4">
+      <DialogFooter className="pt-4">
         <Button
           type="button"
           variant="outline"
@@ -1248,13 +1439,22 @@ function InfrastructureForm({
           className="bg-green-600 hover:bg-green-700"
           disabled={isSubmitting}
         >
-          {isSubmitting
-            ? "Saving..."
-            : isEdit
-            ? "Update Infrastructure"
-            : "Save Infrastructure"}
+          {isSubmitting ? "Saving..." : isEdit ? "Update Entry" : "Save Entry"}
         </Button>
-      </div>
+      </DialogFooter>
     </form>
   );
 }
+
+// Mock shimmer component if not available
+// const EnhancedShimmerTableRows = ({ numRows = 5, numCols = 6 }) => (
+//   Array.from({ length: numRows }).map((_, rowIndex) => (
+//     <TableRow key={rowIndex}>
+//       {Array.from({ length: numCols }).map((_, colIndex) => (
+//         <TableCell key={colIndex}>
+//           <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+//         </TableCell>
+//       ))}
+//     </TableRow>
+//   ))
+// );

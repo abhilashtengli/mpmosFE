@@ -47,8 +47,8 @@ import {
   Eye,
   Edit,
   Upload,
-  Delete,
-  UserRound
+  UserRound,
+  Trash2
 } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { Base_Url, quarterlyData } from "@/lib/constants";
@@ -307,7 +307,6 @@ interface Training {
 }
 
 interface TrainingFormData {
-  trainingId: string;
   title: string;
   projectId: string;
   quarterId: string;
@@ -1047,24 +1046,15 @@ export default function TrainingPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select Year" />
                 </SelectTrigger>
-                <SelectContent className="h-52">
+                <SelectContent className="max-h-60">
                   <SelectItem value="all">All Years</SelectItem>
-                  <SelectItem value="2020">2020</SelectItem>
-                  <SelectItem value="2021">2021</SelectItem>
-                  <SelectItem value="2022">2022</SelectItem>
-                  <SelectItem value="2023">2023</SelectItem>
-                  <SelectItem value="2024">2024</SelectItem>
-                  <SelectItem value="2025">2025</SelectItem>
-                  <SelectItem value="2026">2026</SelectItem>
-                  <SelectItem value="2027">2027</SelectItem>
-                  <SelectItem value="2028">2028</SelectItem>
-                  <SelectItem value="2029">2029</SelectItem>
-                  <SelectItem value="2030">2030</SelectItem>
-                  <SelectItem value="2031">2031</SelectItem>
-                  <SelectItem value="2032">2032</SelectItem>
-                  <SelectItem value="2033">2033</SelectItem>
-                  <SelectItem value="2034">2034</SelectItem>
-                  <SelectItem value="2035">2035</SelectItem>
+                  {Array.from({ length: 16 }, (_, i) => 2020 + i).map(
+                    (year) => (
+                      <SelectItem key={year} value={String(year)}>
+                        {year}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
               <Select
@@ -1221,7 +1211,7 @@ export default function TrainingPage() {
                             variant="outline"
                             onClick={() => handleDelete(training)}
                           >
-                            <Delete className="h-3 w-3 mr-1 text-red-500" />
+                            <Trash2 className="h-3 w-3 mr-1 text-red-600" />
                             Delete
                           </Button>
                         </div>
@@ -1488,7 +1478,6 @@ function TrainingForm({
   isEdit = false
 }: TrainingFormProps) {
   const [formData, setFormData] = useState<TrainingFormData>({
-    trainingId: training?.trainingId || "",
     title: training?.title || "",
     projectId: training?.project.id || "",
     quarterId: training?.quarter.id || "",
