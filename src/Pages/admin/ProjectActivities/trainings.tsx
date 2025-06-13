@@ -2064,5 +2064,3 @@ function TrainingForm({
     </form>
   );
 }
-
-// laboratry nursery school play area
