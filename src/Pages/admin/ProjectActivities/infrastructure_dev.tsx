@@ -966,17 +966,11 @@ function InfrastructureView({ infrastructure }: InfrastructureViewProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label>Infrastructure ID</Label>
-          <p className="font-semibold">{infrastructure.InfraDevId}</p>
+          <p className="font-semibold text-md">{infrastructure.InfraDevId}</p>
         </div>
         <div>
           <Label>Project</Label>
           <p>{projectTitle}</p>
-        </div>
-        <div>
-          <Label>Quarter</Label>
-          <p>
-            <Badge variant="outline">{quarterDisplay}</Badge>
-          </p>
         </div>
       </div>
       <hr />
@@ -998,7 +992,13 @@ function InfrastructureView({ infrastructure }: InfrastructureViewProps) {
         </div>
       </div>
       <hr />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <Label>Quarter</Label>
+          <p className="mt-1">
+            <Badge variant="outline">{quarterDisplay}</Badge>
+          </p>
+        </div>
         <div>
           <Label>Target</Label>
           <p className="font-semibold">{infrastructure.target}</p>
@@ -1039,19 +1039,27 @@ function InfrastructureView({ infrastructure }: InfrastructureViewProps) {
       <hr />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-500">
         <div>
-          <Label>Created At</Label>
-          <p>{new Date(infrastructure.createdAt).toLocaleString()}</p>
+          <Label className="flex items-center">
+            Created At{" "}
+            <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
+          </Label>
+          <p className="tracking-wider mt-2">
+            {new Date(infrastructure.createdAt).toLocaleString()}
+          </p>
         </div>
         <div>
-          <Label>Last Updated</Label>
-          <p>{new Date(infrastructure.updatedAt).toLocaleString()}</p>
+          <Label className="flex items-center">
+            Last Updated{" "}
+            <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
+          </Label>
+          <p className="tracking-wider mt-2">
+            {new Date(infrastructure.updatedAt).toLocaleString()}
+          </p>
         </div>
         {infrastructure.User && (
           <div>
             <Label>Created/Managed By</Label>
-            <p>
-              {infrastructure.User.name} ({infrastructure.User.id})
-            </p>
+            <p className="tracking-wider mt-2">{infrastructure.User.name}</p>
           </div>
         )}
       </div>
@@ -1445,16 +1453,3 @@ function InfrastructureForm({
     </form>
   );
 }
-
-// Mock shimmer component if not available
-// const EnhancedShimmerTableRows = ({ numRows = 5, numCols = 6 }) => (
-//   Array.from({ length: numRows }).map((_, rowIndex) => (
-//     <TableRow key={rowIndex}>
-//       {Array.from({ length: numCols }).map((_, colIndex) => (
-//         <TableCell key={colIndex}>
-//           <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-//         </TableCell>
-//       ))}
-//     </TableRow>
-//   ))
-// );

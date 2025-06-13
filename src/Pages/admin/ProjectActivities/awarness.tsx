@@ -393,7 +393,9 @@ export default function AwarenessPage() {
           units: item.units,
           remarks: item.remarks,
           imageUrl: item.imageUrl ?? undefined,
-          user: item.User
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          User: item.User
             ? { id: item.User.id, name: item.User.name }
             : undefined
         })
@@ -1094,6 +1096,9 @@ export default function AwarenessPage() {
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Target/Achieved</TableHead>
+                  {userRole?.role === "admin" && (
+                    <TableHead>Creadted By</TableHead>
+                  )}
                   <TableHead>Beneficiaries</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -1148,6 +1153,9 @@ export default function AwarenessPage() {
                           </span>
                         </div>
                       </TableCell>
+                      {userRole?.role === "admin" && (
+                        <TableCell>{awareness.User?.name || "N/A"}</TableCell>
+                      )}
                       <TableCell>
                         <div className="text-sm flex flex-col gap-y-1">
                           <Badge variant="outline">
@@ -1313,23 +1321,23 @@ function AwarenessView({ awareness }: AwarenessViewProps) {
   const projects = useProjectStore((state) => state.projects);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 p-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">
             Program ID
           </Label>
-          <p className="text-lg font-semibold">{awareness.awarnessprogramId}</p>
+          <p className="text-md font-semibold">{awareness.awarnessprogramId}</p>
+        </div>
+        <div>
+          <Label className="text-sm font-medium text-gray-500">
+            Program Title
+          </Label>
+          <p className="text-md">{awareness.title}</p>
         </div>
       </div>
 
-      <div>
-        <Label className="text-sm font-medium text-gray-500">
-          Program Title
-        </Label>
-        <p className="text-lg">{awareness.title}</p>
-      </div>
-
+      <hr />
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">Project</Label>
@@ -1347,7 +1355,7 @@ function AwarenessView({ awareness }: AwarenessViewProps) {
           </Badge>
         </div>
       </div>
-
+      <hr />
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">District</Label>
@@ -1362,7 +1370,7 @@ function AwarenessView({ awareness }: AwarenessViewProps) {
           <p>{awareness.block}</p>
         </div>
       </div>
-
+      <hr />
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">Target</Label>
@@ -1381,7 +1389,7 @@ function AwarenessView({ awareness }: AwarenessViewProps) {
           <p>{awareness.units}</p>
         </div>
       </div>
-
+      <hr />
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">
@@ -1409,6 +1417,33 @@ function AwarenessView({ awareness }: AwarenessViewProps) {
           </p>
         </div>
       )}
+      <hr />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-500">
+        <div>
+          <Label className="flex items-center">
+            Created At{" "}
+            <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
+          </Label>
+          <p className="tracking-wider mt-2">
+            {new Date(awareness.createdAt).toLocaleString()}
+          </p>
+        </div>
+        <div>
+          <Label className="flex items-center">
+            Last Updated{" "}
+            <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
+          </Label>
+          <p className="tracking-wider mt-2">
+            {new Date(awareness.updatedAt).toLocaleString()}
+          </p>
+        </div>
+        {awareness.User && (
+          <div>
+            <Label>Created/Managed By</Label>
+            <p className="tracking-wider mt-2">{awareness.User.name}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -422,7 +422,9 @@ export default function TrainingPage() {
           remarks: item.remarks,
           imageUrl: item.imageUrl ?? undefined,
           pdfUrl: item.pdfKey ?? undefined,
-          user: item.User
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          User: item.User
             ? { id: item.User.id, name: item.User.name }
             : undefined
         })
@@ -1117,6 +1119,9 @@ export default function TrainingPage() {
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Target/Achieved</TableHead>
+                  {userRole?.role === "admin" && (
+                    <TableHead>Creadted By</TableHead>
+                  )}
                   <TableHead>Beneficiaries</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -1171,6 +1176,9 @@ export default function TrainingPage() {
                           </span>
                         </div>
                       </TableCell>
+                      {userRole?.role === "admin" && (
+                        <TableCell>{training.User?.name || "N/A"}</TableCell>
+                      )}
                       <TableCell>
                         <div className="text-sm flex flex-col gap-y-1">
                           <Badge variant="outline">
@@ -1334,23 +1342,23 @@ function TrainingView({ training }: TrainingViewProps) {
   const projects = useProjectStore((state) => state.projects);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 p-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">
             Training ID
           </Label>
-          <p className="text-lg font-semibold">{training.trainingId}</p>
+          <p className="text-md font-semibold">{training.trainingId}</p>
+        </div>
+
+        <div>
+          <Label className="text-sm font-medium text-gray-500">
+            Training Title
+          </Label>
+          <p className="text-md ">{training.title}</p>
         </div>
       </div>
-
-      <div>
-        <Label className="text-sm font-medium text-gray-500">
-          Training Title
-        </Label>
-        <p className="text-lg">{training.title}</p>
-      </div>
-
+      <hr />
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">Project</Label>
@@ -1368,7 +1376,7 @@ function TrainingView({ training }: TrainingViewProps) {
           </Badge>
         </div>
       </div>
-
+      <hr />
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">District</Label>
@@ -1383,7 +1391,7 @@ function TrainingView({ training }: TrainingViewProps) {
           <p>{training.block}</p>
         </div>
       </div>
-
+      <hr />
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">Target</Label>
@@ -1402,7 +1410,7 @@ function TrainingView({ training }: TrainingViewProps) {
           <p>{training.units}</p>
         </div>
       </div>
-
+      <hr />
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">
@@ -1421,7 +1429,7 @@ function TrainingView({ training }: TrainingViewProps) {
           </p>
         </div>
       </div>
-
+      <hr />
       {training.remarks && (
         <div>
           <Label className="text-sm font-medium text-gray-500">Remarks</Label>
@@ -1430,7 +1438,6 @@ function TrainingView({ training }: TrainingViewProps) {
           </p>
         </div>
       )}
-
       {/* Display attachments if available */}
       {/* {(training.imageUrl || training.pdfUrl) && (
         <div className="space-y-4">
@@ -1467,6 +1474,34 @@ function TrainingView({ training }: TrainingViewProps) {
           </div>
         </div>
       )} */}
+      <hr />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-500">
+        <div>
+          <Label className="flex items-center">
+            Created At{" "}
+            <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
+          </Label>
+          <p className="tracking-wider mt-2">
+            {new Date(training.createdAt).toLocaleString()}
+          </p>
+        </div>
+        <div>
+          <Label className="flex items-center">
+            Last Updated{" "}
+            <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
+          </Label>{" "}
+          <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
+          <p className="tracking-wider mt-2">
+            {new Date(training.updatedAt).toLocaleString()}
+          </p>
+        </div>
+        {training.User && (
+          <div>
+            <Label>Created/Managed By</Label>
+            <p className="tracking-wider mt-2">{training.User.name}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -2029,3 +2064,5 @@ function TrainingForm({
     </form>
   );
 }
+
+// laboratry nursery school play area

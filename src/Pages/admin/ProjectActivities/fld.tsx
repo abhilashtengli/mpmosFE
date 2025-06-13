@@ -1,3 +1,7 @@
+"use client";
+
+import type React from "react";
+
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -42,7 +46,7 @@ import { useProjectStore } from "@/stores/useProjectStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router-dom";
 import { Base_Url, quarterlyData } from "@/lib/constants";
-import axios, { AxiosError } from "axios";
+import axios, { type AxiosError } from "axios";
 import EnhancedShimmerTableRows from "@/components/shimmer-rows";
 
 // Validation schemas
@@ -195,6 +199,8 @@ interface FLD {
   block: string;
   units: string;
   remarks: string;
+  createdAt: string;
+  updatedAt: string;
   User?: {
     id: string;
     name: string;
@@ -279,11 +285,12 @@ export default function FLDPage() {
         district: item.district,
         village: item.village,
         block: item.block,
-
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
         units: item.units,
         remarks: item.remarks,
 
-        user: item.User ? { id: item.User.id, name: item.User.name } : undefined
+        User: item.User ? { id: item.User.id, name: item.User.name } : undefined
       }));
       console.log("MP : ", mappedFld);
       setFlds(mappedFld || []);
@@ -321,7 +328,7 @@ export default function FLDPage() {
       .includes(searchTerm.toLowerCase());
 
     // Get quarter IDs based on year and quarter selection
-    let matchesYearQuarter: boolean = true;
+    let matchesYearQuarter = true;
 
     if (
       (selectedYear && selectedYear !== "all") ||
@@ -333,11 +340,11 @@ export default function FLDPage() {
           const yearMatch =
             !selectedYear ||
             selectedYear === "all" ||
-            q.year === parseInt(selectedYear);
+            q.year === Number.parseInt(selectedYear);
           const quarterMatch =
             !selectedQuarter ||
             selectedQuarter === "all" ||
-            q.number === parseInt(selectedQuarter);
+            q.number === Number.parseInt(selectedQuarter);
           return yearMatch && quarterMatch;
         })
         .map((q) => q.id);
@@ -360,6 +367,8 @@ export default function FLDPage() {
       matchesSearch && matchesYearQuarter && matchesProject && matchesDistrict
     );
   });
+
+  console.log("FL : ", filteredFLDs);
   const uniqueProjectTitle = useMemo(() => {
     if (!projects || projects.length === 0) return [];
     return Array.from(new Set(projects.map((project) => project.title)));
@@ -570,6 +579,8 @@ export default function FLDPage() {
             district: data.data.district,
             village: data.data.village,
             block: data.data.block,
+            createdAt: data.data.createdAt,
+            updatedAt: data.data.updatedAt,
             units: data.data.units,
             remarks: data.data.remarks,
             User:
@@ -601,6 +612,8 @@ export default function FLDPage() {
                     district: data.data.district,
                     village: data.data.village,
                     block: data.data.block,
+                    createdAt: data.data.createdAt,
+                    updatedAt: data.data.updatedAt,
                     units: data.data.units,
                     remarks: data.data.remarks,
                     User:
@@ -941,6 +954,9 @@ export default function FLDPage() {
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Target/Achieved</TableHead>
+                  {userRole?.role === "admin" && (
+                    <TableHead>Created By</TableHead>
+                  )}
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -987,6 +1003,9 @@ export default function FLDPage() {
                           <span className="text-gray-400"> / {fld.target}</span>
                         </div>
                       </TableCell>
+                      {userRole?.role === "admin" && (
+                        <TableCell>{fld.User?.name || "N/A"}</TableCell>
+                      )}
 
                       <TableCell>
                         <div className="flex space-x-2">
@@ -1130,14 +1149,14 @@ function FLDView({ fld }: FLDViewProps) {
   const projects = useProjectStore((state) => state.projects);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 p-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">FLD ID</Label>
-          <p className="text-lg font-semibold">{fld.fldId}</p>
+          <p className="text-md font-semibold">{fld.fldId}</p>
         </div>
       </div>
-
+      <hr />
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">Project</Label>
@@ -1157,7 +1176,7 @@ function FLDView({ fld }: FLDViewProps) {
           </Badge>
         </div>
       </div>
-
+      <hr />
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">District</Label>
@@ -1172,7 +1191,7 @@ function FLDView({ fld }: FLDViewProps) {
           <p>{fld.block}</p>
         </div>
       </div>
-
+      <hr />
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">Target</Label>
@@ -1187,7 +1206,7 @@ function FLDView({ fld }: FLDViewProps) {
           <p>{fld.units}</p>
         </div>
       </div>
-
+      <hr />
       {fld.remarks && (
         <div>
           <Label className="text-sm font-medium text-gray-500">Remarks</Label>
@@ -1196,6 +1215,33 @@ function FLDView({ fld }: FLDViewProps) {
           </p>
         </div>
       )}
+      <hr />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-500">
+        <div>
+          <Label className="flex items-center">
+            Created At{" "}
+            <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
+          </Label>
+          <p className="tracking-wider mt-2">
+            {new Date(fld.createdAt).toLocaleString()}
+          </p>
+        </div>
+        <div>
+          <Label className="flex items-center">
+            Last Updated{" "}
+            <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
+          </Label>
+          <p className="tracking-wider mt-2">
+            {new Date(fld.updatedAt).toLocaleString()}
+          </p>
+        </div>
+        {fld.User && (
+          <div>
+            <Label>Created/Managed By</Label>
+            <p className="tracking-wider mt-2">{fld.User.name}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

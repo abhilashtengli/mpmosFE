@@ -1,4 +1,9 @@
-import { useState } from "react";
+"use client";
+
+import type React from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { z } from "zod";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -30,206 +35,626 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Package,
   Plus,
   Search,
-  ImageIcon,
   Eye,
   Edit,
-  X,
+  Upload,
+  Trash2,
   AlertCircle
 } from "lucide-react";
-import { toast } from "sonner";
-import {
-  createInputDistributionValidation,
-  updateInputDistributionValidation
-} from "@/lib/validations/input-distribution";
-import { z } from "zod";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useProjectStore } from "@/stores/useProjectStore";
+import { Base_Url, quarterlyData } from "@/lib/constants";
+import { useAuthStore } from "@/stores/useAuthStore";
+import axios, { type AxiosError } from "axios";
+import { useNavigate } from "react-router-dom";
+import EnhancedShimmerTableRows from "@/components/shimmer-rows";
 
-interface InputDistribution {
+// Zod validation schemas
+const createInputDistributionValidation = z
+  .object({
+    projectId: z.string().uuid({ message: "Valid project ID is required" }),
+    quarterId: z.string().uuid({ message: "Valid quarter ID is required" }),
+    activityType: z
+      .string()
+      .trim()
+      .min(2, { message: "Activity type must be at least 2 characters" })
+      .max(100, { message: "Activity type cannot exceed 100 characters" }),
+    name: z
+      .string()
+      .trim()
+      .min(2, { message: "Name must be at least 2 characters" })
+      .max(200, { message: "Name cannot exceed 200 characters" }),
+    target: z
+      .number({ invalid_type_error: "Target must be a number" })
+      .int({ message: "Target must be an integer" })
+      .positive({ message: "Target must be a positive number" }),
+    achieved: z
+      .number({ invalid_type_error: "Achieved must be a number" })
+      .int({ message: "Achieved must be an integer" })
+      .nonnegative({ message: "Achieved must be zero or positive" }),
+    district: z
+      .string()
+      .trim()
+      .min(2, { message: "District must be at least 2 characters" })
+      .max(100, { message: "District cannot exceed 100 characters" }),
+    village: z
+      .string()
+      .trim()
+      .min(2, { message: "Village must be at least 2 characters" })
+      .max(100, { message: "Village cannot exceed 100 characters" }),
+    block: z
+      .string()
+      .trim()
+      .min(2, { message: "Block must be at least 2 characters" })
+      .max(100, { message: "Block cannot exceed 100 characters" }),
+    remarks: z
+      .string()
+      .trim()
+      .max(300, { message: "Remarks cannot exceed 300 characters" })
+      .optional()
+      .nullable(),
+    units: z
+      .string()
+      .trim()
+      .max(20, { message: "Units cannot exceed 20 characters" })
+      .optional()
+      .nullable(),
+    imageUrl: z
+      .string()
+      .url({ message: "Invalid image URL format" })
+      .optional()
+      .nullable(),
+    imageKey: z.string().trim().optional().nullable()
+  })
+  .refine((data) => data.achieved <= data.target, {
+    message: "Achieved count cannot exceed target count",
+    path: ["achieved"]
+  })
+  .refine((data) => !(data.imageUrl && !data.imageKey), {
+    message: "Image key is required when image URL is provided",
+    path: ["imageKey"]
+  });
+
+const updateInputDistributionValidation = z
+  .object({
+    projectId: z
+      .string()
+      .uuid({ message: "Valid project ID is required" })
+      .optional(),
+    quarterId: z
+      .string()
+      .uuid({ message: "Valid quarter ID is required" })
+      .optional(),
+    activityType: z
+      .string()
+      .trim()
+      .min(2, { message: "Activity type must be at least 2 characters" })
+      .max(100, { message: "Activity type cannot exceed 100 characters" })
+      .optional(),
+    name: z
+      .string()
+      .trim()
+      .min(2, { message: "Name must be at least 2 characters" })
+      .max(200, { message: "Name cannot exceed 200 characters" })
+      .optional(),
+    target: z
+      .number({ invalid_type_error: "Target must be a number" })
+      .int({ message: "Target must be an integer" })
+      .positive({ message: "Target must be a positive number" })
+      .optional(),
+    achieved: z
+      .number({ invalid_type_error: "Achieved must be a number" })
+      .int({ message: "Achieved must be an integer" })
+      .nonnegative({ message: "Achieved must be zero or positive" })
+      .optional(),
+    district: z
+      .string()
+      .trim()
+      .min(2, { message: "District must be at least 2 characters" })
+      .max(100, { message: "District cannot exceed 100 characters" })
+      .optional(),
+    village: z
+      .string()
+      .trim()
+      .min(2, { message: "Village must be at least 2 characters" })
+      .max(100, { message: "Village cannot exceed 100 characters" })
+      .optional(),
+    block: z
+      .string()
+      .trim()
+      .min(2, { message: "Block must be at least 2 characters" })
+      .max(100, { message: "Block cannot exceed 100 characters" })
+      .optional(),
+    remarks: z
+      .string()
+      .trim()
+      .max(300, { message: "Remarks cannot exceed 300 characters" })
+      .optional()
+      .nullable(),
+    units: z
+      .string()
+      .trim()
+      .max(20, { message: "Units cannot exceed 20 characters" })
+      .optional()
+      .nullable(),
+    imageUrl: z
+      .string()
+      .url({ message: "Invalid image URL format" })
+      .optional()
+      .nullable(),
+    imageKey: z.string().optional().nullable()
+  })
+  .refine(
+    (data) => {
+      if (data.target === undefined || data.achieved === undefined) return true;
+      return data.achieved <= data.target;
+    },
+    { message: "Achieved count cannot exceed target count", path: ["achieved"] }
+  )
+  .refine(
+    (data) => {
+      if (data.imageUrl === undefined) return true;
+      if (data.imageUrl === null) return true;
+      return !(!data.imageKey && data.imageUrl);
+    },
+    {
+      message: "Image key is required when image URL is provided",
+      path: ["imageKey"]
+    }
+  );
+
+// Interfaces
+interface RawInputDistribution {
   id: string;
   inputDistId: string;
+  project: { id: string; title: string }; // Assuming project object from API
+  quarter: { id: string; number: number; year: number }; // Assuming quarter object from API
   activityType: string;
-  customActivityType?: string;
   name: string;
-  project: string;
-  quarter: string;
   target: number;
   achieved: number;
   district: string;
   village: string;
   block: string;
-  units: string;
-  remarks: string;
-  status: string;
-  imageUrl?: string;
+  remarks: string | null;
+  units: string | null;
+  imageUrl: string | null;
+  imageKey?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  User?: { id: string; name: string };
 }
 
-interface DistributionViewProps {
-  distribution: InputDistribution;
-}
+type InputDistribution = RawInputDistribution;
 
 interface InputDistributionFormData {
-  inputDistId: string;
+  projectId: string;
+  quarterId: string;
   activityType: string;
-  customActivityType: string;
+  customActivityType?: string; // Added for custom input
   name: string;
-  project: string;
-  quarter: string;
   target: string;
   achieved: string;
   district: string;
   village: string;
   block: string;
-  units: string;
-  remarks: string;
-  imageFile: File | null;
+  remarks: string | null;
+  units: string | null;
+  imageFile?: File | null;
+  imageUrl?: string | null;
+  imageKey?: string | null;
+}
+
+interface InputDistributionFormProps {
+  distribution?: InputDistribution;
+  onSave: (data: InputDistributionFormData) => Promise<boolean>;
+  onClose: () => void;
+  isEdit?: boolean;
+}
+
+interface InputDistributionViewProps {
+  distribution: InputDistribution;
 }
 
 interface FormErrors {
   [key: string]: string;
 }
 
-interface InputDistributionFormProps {
-  distribution?: InputDistribution;
-  onSave: (data: InputDistributionFormData) => void;
-  onClose: () => void;
-  isEdit?: boolean;
+interface ApiErrorResponse {
+  success: boolean;
+  message: string;
+  code: string;
+  errors?: unknown;
+  path?: string[];
 }
 
-const inputDistributions: InputDistribution[] = [
-  {
-    id: "1",
-    inputDistId: "IND-2024-001",
-    activityType: "Seed Distribution",
-    name: "High Yield Rice Seeds",
-    project: "Crop Improvement Program",
-    quarter: "Q2 2024",
-    target: 500,
-    achieved: 480,
-    district: "Guwahati",
-    village: "Khanapara",
-    block: "Dispur",
-    units: "kg",
-    remarks: "Distributed to 50 farmers",
-    status: "Completed"
-  },
-  {
-    id: "2",
-    inputDistId: "IND-2024-002",
-    activityType: "Fertilizers",
-    name: "Organic Fertilizer Distribution",
-    project: "Sustainable Agriculture Initiative",
-    quarter: "Q2 2024",
-    target: 200,
-    achieved: 195,
-    district: "Jorhat",
-    village: "Teok",
-    block: "Jorhat",
-    units: "bags",
-    remarks: "Organic fertilizer for vegetable cultivation",
-    status: "Completed"
-  },
-  {
-    id: "3",
-    inputDistId: "IND-2024-003",
-    activityType: "Other",
-    customActivityType: "Bio-pesticides",
-    name: "Neem-based Bio-pesticide",
-    project: "Organic Farming Initiative",
-    quarter: "Q2 2024",
-    target: 100,
-    achieved: 98,
-    district: "Dibrugarh",
-    village: "Naharkatiya",
-    block: "Dibrugarh",
-    units: "bottles",
-    remarks: "Eco-friendly pest control solution",
-    status: "Completed"
-  }
+interface ApiSuccessResponse<T> {
+  success: true;
+  message: string;
+  data: T;
+  code: string;
+}
+
+const PREDEFINED_ACTIVITY_TYPES = [
+  "Seed Distribution",
+  "Planting Materials",
+  "Fertilizers",
+  "Pesticides",
+  "Tools & Equipment",
+  "Other" // Allow custom input if "Other" is selected
 ];
 
 export default function InputDistributionPage() {
+  const [distributions, setDistributions] = useState<InputDistribution[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState<boolean>(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
   const [selectedDistribution, setSelectedDistribution] =
     useState<InputDistribution | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [selectedActivityType, setSelectedActivityType] = useState<string>("");
+  const [selectedYear, setSelectedYear] = useState<string>("");
   const [selectedQuarter, setSelectedQuarter] = useState<string>("");
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
+  const [selectedActivityType, setSelectedActivityType] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  // Filter distributions based on search and filter criteria
-  const filteredDistributions = inputDistributions.filter((distribution) => {
-    const matchesSearch =
-      distribution.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      distribution.inputDistId
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      distribution.project.toLowerCase().includes(searchTerm.toLowerCase());
+  const projects = useProjectStore((state) => state.projects);
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const navigate = useNavigate();
 
-    const matchesActivityType =
-      !selectedActivityType ||
-      selectedActivityType === "all" ||
-      distribution.activityType === selectedActivityType ||
-      (selectedActivityType === "Other" &&
-        distribution.activityType === "Other");
-    const matchesQuarter =
-      !selectedQuarter ||
-      selectedQuarter === "all" ||
-      distribution.quarter === selectedQuarter;
-    const matchesProject =
-      !selectedProject ||
-      selectedProject === "all" ||
-      distribution.project === selectedProject;
-    const matchesDistrict =
-      !selectedDistrict ||
-      selectedDistrict === "all" ||
-      distribution.district === selectedDistrict;
+  const fetchInputDistributions = async () => {
+    setIsLoading(true);
+    setPageError(null);
+    try {
+      const endpoint =
+        user?.role === "admin" ? "get-admin-inputdist" : "get-user-inputdist";
+      const response = await axios.get<
+        ApiSuccessResponse<RawInputDistribution[]>
+      >(`${Base_Url}/${endpoint}`, {
+        withCredentials: true
+      });
 
-    return (
-      matchesSearch &&
-      matchesActivityType &&
-      matchesQuarter &&
-      matchesProject &&
-      matchesDistrict
+      if (
+        response.data.success &&
+        response.status === 200 &&
+        response.data.code === "GET_INPUTDIST_SUCCESSFULL"
+      ) {
+        const mappedData: InputDistribution[] = (response.data.data || []).map(
+          (item) => ({
+            ...item,
+            imageUrl: item.imageUrl ?? null,
+            imageKey: item.imageKey ?? null,
+            remarks: item.remarks ?? null,
+            units: item.units ?? null
+          })
+        );
+        setDistributions(mappedData);
+      } else if (response.data.code === "NO_INPUT_DIST_FOUND") {
+        setDistributions([]);
+        toast.info("No input distribution data found.");
+      } else {
+        throw new Error(
+          response.data.message || "Failed to fetch input distributions"
+        );
+      }
+    } catch (error: unknown) {
+      console.error("Error fetching input distributions:", error);
+      const defaultMessage =
+        "An unexpected error occurred while fetching data.";
+      if (axios.isAxiosError(error)) {
+        const err = error as AxiosError<ApiErrorResponse>;
+        const apiErrorMessage = err.response?.data?.message || err.message;
+        setPageError(apiErrorMessage);
+        toast.error("Fetch Failed", {
+          description: apiErrorMessage || defaultMessage
+        });
+      } else {
+        setPageError(defaultMessage);
+        toast.error("Fetch Failed", {
+          description: (error as Error).message || defaultMessage
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInputDistributions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  const filteredDistributions: InputDistribution[] = useMemo(
+    () =>
+      distributions.filter((dist) => {
+        const searchLower = searchTerm.toLowerCase();
+        const matchesSearch =
+          dist.inputDistId.toLowerCase().includes(searchLower) ||
+          dist.name.toLowerCase().includes(searchLower) ||
+          dist.project.title.toLowerCase().includes(searchLower) ||
+          dist.activityType.toLowerCase().includes(searchLower) ||
+          dist.district.toLowerCase().includes(searchLower);
+
+        let matchesYearQuarter = true;
+        if (
+          (selectedYear && selectedYear !== "all") ||
+          (selectedQuarter && selectedQuarter !== "all")
+        ) {
+          const matchingQuarterIds = quarterlyData
+            .filter((q) => {
+              const yearMatch =
+                !selectedYear ||
+                selectedYear === "all" ||
+                q.year === Number.parseInt(selectedYear);
+              const quarterMatch =
+                !selectedQuarter ||
+                selectedQuarter === "all" ||
+                q.number === Number.parseInt(selectedQuarter);
+              return yearMatch && quarterMatch;
+            })
+            .map((q) => q.id);
+          matchesYearQuarter = matchingQuarterIds.includes(dist.quarter.id);
+        }
+
+        const matchesProjectFilter =
+          !selectedProject ||
+          selectedProject === "all" ||
+          dist.project.id === selectedProject;
+        const matchesDistrictFilter =
+          !selectedDistrict ||
+          selectedDistrict === "all" ||
+          dist.district === selectedDistrict;
+        const matchesActivityTypeFilter =
+          !selectedActivityType ||
+          selectedActivityType === "all" ||
+          dist.activityType === selectedActivityType;
+
+        return (
+          matchesSearch &&
+          matchesYearQuarter &&
+          matchesProjectFilter &&
+          matchesDistrictFilter &&
+          matchesActivityTypeFilter
+        );
+      }),
+    [
+      distributions,
+      searchTerm,
+      selectedYear,
+      selectedQuarter,
+      selectedProject,
+      selectedDistrict,
+      selectedActivityType
+    ]
+  );
+
+  const uniqueProjectItems = useMemo(() => {
+    if (!projects || projects.length === 0) return [];
+    return projects.map((p) => ({ id: p.id, title: p.title }));
+  }, [projects]);
+
+  const uniqueDistricts = useMemo(() => {
+    if (!distributions || distributions.length === 0) return [];
+    return Array.from(new Set(distributions.map((d) => d.district))).sort();
+  }, [distributions]);
+
+  const uniqueActivityTypes = useMemo(() => {
+    if (!distributions || distributions.length === 0)
+      return PREDEFINED_ACTIVITY_TYPES; // Fallback if no data
+    const typesFromData = Array.from(
+      new Set(distributions.map((d) => d.activityType))
     );
-  });
+    return Array.from(
+      new Set([...PREDEFINED_ACTIVITY_TYPES, ...typesFromData])
+    ).sort();
+  }, [distributions]);
 
-  const handleView = (distribution: InputDistribution): void => {
-    setSelectedDistribution(distribution);
+  const handleView = (dist: InputDistribution): void => {
+    setSelectedDistribution(dist);
     setIsViewDialogOpen(true);
   };
 
-  const handleEdit = (distribution: InputDistribution): void => {
-    setSelectedDistribution(distribution);
+  const handleEdit = (dist: InputDistribution): void => {
+    setSelectedDistribution(dist);
     setIsEditDialogOpen(true);
   };
 
-  const handleSave = (data: InputDistributionFormData): void => {
+  const handleDeletePrompt = (dist: InputDistribution): void => {
+    setSelectedDistribution(dist);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleSaveDistribution = async (
+    formData: InputDistributionFormData, // This formData now includes customActivityType
+    operation: "create" | "update" = "create",
+    distIdToUpdate?: string
+  ): Promise<boolean> => {
+    if (operation === "update" && !distIdToUpdate) {
+      toast.error("Distribution ID is required for update.");
+      return false;
+    }
+
+    const loadingToast = toast.loading(
+      `${
+        operation === "create" ? "Creating" : "Updating"
+      } input distribution...`
+    );
+
+    // Determine the final activity type to send to the API
+    const finalActivityType =
+      formData.activityType === "Other" && formData.customActivityType?.trim()
+        ? formData.customActivityType.trim()
+        : formData.activityType;
+
     try {
-      setPageError(null);
-      console.log("Saving distribution:", data);
-      setIsDialogOpen(false);
-      setIsEditDialogOpen(false);
-      toast.success("Success", {
-        description: "Input distribution saved successfully."
+      const requestData = {
+        projectId: formData.projectId,
+        quarterId: formData.quarterId,
+        activityType: finalActivityType, // Use the determined final activity type
+        name: formData.name,
+        target: Number.parseInt(formData.target),
+        achieved: Number.parseInt(formData.achieved),
+        district: formData.district,
+        village: formData.village,
+        block: formData.block,
+        remarks: formData.remarks || null,
+        units: formData.units || null,
+        imageUrl: formData.imageUrl || null,
+        imageKey: formData.imageKey || null
+      };
+
+      let response;
+      const config = {
+        withCredentials: true,
+        timeout: 30000,
+        headers: { "Content-Type": "application/json" }
+      };
+
+      if (operation === "create") {
+        response = await axios.post<ApiSuccessResponse<RawInputDistribution>>(
+          `${Base_Url}/create-input-distribution`,
+          requestData,
+          config
+        );
+      } else {
+        response = await axios.put<ApiSuccessResponse<RawInputDistribution>>(
+          `${Base_Url}/update-input-distribution/${distIdToUpdate}`,
+          requestData,
+          config
+        );
+      }
+      const apiResponse = response.data;
+
+      if (
+        apiResponse.success &&
+        ((operation === "create" &&
+          response.status === 201 &&
+          apiResponse.code === "INPUT_DISTRIBUTION_CREATED") ||
+          (operation === "update" &&
+            response.status === 200 &&
+            apiResponse.code === "RESOURCE_UPDATED"))
+      ) {
+        toast.success(
+          apiResponse.message || `Distribution ${operation}d successfully.`,
+          {
+            description: `ID: ${apiResponse.data.inputDistId}`
+          }
+        );
+
+        const newOrUpdatedDist: InputDistribution = {
+          ...apiResponse.data,
+          imageUrl: apiResponse.data.imageUrl ?? null,
+          imageKey: apiResponse.data.imageKey ?? null,
+          remarks: apiResponse.data.remarks ?? null,
+          units: apiResponse.data.units ?? null
+        };
+
+        if (operation === "create") {
+          setDistributions((prev) => [newOrUpdatedDist, ...prev]);
+        } else {
+          setDistributions((prev) =>
+            prev.map((d) => (d.id === distIdToUpdate ? newOrUpdatedDist : d))
+          );
+        }
+        setIsDialogOpen(false);
+        setIsEditDialogOpen(false);
+        setSelectedDistribution(null);
+        return true;
+      } else {
+        const message =
+          apiResponse.message || `Failed to ${operation} distribution.`;
+        toast.error(message);
+        return false;
+      }
+    } catch (error: unknown) {
+      console.error(`Error ${operation}ing distribution:`, error);
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError<ApiErrorResponse>;
+        const errorData = axiosError.response?.data;
+        let description = "An error occurred.";
+        if (errorData) {
+          description = errorData.message || description;
+        } else if (axiosError.request) {
+          description = "No response from server.";
+        }
+        toast.error(`Failed to ${operation}`, { description });
+        if (axiosError.response?.status === 401 && logout) {
+          logout();
+          navigate("/signin");
+        }
+      } else {
+        toast.error(`Failed to ${operation}`, {
+          description: (error as Error).message || "An unexpected error."
+        });
+      }
+      return false;
+    } finally {
+      toast.dismiss(loadingToast);
+    }
+  };
+
+  const handleDeleteDistribution = async () => {
+    if (!selectedDistribution) {
+      toast.error("No distribution selected.");
+      return;
+    }
+    const loadingToast = toast.loading(
+      `Deleting ID: ${selectedDistribution.inputDistId}...`
+    );
+    try {
+      const response = await axios.delete<{
+        success: boolean;
+        message: string;
+        code: string;
+      }>(`${Base_Url}/delete-input-dist/${selectedDistribution.id}`, {
+        withCredentials: true,
+        timeout: 30000
       });
-    } catch (error) {
-      console.error("Error saving distribution:", error);
-      setPageError("An error occurred while saving. Please try again.");
-      toast.error("Error", {
-        description: "Failed to save input distribution. Please try again."
-      });
+      if (
+        response.status === 200 &&
+        response.data.success &&
+        response.data.code === "RESOURCE_DELETED"
+      ) {
+        toast.success(response.data.message || "Distribution deleted.", {
+          description: `ID: ${selectedDistribution.inputDistId}`
+        });
+        setDistributions((prev) =>
+          prev.filter((d) => d.id !== selectedDistribution.id)
+        );
+        setSelectedDistribution(null);
+        setIsDeleteDialogOpen(false);
+      } else {
+        toast.error("Deletion Failed", {
+          description: response.data?.message || "Could not delete."
+        });
+      }
+    } catch (error: unknown) {
+      console.error("Delete distribution error:", error);
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError<ApiErrorResponse>;
+        toast.error("Deletion Failed", {
+          description: axiosError.response?.data?.message || "Server error."
+        });
+      } else {
+        toast.error("Deletion Failed", {
+          description: (error as Error).message || "Unexpected error."
+        });
+      }
+    } finally {
+      toast.dismiss(loadingToast);
     }
   };
 
@@ -251,19 +676,20 @@ export default function InputDistributionPage() {
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-green-600 hover:bg-green-700">
-                <Plus className="h-4 w-4 mr-2" />
-                New Input Distribution
+                <Plus className="h-4 w-4 mr-2" /> New Distribution
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add New Input Distribution</DialogTitle>
                 <DialogDescription>
-                  Create a new input distribution entry
+                  Create a new input distribution entry.
                 </DialogDescription>
               </DialogHeader>
               <InputDistributionForm
-                onSave={handleSave}
+                onSave={(formData) =>
+                  handleSaveDistribution(formData, "create")
+                }
                 onClose={() => setIsDialogOpen(false)}
               />
             </DialogContent>
@@ -278,15 +704,14 @@ export default function InputDistributionPage() {
             <AlertDescription>{pageError}</AlertDescription>
           </Alert>
         )}
-
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-lg">Filters & Search</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-6.5 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="Search distributions..."
                   value={searchTerm}
@@ -294,26 +719,6 @@ export default function InputDistributionPage() {
                   className="pl-10"
                 />
               </div>
-              <Select
-                value={selectedActivityType}
-                onValueChange={setSelectedActivityType}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Activity Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="Seed Distribution">
-                    Seed Distribution
-                  </SelectItem>
-                  <SelectItem value="Fertilizers">Fertilizers</SelectItem>
-                  <SelectItem value="Pesticides">Pesticides</SelectItem>
-                  <SelectItem value="Planting Materials">
-                    Planting Materials
-                  </SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
               <Select
                 value={selectedQuarter}
                 onValueChange={setSelectedQuarter}
@@ -323,10 +728,24 @@ export default function InputDistributionPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Quarters</SelectItem>
-                  <SelectItem value="Q1 2024">Q1 2024</SelectItem>
-                  <SelectItem value="Q2 2024">Q2 2024</SelectItem>
-                  <SelectItem value="Q3 2024">Q3 2024</SelectItem>
-                  <SelectItem value="Q4 2024">Q4 2024</SelectItem>
+                  {[1, 2, 3, 4].map((q) => (
+                    <SelectItem key={q} value={String(q)}>{`Q${q}`}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Year" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  <SelectItem value="all">All Years</SelectItem>
+                  {Array.from({ length: 16 }, (_, i) => 2020 + i).map(
+                    (year) => (
+                      <SelectItem key={year} value={String(year)}>
+                        {year}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
               <Select
@@ -336,17 +755,15 @@ export default function InputDistributionPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select Project" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60">
                   <SelectItem value="all">All Projects</SelectItem>
-                  <SelectItem value="Crop Improvement Program">
-                    Crop Improvement Program
-                  </SelectItem>
-                  <SelectItem value="Sustainable Agriculture Initiative">
-                    Sustainable Agriculture Initiative
-                  </SelectItem>
-                  <SelectItem value="Organic Farming Initiative">
-                    Organic Farming Initiative
-                  </SelectItem>
+                  {uniqueProjectItems.map((proj) => (
+                    <SelectItem key={proj.id} value={proj.id}>
+                      {" "}
+                      {/* Use ID for value */}
+                      {proj.title}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select
@@ -356,11 +773,30 @@ export default function InputDistributionPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select District" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60">
                   <SelectItem value="all">All Districts</SelectItem>
-                  <SelectItem value="Guwahati">Guwahati</SelectItem>
-                  <SelectItem value="Jorhat">Jorhat</SelectItem>
-                  <SelectItem value="Dibrugarh">Dibrugarh</SelectItem>
+                  {uniqueDistricts.map((district) => (
+                    <SelectItem key={district} value={district}>
+                      {district}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {/* Activity Type Filter - Added as per structure */}
+              <Select
+                value={selectedActivityType}
+                onValueChange={setSelectedActivityType}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Activity Type" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  <SelectItem value="all">All Activity Types</SelectItem>
+                  {uniqueActivityTypes.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -369,13 +805,13 @@ export default function InputDistributionPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Input Distribution Programs</CardTitle>
+            <CardTitle>Input Distribution Entries</CardTitle>
             <CardDescription>
-              List of all input distribution activities
-              {filteredDistributions.length !== inputDistributions.length && (
+              List of all input distribution activities.
+              {filteredDistributions.length !== distributions.length && (
                 <span className="text-green-600">
                   {" "}
-                  ({filteredDistributions.length} of {inputDistributions.length}{" "}
+                  ({filteredDistributions.length} of {distributions.length}{" "}
                   shown)
                 </span>
               )}
@@ -385,92 +821,88 @@ export default function InputDistributionPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Distribution ID</TableHead>
-                  <TableHead>Activity Type</TableHead>
+                  <TableHead>Dist. ID</TableHead>
                   <TableHead>Name</TableHead>
+                  <TableHead>Activity Type</TableHead>
                   <TableHead>Project</TableHead>
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Target/Achieved</TableHead>
-                  <TableHead>Units</TableHead>
-                  <TableHead>Status</TableHead>
+                  {user?.role === "admin" && <TableHead>Created By</TableHead>}
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDistributions.length === 0 ? (
+                {isLoading ? (
+                  <EnhancedShimmerTableRows />
+                ) : filteredDistributions.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={10}
+                      colSpan={user?.role === "admin" ? 10 : 9}
                       className="text-center py-8 text-gray-500"
                     >
-                      No distributions found matching your criteria
+                      No distributions found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredDistributions.map((distribution) => (
-                    <TableRow key={distribution.id}>
+                  filteredDistributions.map((dist) => (
+                    <TableRow key={dist.id}>
                       <TableCell className="font-medium">
-                        {distribution.inputDistId}
+                        {dist.inputDistId}
+                      </TableCell>
+                      <TableCell className="truncate max-w-[150px]">
+                        {dist.name}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{dist.activityType}</Badge>
+                      </TableCell>
+                      <TableCell className="truncate max-w-[150px]">
+                        {dist.project.title}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
-                          {distribution.activityType === "Other" &&
-                          distribution.customActivityType
-                            ? distribution.customActivityType
-                            : distribution.activityType}
+                          {`Q${
+                            quarterlyData.find((q) => q.id === dist.quarter.id)
+                              ?.number
+                          } ${
+                            quarterlyData.find((q) => q.id === dist.quarter.id)
+                              ?.year
+                          }`}
                         </Badge>
                       </TableCell>
-                      <TableCell>{distribution.name}</TableCell>
-                      <TableCell className="text-sm">
-                        {distribution.project}
-                      </TableCell>
+                      <TableCell className="truncate max-w-[150px]">{`${dist.district}, ${dist.village}`}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{distribution.quarter}</Badge>
+                        <span className="text-green-600 font-medium">
+                          {dist.achieved}
+                        </span>{" "}
+                        / {dist.target}
                       </TableCell>
-                      <TableCell className="text-sm">
-                        {distribution.district}, {distribution.village}
-                      </TableCell>
+                      {user?.role === "admin" && (
+                        <TableCell>{dist.User?.name || "N/A"}</TableCell>
+                      )}
                       <TableCell>
-                        <div className="text-sm">
-                          <span className="text-green-600 font-medium">
-                            {distribution.achieved}
-                          </span>
-                          <span className="text-gray-400">
-                            {" "}
-                            / {distribution.target}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{distribution.units}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            distribution.status === "Completed"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {distribution.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
+                        <div className="flex space-x-1">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleEdit(distribution)}
+                            onClick={() => handleEdit(dist)}
                           >
-                            <Edit className="h-3 w-3 mr-1" />
-                            Edit
+                            <Edit className="h-3 w-3 mr-1" /> Edit
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleView(distribution)}
+                            onClick={() => handleView(dist)}
                           >
-                            <Eye className="h-3 w-3 mr-1" />
-                            View
+                            <Eye className="h-3 w-3 mr-1" /> View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeletePrompt(dist)}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1 text-red-600" />{" "}
+                            Delete
                           </Button>
                         </div>
                       </TableCell>
@@ -482,38 +914,65 @@ export default function InputDistributionPage() {
           </CardContent>
         </Card>
 
-        {/* View Distribution Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Distribution Details</DialogTitle>
-              <DialogDescription>
-                View complete input distribution information
-              </DialogDescription>
+              <DialogTitle>Input Distribution Details</DialogTitle>
             </DialogHeader>
             {selectedDistribution && (
-              <DistributionView distribution={selectedDistribution} />
+              <InputDistributionView distribution={selectedDistribution} />
             )}
           </DialogContent>
         </Dialog>
 
-        {/* Edit Distribution Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Input Distribution</DialogTitle>
-              <DialogDescription>
-                Update input distribution information
-              </DialogDescription>
             </DialogHeader>
             {selectedDistribution && (
               <InputDistributionForm
                 distribution={selectedDistribution}
-                onSave={handleSave}
+                onSave={(formData) =>
+                  handleSaveDistribution(
+                    formData,
+                    "update",
+                    selectedDistribution.id
+                  )
+                }
                 onClose={() => setIsEditDialogOpen(false)}
                 isEdit={true}
               />
             )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete distribution:{" "}
+                <strong>{selectedDistribution?.name}</strong> (ID:{" "}
+                {selectedDistribution?.inputDistId})? This action cannot be
+                undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDeleteDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteDistribution}
+                disabled={isLoading}
+              >
+                {isLoading ? "Deleting..." : "Delete"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -521,117 +980,132 @@ export default function InputDistributionPage() {
   );
 }
 
-function DistributionView({ distribution }: DistributionViewProps) {
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label className="text-sm font-medium text-gray-500">
-            Distribution ID
-          </Label>
-          <p className="text-lg font-semibold">{distribution.inputDistId}</p>
-        </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Status</Label>
-          <Badge
-            variant={
-              distribution.status === "Completed" ? "default" : "secondary"
-            }
-            className="mt-1"
-          >
-            {distribution.status}
-          </Badge>
-        </div>
-      </div>
+function InputDistributionView({ distribution }: InputDistributionViewProps) {
+  const projects = useProjectStore((state) => state.projects);
+  const projectTitle =
+    projects.find((p) => p.id === distribution.project.id)?.title ||
+    "Unknown Project";
+  const quarterInfo = quarterlyData.find(
+    (q) => q.id === distribution.quarter.id
+  );
+  const quarterDisplay = quarterInfo
+    ? `Q${quarterInfo.number} ${quarterInfo.year}`
+    : "Unknown Quarter";
 
-      <div className="grid grid-cols-2 gap-4">
+  return (
+    <div className="space-y-4 p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label className="text-sm font-medium text-gray-500">
-            Activity Type
-          </Label>
-          <p className="text-lg">
-            {distribution.activityType === "Other" &&
-            distribution.customActivityType
-              ? distribution.customActivityType
-              : distribution.activityType}
+          <Label>Distribution ID</Label>
+          <p className="font-semibold text-md">{distribution.inputDistId}</p>
+        </div>
+        <div>
+          <Label>Name</Label>
+          <p className="text-md">{distribution.name}</p>
+        </div>
+        <div>
+          <Label>Activity Type</Label>
+          <p className="mt-1">
+            <Badge variant="secondary">{distribution.activityType}</Badge>
           </p>
         </div>
         <div>
-          <Label className="text-sm font-medium text-gray-500">
-            Name/Description
-          </Label>
-          <p className="text-lg">{distribution.name}</p>
+          <Label>Project</Label>
+          <p>{projectTitle}</p>
+        </div>
+        <div>
+          <Label>Quarter</Label>
+          <p className="mt-1">
+            <Badge variant="outline">{quarterDisplay}</Badge>
+          </p>
         </div>
       </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Project</Label>
-          <p>{distribution.project}</p>
-        </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Quarter</Label>
-          <p>{distribution.quarter}</p>
-        </div>
+      <hr />
+      <div>
+        <Label>Location</Label>
       </div>
-
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <Label className="text-sm font-medium text-gray-500">District</Label>
+          <Label>District</Label>
           <p>{distribution.district}</p>
         </div>
         <div>
-          <Label className="text-sm font-medium text-gray-500">Village</Label>
+          <Label>Village</Label>
           <p>{distribution.village}</p>
         </div>
         <div>
-          <Label className="text-sm font-medium text-gray-500">Block</Label>
+          <Label>Block</Label>
           <p>{distribution.block}</p>
         </div>
       </div>
-
-      <div className="grid grid-cols-3 gap-4">
+      <hr />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <Label className="text-sm font-medium text-gray-500">Target</Label>
-          <p className="text-lg font-semibold text-gray-600">
-            {distribution.target}
-          </p>
+          <Label>Target</Label>
+          <p className="font-semibold">{distribution.target}</p>
         </div>
         <div>
-          <Label className="text-sm font-medium text-gray-500">Achieved</Label>
-          <p className="text-lg font-semibold text-green-600">
+          <Label>Achieved</Label>
+          <p className="font-semibold text-green-600">
             {distribution.achieved}
           </p>
         </div>
         <div>
-          <Label className="text-sm font-medium text-gray-500">Units</Label>
-          <p>{distribution.units}</p>
+          <Label>Units</Label>
+          <p>{distribution.units || "N/A"}</p>
         </div>
       </div>
-
       {distribution.remarks && (
+        <>
+          <hr />
+          <div>
+            <Label>Remarks</Label>
+            <p className="bg-gray-50 p-2 rounded-md">{distribution.remarks}</p>
+          </div>
+        </>
+      )}
+      {distribution.imageUrl && (
+        <>
+          <hr />
+          <div>
+            <Label>Image</Label>
+            <div className="mt-2 border rounded-md overflow-hidden max-w-sm">
+              <img
+                src={distribution.imageUrl || "/placeholder.svg"}
+                alt={distribution.name}
+                className="w-full h-auto object-cover"
+              />
+            </div>
+          </div>
+        </>
+      )}
+      <hr />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-500">
         <div>
-          <Label className="text-sm font-medium text-gray-500">Remarks</Label>
-          <p className="text-gray-700 bg-gray-50 p-3 rounded-md">
-            {distribution.remarks}
+          <Label className="flex items-center">
+            Created At{" "}
+            <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
+          </Label>
+          <p className="tracking-wider mt-2">
+            {new Date(distribution.createdAt).toLocaleString()}
           </p>
         </div>
-      )}
-
-      {distribution.imageUrl && (
         <div>
-          <Label className="text-sm font-medium text-gray-500">
-            Distribution Image
+          <Label className="flex items-center">
+            Last Updated{" "}
+            <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
           </Label>
-          <div className="mt-2">
-            <img
-              src={distribution.imageUrl || "/placeholder.svg"}
-              alt="Distribution"
-              className="max-w-full h-auto rounded-md border"
-            />
-          </div>
+          <p className="tracking-wider mt-2">
+            {new Date(distribution.updatedAt).toLocaleString()}
+          </p>
         </div>
-      )}
+        {distribution.User && (
+          <div>
+            <Label>Created/Managed By</Label>
+            <p className="tracking-wider mt-2">{distribution.User.name}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -642,144 +1116,188 @@ function InputDistributionForm({
   onClose,
   isEdit = false
 }: InputDistributionFormProps) {
+  const isInitialCustomActivity =
+    distribution?.activityType &&
+    !PREDEFINED_ACTIVITY_TYPES.includes(distribution.activityType);
+
   const [formData, setFormData] = useState<InputDistributionFormData>({
-    inputDistId: distribution?.inputDistId || "",
-    activityType: distribution?.activityType || "",
-    customActivityType: distribution?.customActivityType || "",
+    projectId: distribution?.project.id || "",
+    quarterId: distribution?.quarter.id || "",
+    activityType: isInitialCustomActivity
+      ? "Other"
+      : distribution?.activityType || "",
+    customActivityType: isInitialCustomActivity
+      ? distribution.activityType
+      : "", // Initialize custom field
     name: distribution?.name || "",
-    project: distribution?.project || "",
-    quarter: distribution?.quarter || "",
-    target: distribution?.target?.toString() || "",
-    achieved: distribution?.achieved?.toString() || "",
+    target: distribution?.target?.toString() || "0",
+    achieved: distribution?.achieved?.toString() || "0",
     district: distribution?.district || "",
     village: distribution?.village || "",
     block: distribution?.block || "",
-    units: distribution?.units || "",
     remarks: distribution?.remarks || "",
-    imageFile: null
+    units: distribution?.units || "",
+    imageFile: null,
+    imageUrl: distribution?.imageUrl || null,
+    imageKey: distribution?.imageKey || null
   });
-
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(
+  const [filePreview, setFilePreview] = useState<string | null>(
     distribution?.imageUrl || null
   );
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const projects = useProjectStore((state) => state.projects);
+  const uniqueProjectItems = useMemo(() => {
+    if (!projects || projects.length === 0) return [];
+    return projects.map((p) => ({ id: p.id, title: p.title }));
+  }, [projects]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ): void => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    // Clear error for this field
-    if (formErrors[name]) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
-    }
+    if (formErrors[name]) setFormErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
   const handleSelectChange = (name: string, value: string): void => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
-
-    // Clear error for this field
-    if (formErrors[name]) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
+    setFormData((prev) => {
+      const newState = { ...prev, [name]: value };
+      if (name === "activityType" && value !== "Other") {
+        newState.customActivityType = ""; // Clear custom field if "Other" is not selected
+      }
+      return newState;
+    });
+    if (formErrors[name]) setFormErrors((prev) => ({ ...prev, [name]: "" }));
+    if (name === "activityType" && formErrors.customActivityType) {
+      setFormErrors((prev) => ({ ...prev, customActivityType: "" }));
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = e.target.files?.[0] || null;
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        // 5MB limit
+        setFormErrors((prev) => ({
+          ...prev,
+          imageFile: "File size must be less than 5MB"
+        }));
+        return;
+      }
+      if (!file.type.startsWith("image/")) {
+        setFormErrors((prev) => ({
+          ...prev,
+          imageFile: "Please select a valid image file"
+        }));
+        return;
+      }
+      setFormData((prev) => ({
+        ...prev,
+        imageFile: file,
+        imageUrl: null,
+        imageKey: null
+      }));
+      setFilePreview(URL.createObjectURL(file));
+      if (formErrors.imageFile)
+        setFormErrors((prev) => ({ ...prev, imageFile: "" }));
+      toast.success("Image selected", { description: file.name });
+    }
+  };
 
-    if (!file) return;
+  const removeImage = () => {
+    setFormData((prev) => ({
+      ...prev,
+      imageFile: null,
+      imageUrl: null,
+      imageKey: null
+    }));
+    setFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    toast.info("Image removed");
+  };
 
-    // Validate file size (20MB max)
-    if (file.size > 20 * 1024 * 1024) {
+  const validateForm = (): boolean => {
+    const finalActivityType =
+      formData.activityType === "Other" && formData.customActivityType?.trim()
+        ? formData.customActivityType.trim()
+        : formData.activityType;
+
+    if (
+      formData.activityType === "Other" &&
+      !formData.customActivityType?.trim()
+    ) {
       setFormErrors((prev) => ({
         ...prev,
-        imageFile: "File size must be less than 20MB"
+        customActivityType:
+          "Custom activity type is required when 'Other' is selected."
       }));
-      return;
-    }
-
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      setFormErrors((prev) => ({
-        ...prev,
-        imageFile: "Please select a valid image file"
-      }));
-      return;
-    }
-
-    setFormData((prev) => ({ ...prev, imageFile: file }));
-
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-
-    // Clear error for this field
-    if (formErrors.imageFile) {
+      toast.error("Validation Error", {
+        description: "Custom activity type is required."
+      });
+      return false;
+    } else if (formErrors.customActivityType) {
+      // Clear error if it was previously set and now condition is met
       setFormErrors((prev) => {
         const newErrors = { ...prev };
-        delete newErrors.imageFile;
+        delete newErrors.customActivityType;
         return newErrors;
       });
     }
 
-    toast.success("Image selected", {
-      description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`
-    });
-  };
+    const dataToValidate = {
+      ...formData,
+      activityType: finalActivityType, // Use the potentially custom activity type for validation
+      target: Number.parseInt(formData.target) || 0,
+      achieved: Number.parseInt(formData.achieved) || 0,
+      imageUrl:
+        formData.imageUrl ||
+        (formData.imageFile ? "https://mockurl.com/image.png" : null),
+      imageKey: formData.imageKey || (formData.imageFile ? "mock-key" : null)
+    };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { imageFile, customActivityType, ...restToValidate } = dataToValidate; // Exclude customActivityType from Zod schema check if it's handled separately
 
-  const removeImage = (): void => {
-    setFormData((prev) => ({ ...prev, imageFile: null }));
-    setImagePreview(null);
-  };
-
-  const validateForm = (): boolean => {
     try {
-      const dataToValidate = {
-        projectId: "550e8400-e29b-41d4-a716-446655440000", // Mock project ID
-        quarterId: "550e8400-e29b-41d4-a716-446655440001", // Mock quarter ID
-        activityType: formData.activityType,
-        customActivityType: formData.customActivityType,
-        name: formData.name,
-        target: Number.parseInt(formData.target) || 0,
-        achieved: Number.parseInt(formData.achieved) || 0,
-        district: formData.district,
-        village: formData.village,
-        block: formData.block,
-        units: formData.units,
-        remarks: formData.remarks,
-        imageUrl: formData.imageFile ? "https://example.com/image.jpg" : null,
-        imageKey: formData.imageFile ? `input-distribution-${Date.now()}` : null
-      };
-
       if (isEdit) {
-        updateInputDistributionValidation.parse(dataToValidate);
+        updateInputDistributionValidation.parse(restToValidate);
       } else {
-        createInputDistributionValidation.parse(dataToValidate);
+        createInputDistributionValidation.parse(restToValidate);
       }
-
-      return true;
+      // Clear general form errors if validation passes for Zod part
+      const currentErrors = { ...formErrors };
+      // Keep customActivityType error if it was set by direct check
+      if (
+        formData.activityType !== "Other" ||
+        formData.customActivityType?.trim()
+      ) {
+        delete currentErrors.customActivityType;
+      }
+      setFormErrors(currentErrors);
+      return (
+        Object.keys(currentErrors).filter(
+          (k) =>
+            k !== "customActivityType" ||
+            (formData.activityType === "Other" &&
+              !formData.customActivityType?.trim())
+        ).length === 0
+      );
     } catch (error) {
       if (error instanceof z.ZodError) {
         const newErrors: FormErrors = {};
         error.errors.forEach((err) => {
-          const path = err.path[0].toString();
-          newErrors[path] = err.message;
+          if (err.path.length > 0)
+            newErrors[err.path[0].toString()] = err.message;
         });
+        // Preserve customActivityType error if it was set by direct check
+        if (formErrors.customActivityType)
+          newErrors.customActivityType = formErrors.customActivityType;
         setFormErrors(newErrors);
+        toast.error("Validation Error", {
+          description: "Please check the form for errors."
+        });
       }
       return false;
     }
@@ -789,157 +1307,123 @@ function InputDistributionForm({
     e: React.FormEvent<HTMLFormElement>
   ): Promise<void> => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      toast.error("Validation Error", {
-        description: "Please fix the errors in the form before submitting."
-      });
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsSubmitting(true);
-    setFormError(null);
-
-    try {
-      // Simulate file upload delay
-      if (formData.imageFile) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-
-      onSave(formData);
-    } catch (error) {
-      console.error("Error submitting form:", error);
-      setFormError("An error occurred while saving. Please try again.");
-      toast.error("Error", {
-        description: "Failed to save input distribution. Please try again."
-      });
-    } finally {
-      setIsSubmitting(false);
+    // Note: Actual file upload to a server to get imageUrl and imageKey should happen here
+    // if formData.imageFile exists. For this example, we pass it to onSave.
+    const success = await onSave(formData);
+    if (success) {
+      // Parent component will close dialog
     }
+    setIsSubmitting(false);
   };
 
   return (
-    <div className="space-y-4">
-      {formError && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{formError}</AlertDescription>
-        </Alert>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 gap-4">
-          <div>
-            <Label>
-              Project <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={formData.project}
-              onValueChange={(value) => handleSelectChange("project", value)}
+    <form className="space-y-4" onSubmit={handleSubmit}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="projectId">
+            Project <span className="text-red-500">*</span>
+          </Label>
+          <Select
+            value={formData.projectId}
+            onValueChange={(value) => handleSelectChange("projectId", value)}
+          >
+            <SelectTrigger
+              id="projectId"
+              className={formErrors.projectId ? "border-red-500" : ""}
             >
-              <SelectTrigger
-                className={formErrors.project ? "border-red-500" : ""}
-              >
-                <SelectValue placeholder="Select project" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Crop Improvement Program">
-                  Crop Improvement Program
+              <SelectValue placeholder="Select project" />
+            </SelectTrigger>
+            <SelectContent className="max-h-60">
+              {uniqueProjectItems.map((proj) => (
+                <SelectItem key={proj.id} value={proj.id}>
+                  {proj.title}
                 </SelectItem>
-                <SelectItem value="Sustainable Agriculture Initiative">
-                  Sustainable Agriculture Initiative
-                </SelectItem>
-                <SelectItem value="Organic Farming Initiative">
-                  Organic Farming Initiative
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            {formErrors.project && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.project}</p>
-            )}
-          </div>
-          <div>
-            <Label htmlFor="name">
-              Name/Description <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="name"
-              name="name"
-              placeholder="Enter distribution name"
-              value={formData.name}
-              onChange={handleInputChange}
-              maxLength={200}
-              className={formErrors.name ? "border-red-500" : ""}
-              required
-            />
-            {formErrors.name && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
-            )}
-          </div>
+              ))}
+            </SelectContent>
+          </Select>
+          {formErrors.projectId && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.projectId}</p>
+          )}
         </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label>
-              Quarter <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={formData.quarter}
-              onValueChange={(value) => handleSelectChange("quarter", value)}
+        <div>
+          <Label htmlFor="quarterId">
+            Quarter <span className="text-red-500">*</span>
+          </Label>
+          <Select
+            value={formData.quarterId}
+            onValueChange={(value) => handleSelectChange("quarterId", value)}
+          >
+            <SelectTrigger
+              id="quarterId"
+              className={formErrors.quarterId ? "border-red-500" : ""}
             >
-              <SelectTrigger
-                className={formErrors.quarter ? "border-red-500" : ""}
-              >
-                <SelectValue placeholder="Select quarter" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Q1 2024">Q1 2024</SelectItem>
-                <SelectItem value="Q2 2024">Q2 2024</SelectItem>
-                <SelectItem value="Q3 2024">Q3 2024</SelectItem>
-                <SelectItem value="Q4 2024">Q4 2024</SelectItem>
-              </SelectContent>
-            </Select>
-            {formErrors.quarter && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.quarter}</p>
-            )}
-          </div>
-          <div>
-            <Label>
-              Activity Type <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={formData.activityType}
-              onValueChange={(value) =>
-                handleSelectChange("activityType", value)
-              }
+              <SelectValue placeholder="Select quarter" />
+            </SelectTrigger>
+            <SelectContent className="max-h-60">
+              {quarterlyData.map((q) => (
+                <SelectItem
+                  key={q.id}
+                  value={q.id}
+                >{`Q${q.number} ${q.year}`}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {formErrors.quarterId && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.quarterId}</p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="name">
+            Name/Description <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="name"
+            name="name"
+            placeholder="e.g., High Yield Rice Seeds"
+            value={formData.name}
+            onChange={handleInputChange}
+            className={formErrors.name ? "border-red-500" : ""}
+          />
+          {formErrors.name && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="activityType">
+            Activity Type <span className="text-red-500">*</span>
+          </Label>
+          <Select
+            value={formData.activityType}
+            onValueChange={(value) => handleSelectChange("activityType", value)}
+          >
+            <SelectTrigger
+              id="activityType"
+              className={formErrors.activityType ? "border-red-500" : ""}
             >
-              <SelectTrigger
-                className={formErrors.activityType ? "border-red-500" : ""}
-              >
-                <SelectValue placeholder="Select activity type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Seed Distribution">
-                  Seed Distribution
+              <SelectValue placeholder="Select activity type" />
+            </SelectTrigger>
+            <SelectContent className="max-h-60">
+              {PREDEFINED_ACTIVITY_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
                 </SelectItem>
-                <SelectItem value="Fertilizers">Fertilizers</SelectItem>
-                <SelectItem value="Pesticides">Pesticides</SelectItem>
-                <SelectItem value="Planting Materials">
-                  Planting Materials
-                </SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-            {formErrors.activityType && (
-              <p className="text-red-500 text-sm mt-1">
-                {formErrors.activityType}
-              </p>
-            )}
-          </div>
+              ))}
+            </SelectContent>
+          </Select>
+          {formErrors.activityType && (
+            <p className="text-red-500 text-sm mt-1">
+              {formErrors.activityType}
+            </p>
+          )}
         </div>
 
         {formData.activityType === "Other" && (
-          <div>
+          <div className="md:col-span-2">
+            {" "}
+            {/* Adjust span if needed */}
             <Label htmlFor="customActivityType">
               Custom Activity Type <span className="text-red-500">*</span>
             </Label>
@@ -947,10 +1431,9 @@ function InputDistributionForm({
               id="customActivityType"
               name="customActivityType"
               placeholder="Enter custom activity type"
-              value={formData.customActivityType}
+              value={formData.customActivityType || ""}
               onChange={handleInputChange}
               className={formErrors.customActivityType ? "border-red-500" : ""}
-              required
             />
             {formErrors.customActivityType && (
               <p className="text-red-500 text-sm mt-1">
@@ -960,202 +1443,194 @@ function InputDistributionForm({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="target">
-              Target <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="target"
-              name="target"
-              type="number"
-              placeholder="Enter target"
-              value={formData.target}
-              onChange={handleInputChange}
-              className={formErrors.target ? "border-red-500" : ""}
-              required
-            />
-            {formErrors.target && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.target}</p>
-            )}
-          </div>
-          <div>
-            <Label htmlFor="achieved">
-              Achieved <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="achieved"
-              name="achieved"
-              type="number"
-              placeholder="Enter achieved"
-              value={formData.achieved}
-              onChange={handleInputChange}
-              className={formErrors.achieved ? "border-red-500" : ""}
-              required
-            />
-            {formErrors.achieved && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
-            )}
-          </div>
-          <div>
-            <Label htmlFor="units">
-              Units <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="units"
-              name="units"
-              placeholder="kg, bags, packets"
-              value={formData.units}
-              onChange={handleInputChange}
-              maxLength={20}
-              className={formErrors.units ? "border-red-500" : ""}
-              required
-            />
-            {formErrors.units && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.units}</p>
-            )}
-          </div>
-          <div>
-            <Label htmlFor="district">
-              District <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="district"
-              name="district"
-              placeholder="District name"
-              value={formData.district}
-              onChange={handleInputChange}
-              maxLength={100}
-              className={formErrors.district ? "border-red-500" : ""}
-              required
-            />
-            {formErrors.district && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.district}</p>
-            )}
-          </div>
-          <div>
-            <Label htmlFor="village">
-              Village <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="village"
-              name="village"
-              placeholder="Village name"
-              value={formData.village}
-              onChange={handleInputChange}
-              maxLength={100}
-              className={formErrors.village ? "border-red-500" : ""}
-              required
-            />
-            {formErrors.village && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.village}</p>
-            )}
-          </div>
-          <div>
-            <Label htmlFor="block">
-              Block <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="block"
-              name="block"
-              placeholder="Block name"
-              value={formData.block}
-              onChange={handleInputChange}
-              maxLength={100}
-              className={formErrors.block ? "border-red-500" : ""}
-              required
-            />
-            {formErrors.block && (
-              <p className="text-red-500 text-sm mt-1">{formErrors.block}</p>
-            )}
-          </div>
-        </div>
-
         <div>
-          <Label htmlFor="remarks">Remarks</Label>
-          <Textarea
-            id="remarks"
-            name="remarks"
-            placeholder="Additional remarks (max 300 characters)"
-            value={formData.remarks}
+          <Label htmlFor="target">
+            Target <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="target"
+            name="target"
+            type="number"
+            placeholder="0"
+            value={formData.target}
             onChange={handleInputChange}
-            maxLength={300}
-            className={` mt-2 ${formErrors.remarks ? "border-red-500" : ""}`}
+            className={formErrors.target ? "border-red-500" : ""}
           />
-          {formErrors.remarks && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
+          {formErrors.target && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.target}</p>
           )}
         </div>
-
         <div>
-          <Label htmlFor="imageFile">Distribution Image</Label>
-          <div className="space-y-2 mt-2">
-            {imagePreview ? (
-              <div className="relative">
-                <img
-                  src={imagePreview || "/placeholder.svg"}
-                  alt="Preview"
-                  className="max-w-full h-48 object-cover rounded-md border"
-                />
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  className="absolute top-2 right-2"
-                  onClick={removeImage}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="border-2 border-dashed border-gray-300 rounded-md p-6 text-center">
-                <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <div className="mt-2">
-                  <Label htmlFor="imageFile" className="cursor-pointer">
-                    <span className="mt-2 block text-sm font-medium text-gray-900">
-                      Upload an image
-                    </span>
-                  </Label>
-                  <Input
-                    id="imageFile"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </div>
-              </div>
-            )}
-            {formErrors.imageFile ? (
-              <p className="text-red-500 text-sm">{formErrors.imageFile}</p>
-            ) : (
-              <p className="text-sm text-gray-500">Max file size: 20MB</p>
-            )}
-          </div>
+          <Label htmlFor="achieved">
+            Achieved <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="achieved"
+            name="achieved"
+            type="number"
+            placeholder="0"
+            value={formData.achieved}
+            onChange={handleInputChange}
+            className={formErrors.achieved ? "border-red-500" : ""}
+          />
+          {formErrors.achieved && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
+          )}
         </div>
-
-        <div className="flex justify-end space-x-2 pt-4">
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="units">Units</Label>
+          <Input
+            id="units"
+            name="units"
+            placeholder="e.g., kg, bags, packets"
+            value={formData.units || ""}
+            onChange={handleInputChange}
+            className={formErrors.units ? "border-red-500" : ""}
+          />
+          {formErrors.units && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.units}</p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="district">
+            District <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="district"
+            name="district"
+            placeholder="District name"
+            value={formData.district}
+            onChange={handleInputChange}
+            className={formErrors.district ? "border-red-500" : ""}
+          />
+          {formErrors.district && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.district}</p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="village">
+            Village <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="village"
+            name="village"
+            placeholder="Village name"
+            value={formData.village}
+            onChange={handleInputChange}
+            className={formErrors.village ? "border-red-500" : ""}
+          />
+          {formErrors.village && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.village}</p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="block">
+            Block <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="block"
+            name="block"
+            placeholder="Block name"
+            value={formData.block}
+            onChange={handleInputChange}
+            className={formErrors.block ? "border-red-500" : ""}
+          />
+          {formErrors.block && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.block}</p>
+          )}
+        </div>
+      </div>
+      <div>
+        <Label htmlFor="remarks">Remarks</Label>
+        <Textarea
+          id="remarks"
+          name="remarks"
+          placeholder="Additional remarks (max 300 characters)"
+          value={formData.remarks || ""}
+          onChange={handleInputChange}
+          className={formErrors.remarks ? "border-red-500 mt-2" : "mt-2"}
+        />
+        {formErrors.remarks && (
+          <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
+        )}
+      </div>
+      <div>
+        <Label htmlFor="imageFile">Distribution Image</Label>
+        <div className="flex items-center space-x-2 mt-1">
+          <Input
+            id="imageFile"
+            name="imageFile"
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            ref={fileInputRef}
+            className="hidden"
+          />
           <Button
             type="button"
             variant="outline"
-            onClick={onClose}
-            disabled={isSubmitting}
+            onClick={() => fileInputRef.current?.click()}
+            className="mt-1"
           >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            className="bg-green-600 hover:bg-green-700"
-            disabled={isSubmitting}
-          >
-            {isSubmitting
-              ? "Saving..."
-              : isEdit
-              ? "Update Distribution"
-              : "Save Distribution"}
+            <Upload className="h-4 w-4 mr-2" /> Browse
           </Button>
         </div>
-      </form>
-    </div>
+        {formErrors.imageFile && (
+          <p className="text-red-500 text-sm mt-1">{formErrors.imageFile}</p>
+        )}
+        {formErrors.imageUrl && (
+          <p className="text-red-500 text-sm mt-1">{formErrors.imageUrl}</p>
+        )}
+        {formErrors.imageKey && (
+          <p className="text-red-500 text-sm mt-1">{formErrors.imageKey}</p>
+        )}
+        {filePreview && (
+          <div className="mt-2 border rounded-md overflow-hidden max-w-xs relative">
+            <img
+              src={filePreview || "/placeholder.svg"}
+              alt="Preview"
+              className="w-full h-auto object-cover"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={removeImage}
+              className="absolute top-1 right-1 bg-white/70 hover:bg-white rounded-full p-1"
+            >
+              <Trash2 className="h-4 w-4 text-red-500" />
+            </Button>
+          </div>
+        )}
+        {!filePreview && formData.imageFile && (
+          <p className="text-sm text-green-600 mt-1">
+            Selected: {formData.imageFile.name}
+          </p>
+        )}
+      </div>
+      <DialogFooter className="pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onClose}
+          disabled={isSubmitting}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          className="bg-green-600 hover:bg-green-700"
+          disabled={isSubmitting}
+        >
+          {isSubmitting
+            ? "Saving..."
+            : isEdit
+            ? "Update Distribution"
+            : "Save Distribution"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }
