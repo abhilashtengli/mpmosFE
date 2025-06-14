@@ -492,7 +492,9 @@ function ProjectView({ project }: ProjectViewProps) {
         <div>
           <Label className="text-sm font-medium text-gray-500">Budget</Label>
           <p className="text-lg font-semibold text-green-600">
-            ₹{project.budget.toLocaleString()}
+            {project.budget
+              ? `₹ ${Number(project.budget).toLocaleString("en-IN")}`
+              : "N/A"}
           </p>
         </div>
       </div>
@@ -1112,7 +1114,11 @@ export default function ProjectsPage() {
                         {project.locationState}
                       </TableCell>
                       <TableCell className="truncate max-w-[150px] whitespace-nowrap overflow-hidden">
-                        ₹ {project.budget.toLocaleString()}
+                        {project.budget
+                          ? `₹ ${Number(project.budget).toLocaleString(
+                              "en-IN"
+                            )}`
+                          : "N/A"}
                       </TableCell>
                       <TableCell className="text-sm truncate max-w-[150px] whitespace-nowrap overflow-hidden ">
                         <div className="flex items-center space-x-1">
