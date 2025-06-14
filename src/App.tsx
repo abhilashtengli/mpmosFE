@@ -24,6 +24,7 @@ import { useSSEConnection } from "./hooks/useSSEConnection";
 import { useAuthStore } from "./stores/useAuthStore";
 import { useEffect } from "react";
 import { Toaster } from "sonner";
+import ProjectDetailsAdPage from "./Pages/admin/Content/project_details";
 
 function App() {
   const { isAuthenticated, fetchUser } = useAuthStore();
@@ -64,7 +65,7 @@ function App() {
             <Route path="dashboard" element={<DashboardAdPage />} />
             <Route path="reports" element={<ReportsAdPage />} />
             <Route path="gallery" element={<GalleryAdPage />} />
-            <Route path="project_details" element={<ProjectsAdPage />} />
+            <Route path="project_details" element={<ProjectDetailsAdPage />} />
             <Route path="publications" element={<PublicationsAdPage />} />
             <Route path="upcoming_events" element={<EventsAdPage />} />
             <Route path="awarness_programs" element={<AwarenessAdPage />} />
