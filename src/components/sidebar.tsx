@@ -56,7 +56,11 @@ const navigation = [
       },
       { name: "Publications", href: "/admin/publications", icon: BookOpen },
       { name: "Gallery", href: "/admin/gallery", icon: ImageIcon },
-      { name: "Project Details", href: "/admin/project_details", icon: FileText }
+      {
+        name: "Project Details",
+        href: "/admin/project_details",
+        icon: FileText
+      }
     ]
   },
   { name: "Reports", href: "/admin/reports", icon: BarChart3 }
@@ -67,7 +71,10 @@ export function Sidebar() {
   const location = useLocation();
   const pathname = location.pathname;
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedItems, setExpandedItems] = useState<string[]>(["Activities"]);
+  const [expandedItems, setExpandedItems] = useState<string[]>([
+    "Activities",
+    "Content"
+  ]);
 
   const toggleExpanded = (name: string) => {
     setExpandedItems((prev) =>
