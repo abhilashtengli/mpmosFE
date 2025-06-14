@@ -202,7 +202,7 @@ export default function EventsAdPage() {
   const [selectedEvent, setSelectedEvent] = useState<UpcomingEvent | null>(
     null
   );
-
+  const [deleting, setDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [locationFilter, setLocationFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("all"); // "all", "upcoming", "past"
@@ -314,6 +314,7 @@ export default function EventsAdPage() {
     if (!selectedEvent) return;
     const loadingToast = toast.loading("Deleting event...");
     try {
+      setDeleting(true);
       const response = await axios.delete(
         `${Base_Url}/delete-event/${selectedEvent.id}`,
         { withCredentials: true }
@@ -339,6 +340,8 @@ export default function EventsAdPage() {
         axiosError.message ||
         "An error occurred.";
       toast.error("Error", { description: message, id: loadingToast });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -642,8 +645,12 @@ export default function EventsAdPage() {
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteEvent}>
-              Delete Event
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={handleDeleteEvent}
+            >
+              {deleting ? "Deleting.." : "Delete Event"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -826,7 +833,9 @@ function EventForm({ event, onSave, onClose, isEdit = false }: EventFormProps) {
     if (success) {
       onClose();
     }
-    setIsSubmitting(false);
+    setTimeout(() => {
+      setIsSubmitting(false);
+    }, 30000); // 30000 milliseconds = 30 seconds
   };
 
   return (
