@@ -46,17 +46,22 @@ import {
   Search,
   Eye,
   Edit,
-  Upload,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  ImageIcon,
+  UploadCloud,
+  Loader2
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert"; // For pageError
 import { useProjectStore } from "@/stores/useProjectStore"; // Assuming path is correct
-import { Base_Url, quarterlyData } from "@/lib/constants"; // Assuming path is correct
+import { Base_Url, quarterlyData, SignedUrlResponse } from "@/lib/constants"; // Assuming path is correct
 import { useAuthStore } from "@/stores/useAuthStore"; // Assuming path is correct
 import axios, { type AxiosError } from "axios";
 import { useNavigate } from "react-router-dom"; // From training-page
 import EnhancedShimmerTableRows from "@/components/shimmer-rows"; // From training-page
+import { getSignedUrl } from "@/services/cloudflare/getSignedUrl";
+import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudflare";
+import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
 
 // Zod validation schemas (provided by user)
 const createInfrastructureValidation = z
@@ -325,7 +330,6 @@ export default function InfrastructurePage() {
           imageKey: item.imageKey ?? undefined,
           remarks: item.remarks ?? null
         }));
-        console.log("MI : ", mappedInfrastructures);
         setInfrastructures(mappedInfrastructures);
       } else {
         throw new Error(
@@ -454,11 +458,6 @@ export default function InfrastructurePage() {
       toast.error("Infrastructure ID is required for update operation");
       return false;
     }
-
-    // Actual file upload should happen here or in the form,
-    // then imageUrl and imageKey are passed in formData.
-    // For this example, we assume formData contains imageUrl and imageKey if an image is involved.
-
     const loadingToast = toast.loading(
       `${
         operation === "create" ? "Creating" : "Updating"
@@ -525,7 +524,6 @@ export default function InfrastructurePage() {
           imageKey: apiResponse.data.imageKey ?? undefined,
           remarks: apiResponse.data.remarks ?? null
         };
-        console.log("Updated Infra : ", apiResponse.data);
 
         if (operation === "create") {
           setInfrastructures((prev) => [newOrUpdatedInfra, ...prev]);
@@ -1083,17 +1081,32 @@ function InfrastructureForm({
     block: infrastructure?.block || "",
     remarks: infrastructure?.remarks || "",
     imageFile: null,
-    imageUrl: infrastructure?.imageUrl || null,
-    imageKey: infrastructure?.imageKey || null
+    imageUrl: infrastructure?.imageUrl,
+    imageKey: infrastructure?.imageKey
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [filePreview, setFilePreview] = useState<string | null>(
-    infrastructure?.imageUrl || null
+  const projects = useProjectStore((state) => state.projects);
+  const [url, setUrl] = useState<SignedUrlResponse | null>(null); // For storing fetched signed URL
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageToBeRemovedKey, setImageToBeRemovedKey] = useState<string | null>(
+    null
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(true);
 
-  const projects = useProjectStore((state) => state.projects);
+  useEffect(() => {
+    if (isEdit && infrastructure?.imageUrl) {
+      setImagePreviewUrl(infrastructure.imageUrl);
+      setFormData((prev) => ({
+        ...prev,
+        imageUrl: infrastructure.imageUrl,
+        imageKey: infrastructure.imageKey
+      }));
+    }
+  }, [isEdit, infrastructure]);
+
   const uniqueProjectItems = useMemo(() => {
     if (!projects || projects.length === 0) return [];
     return projects.map((p) => ({ id: p.id, title: p.title }));
@@ -1112,8 +1125,22 @@ function InfrastructureForm({
     if (formErrors[name]) setFormErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+  const handleFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> => {
     const file = e.target.files?.[0];
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    if (!file) {
+      toast.warning("File is missing", {
+        description: "Please select a file to upload."
+      });
+      return;
+    }
+
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
         // 5MB limit
@@ -1130,28 +1157,70 @@ function InfrastructureForm({
         }));
         return;
       }
+      setIsProcessingFile(true);
+
+      const localPreviewUrl = URL.createObjectURL(file);
+      setImagePreviewUrl(localPreviewUrl);
       setFormData((prev) => ({
         ...prev,
         imageFile: file,
         imageUrl: null,
         imageKey: null
-      })); // Clear existing URL/Key if new file
-      setFilePreview(URL.createObjectURL(file));
-      if (formErrors.imageFile)
-        setFormErrors((prev) => ({ ...prev, imageFile: "" }));
-      toast.success("Image selected", { description: file.name });
+      }));
+      setImageToBeRemovedKey(null); // If a new file is chosen, we are not removing an *existing* one without replacement
+      setFormErrors((prev) => ({ ...prev, imageFile: "" }));
+
+      try {
+        const signedUrlData = await getSignedUrl({
+          fileName: file.name,
+          contentType: file.type
+        });
+
+        setUrl(signedUrlData);
+        toast.success("Image selected", {
+          description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(
+            2
+          )} MB)`
+        });
+      } catch {
+        toast.error("Failed to get upload URL", {
+          description: "Could not prepare image for upload. Please try again."
+        });
+        // Reset if fetching signed URL fails
+        URL.revokeObjectURL(localPreviewUrl);
+        setImagePreviewUrl(
+          isEdit && infrastructure?.imageUrl ? infrastructure.imageUrl : null
+        );
+        setFormData((prev) => ({ ...prev, imageFile: null }));
+        setUrl(null);
+      } finally {
+        // File processing complete
+        setIsProcessingFile(false);
+      }
     }
   };
 
-  const removeImage = () => {
+  const handleRemoveImage = (): void => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setImagePreviewUrl(null);
     setFormData((prev) => ({
       ...prev,
       imageFile: null,
       imageUrl: null,
       imageKey: null
     }));
-    setFilePreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+    setUrl(null);
+
+    // If it was an existing image from `awareness` prop, mark its key for deletion on save
+    if (isEdit && infrastructure?.imageKey) {
+      setImageToBeRemovedKey(infrastructure.imageKey);
+    } else {
+      setImageToBeRemovedKey(null);
+    }
+    // Clear file input visually
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     toast.info("Image removed");
   };
 
@@ -1165,10 +1234,8 @@ function InfrastructureForm({
       village: formData.village,
       block: formData.block,
       remarks: formData.remarks || null,
-      imageUrl:
-        formData.imageUrl ||
-        (formData.imageFile ? "https://mockurl.com/image.png" : null), // Provide mock for validation if file exists
-      imageKey: formData.imageKey || (formData.imageFile ? "mock-key" : null)
+      imageUrl: formData.imageFile ? null : formData.imageUrl, // If new file, URL is not yet set from cloud
+      imageKey: formData.imageFile ? null : formData.imageKey
     };
 
     try {
@@ -1195,6 +1262,19 @@ function InfrastructureForm({
     }
   };
 
+  const isSubmitDisabled = (): boolean => {
+    // Check if currently submitting
+    if (isSubmitting === true) return true;
+
+    // Check if currently processing file
+    if (isProcessingFile === true) return true;
+
+    // Check if file is selected but signed URL is not ready
+    if (formData.imageFile && (!url || !url.signedUrl)) return true;
+
+    return false;
+  };
+
   const handleSubmit = async (
     e: React.FormEvent<HTMLFormElement>
   ): Promise<void> => {
@@ -1202,25 +1282,78 @@ function InfrastructureForm({
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    // In a real app, if formData.imageFile exists, upload it here, get the actual URL and Key,
-    // then update formData.imageUrl and formData.imageKey before calling onSave.
-    // For this example, we'll assume onSave handles the formData as is,
-    // and the parent component (InfrastructurePage) would orchestrate the upload if needed.
-    // However, the current onSave expects imageUrl and imageKey to be potentially set.
-    // If a new file is selected, we should ideally upload it and get a real URL/key.
-    // For now, we pass imageFile, and let onSave decide.
-    // A better approach for this structure:
-    // 1. Upload file if formData.imageFile exists.
-    // 2. Get actual imageUrl and imageKey.
-    // 3. Update a temporary formData with these real values.
-    // 4. Call onSave with this temporary formData.
 
-    // Simplified: onSave will receive the current formData which includes imageFile, imageUrl, imageKey
-    const success = await onSave(formData);
-    if (success) {
-      // Form will be closed by parent if save is successful
+    let finalImageUrl: string | null = infrastructure?.imageUrl || null;
+    let finalImageKey: string | null = infrastructure?.imageKey || null;
+
+    try {
+      // 1. Handle removal of an existing image
+      if (imageToBeRemovedKey) {
+        const deleted = await deleteFileFromCloudflare(imageToBeRemovedKey);
+        if (deleted) {
+          finalImageUrl = null;
+          finalImageKey = null;
+          toast.success("Previous image deleted from storage.");
+        } else {
+          toast.error("Failed to delete previous image", {
+            description:
+              "Could not remove the old image from storage. Please check manually."
+          });
+        }
+      }
+
+      // 2. Handle upload of a new image
+      if (formData.imageFile && url?.signedUrl) {
+        if (
+          isEdit &&
+          infrastructure?.imageKey &&
+          !imageToBeRemovedKey &&
+          formData.imageFile
+        ) {
+          const oldKeyDeleted = await deleteFileFromCloudflare(
+            infrastructure.imageKey
+          );
+          if (!oldKeyDeleted) {
+            toast.warning("Old Image Deletion Issue", {
+              description:
+                "Could not delete the previously existing image from storage."
+            });
+          }
+        }
+
+        const uploadResult = await uploadFileToCloudflare(
+          formData.imageFile,
+          url.signedUrl
+        );
+        if (uploadResult.success && url.publicUrl && url.key) {
+          finalImageUrl = url.publicUrl;
+          finalImageKey = url.key;
+        } else {
+          toast.error("Image Upload Failed", {
+            description: uploadResult.error || "Could not upload the new image."
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Prepare data for onSave callback
+      const dataToSave: InfrastructureFormData = {
+        ...formData,
+        imageUrl: finalImageUrl,
+        imageKey: finalImageKey
+      };
+
+      const success = await onSave(dataToSave);
+      if (!success) {
+        setIsSubmitting(false);
+      }
+    } catch {
+      toast.error("Submission Error", {
+        description: "An unexpected error occurred while saving."
+      });
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (
@@ -1378,78 +1511,148 @@ function InfrastructureForm({
           <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
         )}
       </div>
+
       <div>
         <Label htmlFor="imageFile">Infrastructure Image</Label>
-        <div className="flex items-center space-x-2 mt-1">
+        <div
+          className={`mt-1 p-4 border-2 ${
+            formErrors.imageFile ? "border-red-500" : "border-gray-300"
+          } border-dashed rounded-md`}
+        >
+          {imagePreviewUrl ? (
+            // Image Preview and Remove Button
+            <div className="space-y-2">
+              <div className="relative group w-full h-auto max-h-60 md:max-h-80 rounded-md overflow-hidden">
+                {isImageLoading && (
+                  <div className="absolute inset-0 z-10 shimmer-effect rounded-md">
+                    {/* Pulse overlay for enhanced shimmer effect */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/10 to-transparent animate-[pulse_2s_ease-in-out_infinite_alternate]"></div>
+                  </div>
+                )}
+                <img
+                  src={imagePreviewUrl || "/placeholder.svg"}
+                  alt="Program preview"
+                  onLoad={() => setIsImageLoading(false)}
+                  onError={() => setIsImageLoading(false)} // in case image fails
+                  className={`w-full h-full object-contain transition-opacity duration-300 ${
+                    isImageLoading ? "opacity-0" : "opacity-100"
+                  }`}
+                />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  onClick={handleRemoveImage}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-red-600/80 text-white"
+                  aria-label="Remove image"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              {formData.imageFile && (
+                <p className="text-xs text-green-600">
+                  New image selected: {formData.imageFile.name} (
+                  {(formData.imageFile.size / (1024 * 1024)).toFixed(2)} MB)
+                </p>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <ImageIcon className="h-4 w-4 mr-2" /> Change Image
+              </Button>
+            </div>
+          ) : (
+            // Upload Placeholder
+            <div className="text-center">
+              <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
+              <p className="mt-1 text-sm text-gray-600">
+                <Button
+                  type="button"
+                  variant="link"
+                  className="p-0 h-auto font-medium text-green-600 hover:text-green-500"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Click to upload an image
+                </Button>
+              </p>
+              <p className="text-xs text-gray-500">PNG, JPG, GIF up to 20MB</p>
+            </div>
+          )}
+          {/* Hidden file input, triggered by button/placeholder click */}
           <Input
             id="imageFile"
             name="imageFile"
+            ref={fileInputRef}
             type="file"
             accept="image/*"
             onChange={handleFileChange}
-            ref={fileInputRef}
-            className="hidden"
+            className="hidden" // Visually hidden, functionality triggered by ref
           />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            className="mt-2"
-          >
-            <Upload className="h-4 w-4 mr-2" /> Browse
-          </Button>
-        </div>
-        {formErrors.imageFile && (
-          <p className="text-red-500 text-sm mt-1">{formErrors.imageFile}</p>
-        )}
-        {formErrors.imageUrl && (
-          <p className="text-red-500 text-sm mt-1">{formErrors.imageUrl}</p>
-        )}
-        {formErrors.imageKey && (
-          <p className="text-red-500 text-sm mt-1">{formErrors.imageKey}</p>
-        )}
+          {formErrors.imageFile && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.imageFile}</p>
+          )}
 
-        {filePreview && (
-          <div className="mt-2 border rounded-md overflow-hidden max-w-xs relative">
-            <img
-              src={filePreview || "/placeholder.svg"}
-              alt="Preview"
-              className="w-full h-auto object-cover"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={removeImage}
-              className="absolute top-1 right-1 bg-white/70 hover:bg-white rounded-full p-1"
-            >
-              <Trash2 className="h-4 w-4 text-red-500" />
-            </Button>
-          </div>
-        )}
-        {!filePreview && formData.imageFile && (
-          <p className="text-sm text-green-600 mt-1">
-            Selected: {formData.imageFile.name}
-          </p>
-        )}
+          {formErrors.imageUrl && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.imageUrl}</p>
+          )}
+          {formErrors.imageKey && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.imageKey}</p>
+          )}
+        </div>
       </div>
+
       <DialogFooter className="pt-4">
         <Button
           type="button"
           variant="outline"
           onClick={onClose}
-          disabled={isSubmitting}
+          disabled={isSubmitDisabled()}
+          className={`your-button-classes ${
+            isSubmitDisabled() ? "opacity-50 cursor-not-allowed" : ""
+          }`}
         >
           Cancel
         </Button>
         <Button
           type="submit"
-          className="bg-green-600 hover:bg-green-700"
-          disabled={isSubmitting}
+          disabled={isSubmitDisabled()}
+          className={`your-button-classes bg-green-600 hover:bg-green-700 ${
+            isSubmitDisabled() ? "opacity-50 cursor-not-allowed" : ""
+          }`}
         >
-          {isSubmitting ? "Saving..." : isEdit ? "Update Entry" : "Save Entry"}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+              Saving...
+            </>
+          ) : isProcessingFile ? (
+            <>
+              <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+              Processing...
+            </>
+          ) : isEdit ? (
+            "Update Entry"
+          ) : (
+            "Save Entry"
+          )}
         </Button>
       </DialogFooter>
+      {isProcessingFile && (
+        <div className="text-sm text-blue-600 mt-2">
+          <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+          Preparing file for upload...
+        </div>
+      )}
+      {formData.imageFile && !url?.signedUrl && !isProcessingFile && (
+        <div className="text-sm text-amber-600 mt-2">
+          ⚠️ File selected but not ready for upload. Please wait or try
+          selecting again.
+        </div>
+      )}
     </form>
   );
 }

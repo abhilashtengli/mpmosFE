@@ -4,7 +4,7 @@ import axios from "axios";
 
 const deleteFileFromCloudflare = async (key: string): Promise<boolean> => {
   if (!key?.trim()) return false;
-
+//   console.log("Entered : ", key);
   try {
     const response = await axios.delete(`${Base_Url}/delete-file`, {
       data: { key: key.trim() },
