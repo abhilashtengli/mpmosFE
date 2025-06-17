@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
@@ -48,14 +48,18 @@ import {
   Edit,
   ImageIcon,
   UserRound,
-  Trash2
+  Trash2,
+  UploadCloud
 } from "lucide-react";
 import axios, { AxiosError } from "axios";
-import { Base_Url, quarterlyData } from "@/lib/constants";
+import { Base_Url, quarterlyData, SignedUrlResponse } from "@/lib/constants";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import EnhancedShimmerTableRows from "@/components/shimmer-rows";
 import { useNavigate } from "react-router-dom";
+import { getSignedUrl } from "@/services/cloudflare/getSignedUrl";
+import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
+import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudflare";
 
 // Add these validation schemas (you'll need to create the validation file)
 const baseAwarenessSchema = z.object({
@@ -294,13 +298,15 @@ interface AwarenessFormData {
   title: string;
   projectId: string;
   quarterId: string;
-  target: string;
-  achieved: string;
+  target: number;
+  achieved: number;
   district: string;
   village: string;
   block: string;
-  beneficiaryMale: string;
-  beneficiaryFemale: string;
+  beneficiaryMale: number;
+  beneficiaryFemale: number;
+  imageUrl?: string | null;
+  imageKey?: string | null;
   units: string;
   remarks: string;
   imageFile?: File | null;
@@ -324,10 +330,6 @@ interface ApiSuccessResponse {
   code: string;
 }
 
-//Get project data
-//Get awarness data
-// submit new created data
-// submit updated data
 export default function AwarenessPage() {
   const [awarenessPrograms, setAwarnessProgram] = useState<AwarenessProgram[]>(
     []
@@ -368,7 +370,7 @@ export default function AwarenessPage() {
       if (!data.success || response.status !== 200) {
         throw new Error(data.message || "Failed to fetch Awarness programs");
       }
-      console.log("data : ", data.data);
+      // console.log("data : ", data.data);
       const mappedAwarnessPrograms: AwarenessProgram[] = (data.data || []).map(
         (item: AwarenessProgram) => ({
           id: item.id,
@@ -393,6 +395,7 @@ export default function AwarenessPage() {
           units: item.units,
           remarks: item.remarks,
           imageUrl: item.imageUrl ?? undefined,
+          imageKey: item.imageKey ?? undefined,
           createdAt: item.createdAt,
           updatedAt: item.updatedAt,
           User: item.User
@@ -400,7 +403,7 @@ export default function AwarenessPage() {
             : undefined
         })
       );
-      console.log("MAPPEDDAT : ", mappedAwarnessPrograms);
+      // console.log("MAPPEDDAT : ", mappedAwarnessPrograms);
       setAwarnessProgram(mappedAwarnessPrograms || []);
     } catch (error: unknown) {
       // console.error("Error fetching trainings:", error);
@@ -516,7 +519,8 @@ export default function AwarenessPage() {
   ): Promise<boolean> => {
     // Input validation
 
-    console.log("DATA : ", formData);
+    // console.log("DATA : ", formData);
+
     if (operation === "update" && !awarnessId) {
       toast.error("Awarness program ID is required for update operation");
       return false;
@@ -538,7 +542,7 @@ export default function AwarenessPage() {
       return false;
     }
 
-    if (!formData.target || Number.parseInt(formData.target) <= 0) {
+    if (!formData.target || formData.target <= 0) {
       toast.error("Valid target number is required");
       return false;
     }
@@ -563,21 +567,19 @@ export default function AwarenessPage() {
         projectId: formData.projectId,
         quarterId: formData.quarterId,
         title: formData.title,
-        target: Number.parseInt(formData.target),
-        achieved: Number.parseInt(formData.achieved) || 0,
+        target: formData.target || 0,
+        achieved: formData.achieved || 0,
         district: formData.district,
         village: formData.village,
         block: formData.block,
-        beneficiaryMale: Number.parseInt(formData.beneficiaryMale) || 0,
-        beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
+        beneficiaryMale: formData.beneficiaryMale || 0,
+        beneficiaryFemale: formData.beneficiaryFemale || 0,
         units: formData.units,
-        remarks: formData.remarks
-
-        // Add these later on...
-        // imageUrl: formData.imageUrl || null,
-        // imageKey: formData.imageKey || null,
+        remarks: formData.remarks,
+        imageKey: formData.imageKey || null,
+        imageUrl: formData.imageUrl || null
       };
-
+      console.log("Request-Data : ", requestData);
       if (operation === "create") {
         response = await axios.post(
           `${Base_Url}/create-awareness-program`,
@@ -603,7 +605,7 @@ export default function AwarenessPage() {
           duration: 6000
         });
 
-        console.log(`Training `, data.data);
+        // console.log(`Training `, data.data);
 
         // Update local state
         if (operation === "create") {
@@ -629,6 +631,8 @@ export default function AwarenessPage() {
             beneficiaryFemale: data.data.beneficiaryFemale || 0,
             units: data.data.units,
             remarks: data.data.remarks,
+            imageUrl: data.data.imageUrl,
+            imageKey: data.data.imageKey,
             createdAt: "",
             updatedAt: "",
             User:
@@ -665,6 +669,8 @@ export default function AwarenessPage() {
                     beneficiaryFemale: data.data.beneficiaryFemale || 0,
                     units: data.data.units,
                     remarks: data.data.remarks,
+                    imageUrl: data.data.imageUrl,
+                    imageKey: data.data.imageKey,
                     User:
                       data.data.User?.id && data.data.User?.name
                         ? {
@@ -856,6 +862,7 @@ export default function AwarenessPage() {
       toast.dismiss(loadingToast);
     }
   };
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     setSearchTerm(e.target.value);
   };
@@ -1458,20 +1465,44 @@ function AwarenessForm({
     title: awareness?.title || "",
     projectId: awareness?.project.id || "",
     quarterId: awareness?.quarter.id || "",
-    target: awareness?.target?.toString() || "",
-    achieved: awareness?.achieved?.toString() || "",
+    target: awareness?.target || 0,
+    achieved: awareness?.achieved || 0,
     district: awareness?.district || "",
     village: awareness?.village || "",
     block: awareness?.block || "",
-    beneficiaryMale: awareness?.beneficiaryMale?.toString() || "0",
-    beneficiaryFemale: awareness?.beneficiaryFemale?.toString() || "0",
+    beneficiaryMale: awareness?.beneficiaryMale || 0,
+    beneficiaryFemale: awareness?.beneficiaryFemale || 0,
     units: awareness?.units || "",
     remarks: awareness?.remarks || "",
-    imageFile: null
+    // Initialize image fields from awareness prop if editing
+    imageUrl: awareness?.imageUrl, // Use null for consistency
+    imageKey: awareness?.imageKey, // Use null for consistency
+    imageFile: null // This is for the NEW file selection
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const projects = useProjectStore((state) => state.projects);
+  const [url, setUrl] = useState<SignedUrlResponse | null>(null); // For storing fetched signed URL
+
+  // State for image preview and tracking removal
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageToBeRemovedKey, setImageToBeRemovedKey] = useState<string | null>(
+    null
+  ); // Stores key of image to delete on save
+  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for file input
+
+  // Effect to set initial image preview if editing and image exists
+  useEffect(() => {
+    if (isEdit && awareness?.imageUrl) {
+      setImagePreviewUrl(awareness.imageUrl);
+      // Set initial formData imageUrl and imageKey from awareness prop
+      setFormData((prev) => ({
+        ...prev,
+        imageUrl: awareness.imageUrl,
+        imageKey: awareness.imageKey
+      }));
+    }
+  }, [isEdit, awareness]);
 
   const uniqueProjectTitle = useMemo(() => {
     if (!projects || projects.length === 0) return [];
@@ -1483,91 +1514,149 @@ function AwarenessForm({
   ): void => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    // Clear error for this field
     if (formErrors[name]) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
+      setFormErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
   const handleSelectChange = (name: string, value: string): void => {
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    // Clear error for this field
     if (formErrors[name]) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
+      setFormErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+  // Handles new file selection
+  const handleFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> => {
     const file = e.target.files?.[0] || null;
-
-    if (!file) return;
-
-    // Validate file size (20MB max)
-    if (file.size > 20 * 1024 * 1024) {
-      setFormErrors((prev) => ({
-        ...prev,
-        imageFile: "File size must be less than 20MB"
-      }));
-      return;
+    // Clear previous file input value to allow re-selecting the same file after removal
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      setFormErrors((prev) => ({
-        ...prev,
-        imageFile: "Please select a valid image file"
-      }));
-      return;
-    }
-
-    setFormData((prev) => ({ ...prev, imageFile: file }));
-
-    // Clear error for this field
-    if (formErrors.imageFile) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors.imageFile;
-        return newErrors;
+    if (!file) {
+      toast.warning("File is missing", {
+        description: "Please select a file to upload."
       });
+      return;
     }
 
-    toast.success("Image selected", {
-      description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`
-    });
+    if (file.size > 20 * 1024 * 1024) {
+      // 20MB
+      setFormErrors((prev) => ({ ...prev, imageFile: "Max file size: 20MB" }));
+      toast.error("File too large", {
+        description: "Image size must be less than 20MB."
+      });
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setFormErrors((prev) => ({ ...prev, imageFile: "Invalid file type" }));
+      toast.error("Invalid File Type", {
+        description: "Please select a valid image file."
+      });
+      return;
+    }
+
+    // Generate local URL for preview
+    const localPreviewUrl = URL.createObjectURL(file);
+    setImagePreviewUrl(localPreviewUrl); // Update preview
+    setFormData((prev) => ({
+      ...prev,
+      imageFile: file,
+      imageUrl: null,
+      imageKey: null
+    })); // Set file, clear existing cloud URL/Key
+    setImageToBeRemovedKey(null); // If a new file is chosen, we are not removing an *existing* one without replacement
+    setFormErrors((prev) => ({ ...prev, imageFile: "" }));
+
+    // Fetch signed URL for the new file
+    try {
+      const signedUrlData = await getSignedUrl({
+        fileName: file.name,
+        contentType: file.type
+      });
+      setUrl(signedUrlData);
+      toast.success("Image selected", {
+        description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(
+          2
+        )} MB)`
+      });
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (error) {
+      toast.error("Failed to get upload URL", {
+        description: "Could not prepare image for upload. Please try again."
+      });
+      // Reset if fetching signed URL fails
+      setImagePreviewUrl(
+        isEdit && awareness?.imageUrl ? awareness.imageUrl : null
+      );
+      setFormData((prev) => ({ ...prev, imageFile: null }));
+      setUrl(null);
+    }
+  };
+
+  // Handles removal of current image (newly selected or existing)
+  const handleRemoveImage = (): void => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setImagePreviewUrl(null);
+    setFormData((prev) => ({
+      ...prev,
+      imageFile: null,
+      imageUrl: null,
+      imageKey: null
+    }));
+    setUrl(null);
+
+    // If it was an existing image from `awareness` prop, mark its key for deletion on save
+    if (isEdit && awareness?.imageKey) {
+      setImageToBeRemovedKey(awareness.imageKey);
+    } else {
+      setImageToBeRemovedKey(null);
+    }
+    // Clear file input visually
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    toast.info("Image removed");
   };
 
   const validateForm = (): boolean => {
     try {
-      const validationData = {
+      // Prepare data for validation, including potentially null image fields
+      const validationData: Partial<AwarenessFormData> & {
+        target: number;
+        achieved: number;
+        beneficiaryMale: number;
+        beneficiaryFemale: number;
+      } = {
         title: formData.title,
         projectId: formData.projectId,
         quarterId: formData.quarterId,
-        target: Number.parseInt(formData.target) || 0,
-        achieved: Number.parseInt(formData.achieved) || 0,
+        target: formData.target,
+        achieved: formData.achieved,
         district: formData.district,
         village: formData.village,
         block: formData.block,
-        beneficiaryMale: Number.parseInt(formData.beneficiaryMale) || 0,
-        beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
+        beneficiaryMale: formData.beneficiaryMale || 0,
+        beneficiaryFemale: formData.beneficiaryFemale || 0,
         units: formData.units,
-        remarks: formData.remarks
+        remarks: formData.remarks,
+        // Pass current state of imageUrl and imageKey for validation
+        imageUrl: formData.imageFile ? null : formData.imageUrl, // If new file, URL is not yet set from cloud
+        imageKey: formData.imageFile ? null : formData.imageKey
       };
+
       if (isEdit) {
         updateAwarenessProgramValidation.parse(validationData);
       } else {
+        // For create, if image is mandatory, add imageFile to validationData
+        // if (!formData.imageFile && MANDATORY_IMAGE_ON_CREATE) {
+        //   throw new z.ZodError([{ path: ["imageFile"], message: "Image is required", code: z.ZodIssueCode.custom }]);
+        // }
         createAwarenessValidation.parse(validationData);
       }
-
       setFormErrors({});
       return true;
     } catch (error) {
@@ -1575,11 +1664,12 @@ function AwarenessForm({
         const newErrors: FormErrors = {};
         error.errors.forEach((err) => {
           const path = err.path[0]?.toString();
-          if (path) {
-            newErrors[path] = err.message;
-          }
+          if (path) newErrors[path] = err.message;
         });
         setFormErrors(newErrors);
+        toast.error("Validation Failed", {
+          description: "Please check the form for errors."
+        });
       }
       return false;
     }
@@ -1589,34 +1679,77 @@ function AwarenessForm({
     e: React.FormEvent<HTMLFormElement>
   ): Promise<void> => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      toast.error("Validation Error", {
-        description: "Please fix the errors in the form before submitting."
-      });
-      return;
-    }
-
+    if (!validateForm()) return;
     setIsSubmitting(true);
 
+    let finalImageUrl: string | null = awareness?.imageUrl || null;
+    let finalImageKey: string | null = awareness?.imageKey || null;
+
     try {
-      // Simulate file upload delay
-      if (formData.imageFile) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+      // 1. Handle removal of an existing image
+      if (imageToBeRemovedKey) {
+        const deleted = await deleteFileFromCloudflare(imageToBeRemovedKey);
+        if (deleted) {
+          finalImageUrl = null;
+          finalImageKey = null;
+          toast.success("Previous image deleted from storage.");
+        } else {
+          toast.error("Failed to delete previous image", {
+            description:
+              "Could not remove the old image from storage. Please check manually."
+          });
+          // Decide if you want to stop submission or continue
+          // setIsSubmitting(false); return;
+        }
       }
 
-      onSave(formData);
-    } catch {
-      toast.error("Error", {
-        description: "Failed to save awareness program. Please try again."
-      });
-    } finally {
-      const timer = setTimeout(() => {
-        setIsSubmitting(false);
-      }, 30000); // 30000 milliseconds = 30 seconds
+      // 2. Handle upload of a new image
+      if (formData.imageFile && url?.signedUrl) {
+        if (
+          isEdit &&
+          awareness?.imageKey &&
+          awareness.imageKey !== imageToBeRemovedKey
+        ) {
+          console.log("Image-key : ", awareness.imageKey);
+          const oldKeyDeleted = await deleteFileFromCloudflare(
+            awareness.imageKey
+          );
+          if (!oldKeyDeleted) {
+            toast.warning("Old Image Deletion Issue", {
+              description:
+                "Could not delete the previously existing image from storage."
+            });
+          }
+        }
 
-      // Optional: cleanup in case the component unmounts before 15s
-      clearTimeout(timer);
+        const uploadResult = await uploadFileToCloudflare(
+          formData.imageFile,
+          url.signedUrl
+        );
+        if (uploadResult.success && url.publicUrl && url.key) {
+          finalImageUrl = url.publicUrl;
+          finalImageKey = url.key;
+        } else {
+          toast.error("Image Upload Failed", {
+            description: uploadResult.error || "Could not upload the new image."
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Prepare data for onSave callback
+      const dataToSave: AwarenessFormData = {
+        ...formData,
+        imageUrl: finalImageUrl,
+        imageKey: finalImageKey
+      };
+
+      onSave(dataToSave); // This now passes the correct imageUrl and imageKey
+    } catch {
+      toast.error("Submission Error", {
+        description: "An unexpected error occurred while saving."
+      });
     }
   };
 
@@ -1627,21 +1760,14 @@ function AwarenessForm({
           <Label>
             Project <span className="text-red-500">*</span>
           </Label>
-
           <Select
-            value={(() => {
-              const projectInfo = projects.find(
-                (p) => p.id === formData.projectId
-              );
-              return projectInfo ? projectInfo.title : "";
-            })()}
+            value={
+              projects.find((p) => p.id === formData.projectId)?.title || ""
+            }
             onValueChange={(value) => {
-              // Find the project ID based on the selected title
               const selectedProject = projects.find((p) => p.title === value);
-
-              if (selectedProject) {
+              if (selectedProject)
                 handleSelectChange("projectId", selectedProject.id);
-              }
             }}
           >
             <SelectTrigger
@@ -1670,7 +1796,7 @@ function AwarenessForm({
         <Input
           id="title"
           name="title"
-          placeholder="Enter program title (max 100 characters)"
+          placeholder="Enter program title"
           value={formData.title}
           onChange={handleInputChange}
           maxLength={100}
@@ -1682,7 +1808,7 @@ function AwarenessForm({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label>
             Quarter <span className="text-red-500">*</span>
@@ -1731,7 +1857,7 @@ function AwarenessForm({
           <Input
             id="units"
             name="units"
-            placeholder="e.g., Participants, Sessions"
+            placeholder="e.g., Participants"
             value={formData.units}
             onChange={handleInputChange}
             className={formErrors.units ? "border-red-500" : ""}
@@ -1742,7 +1868,7 @@ function AwarenessForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="target">
             Target <span className="text-red-500">*</span>
@@ -1751,7 +1877,7 @@ function AwarenessForm({
             id="target"
             name="target"
             type="number"
-            placeholder="Enter target number"
+            placeholder="0"
             value={formData.target}
             onChange={handleInputChange}
             className={formErrors.target ? "border-red-500" : ""}
@@ -1770,7 +1896,7 @@ function AwarenessForm({
             id="achieved"
             name="achieved"
             type="number"
-            placeholder="Enter achieved number"
+            placeholder="0"
             value={formData.achieved}
             onChange={handleInputChange}
             className={formErrors.achieved ? "border-red-500" : ""}
@@ -1781,6 +1907,9 @@ function AwarenessForm({
             <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
           )}
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <Label htmlFor="district">
             District <span className="text-red-500">*</span>
@@ -1837,7 +1966,7 @@ function AwarenessForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="beneficiaryMale">
             Male Beneficiaries <span className="text-red-500">*</span>
@@ -1887,53 +2016,92 @@ function AwarenessForm({
         <Textarea
           id="remarks"
           name="remarks"
-          placeholder="Additional remarks (max 300 characters)"
+          placeholder="Additional remarks (max 300 chars)"
           value={formData.remarks}
           onChange={handleInputChange}
           maxLength={300}
-          className={formErrors.remarks ? "border-red-500 mt-2" : "mt-2"}
+          className={formErrors.remarks ? "border-red-500" : ""}
         />
         {formErrors.remarks && (
           <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
         )}
       </div>
 
+      {/* --- Enhanced Image Upload Section --- */}
       <div>
         <Label htmlFor="imageFile">Program Image</Label>
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <Input
-              id="imageFile"
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className={`cursor-pointer ${
-                formErrors.imageFile ? "border-red-500" : ""
-              }`}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-            >
-              <ImageIcon className="h-4 w-4 mr-2" />
-              Browse
-            </Button>
-          </div>
-          {formErrors.imageFile ? (
-            <p className="text-red-500 text-sm">{formErrors.imageFile}</p>
+        <div
+          className={`mt-1 p-4 border-2 ${
+            formErrors.imageFile ? "border-red-500" : "border-gray-300"
+          } border-dashed rounded-md`}
+        >
+          {imagePreviewUrl ? (
+            // Image Preview and Remove Button
+            <div className="space-y-2">
+              <div className="relative group w-full h-auto max-h-60 md:max-h-80 rounded-md overflow-hidden">
+                <img
+                  src={imagePreviewUrl || "/placeholder.svg"}
+                  alt="Program preview"
+                  className="w-full h-full object-contain" // object-contain to see full image
+                />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  onClick={handleRemoveImage}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-red-600/80 text-white"
+                  aria-label="Remove image"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              {formData.imageFile && (
+                <p className="text-xs text-green-600">
+                  New image selected: {formData.imageFile.name} (
+                  {(formData.imageFile.size / (1024 * 1024)).toFixed(2)} MB)
+                </p>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <ImageIcon className="h-4 w-4 mr-2" /> Change Image
+              </Button>
+            </div>
           ) : (
-            <p className="text-sm text-gray-500">Max file size: 20MB</p>
+            // Upload Placeholder
+            <div className="text-center">
+              <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
+              <p className="mt-1 text-sm text-gray-600">
+                <Button
+                  type="button"
+                  variant="link"
+                  className="p-0 h-auto font-medium text-green-600 hover:text-green-500"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Click to upload an image
+                </Button>
+              </p>
+              <p className="text-xs text-gray-500">PNG, JPG, GIF up to 20MB</p>
+            </div>
           )}
-          {formData.imageFile && (
-            <p className="text-sm text-green-600">
-              Selected: {formData.imageFile.name} (
-              {(formData.imageFile.size / (1024 * 1024)).toFixed(2)} MB)
-            </p>
+          {/* Hidden file input, triggered by button/placeholder click */}
+          <Input
+            id="imageFile"
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden" // Visually hidden, functionality triggered by ref
+          />
+          {formErrors.imageFile && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.imageFile}</p>
           )}
         </div>
       </div>
+      {/* --- End of Image Upload Section --- */}
 
       <div className="flex justify-end space-x-2 pt-4">
         <Button
