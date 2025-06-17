@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
@@ -46,16 +46,22 @@ import {
   // ImageIcon,
   Eye,
   Edit,
-  Upload,
   UserRound,
-  Trash2
+  Trash2,
+  Loader2,
+  UploadCloud,
+  ImageIcon,
+  FileText
 } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { Base_Url, quarterlyData } from "@/lib/constants";
+import { Base_Url, quarterlyData, SignedUrlResponse } from "@/lib/constants";
 import { useAuthStore } from "@/stores/useAuthStore";
 import axios, { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import EnhancedShimmerTableRows from "@/components/shimmer-rows";
+import { getSignedUrl } from "@/services/cloudflare/getSignedUrl";
+import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudflare";
+import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
 // Base validation schema
 const baseTrainingSchema = z.object({
   title: z
@@ -264,6 +270,8 @@ interface RawTraining {
   units: string;
   remarks: string;
   imageUrl?: string | null;
+  imageKey?: string | null;
+  pdfUrl?: string | null;
   pdfKey?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -297,7 +305,9 @@ interface Training {
   units: string;
   remarks: string;
   imageUrl?: string | null;
+  imageKey?: string | null;
   pdfKey?: string | null;
+  pdfUrl?: string | null;
   createdAt: string;
   updatedAt: string;
   User?: {
@@ -319,13 +329,17 @@ interface TrainingFormData {
   beneficiaryFemale: string;
   units: string;
   remarks: string;
+  imageUrl: string | null;
+  imageKey: string | null;
+  pdfKey: string | null;
+  pdfUrl: string | null;
   imageFile?: File | null;
   pdfFile?: File | null;
 }
 
 interface TrainingFormProps {
   training?: Training;
-  onSave: (data: TrainingFormData) => void;
+  onSave: (data: TrainingFormData) => Promise<boolean>; // This line was changed
   onClose: () => void;
   isEdit?: boolean;
 }
@@ -353,10 +367,6 @@ interface ApiSuccessResponse {
   code: string;
 }
 
-//Get project data
-//Get training data
-// submit new created data
-// submit updated data
 export default function TrainingPage() {
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
@@ -373,7 +383,7 @@ export default function TrainingPage() {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const projects = useProjectStore((state) => state.projects);
-  const logOut = useAuthStore((state) => state.logout);
+  const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
 
   const userRole = useAuthStore((state) => state.user);
@@ -421,7 +431,9 @@ export default function TrainingPage() {
           units: item.units,
           remarks: item.remarks,
           imageUrl: item.imageUrl ?? undefined,
-          pdfUrl: item.pdfKey ?? undefined,
+          imageKey: item.imageKey ?? undefined,
+          pdfUrl: item.pdfUrl ?? undefined,
+          pdfKey: item.pdfKey ?? undefined,
           createdAt: item.createdAt,
           updatedAt: item.updatedAt,
           User: item.User
@@ -592,12 +604,11 @@ export default function TrainingPage() {
         beneficiaryMale: Number.parseInt(formData.beneficiaryMale) || 0,
         beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
         units: formData.units,
-        remarks: formData.remarks
-        // Add these later on...
-        // imageUrl: formData.imageUrl || null,
-        // imageKey: formData.imageKey || null,
-        // pdfUrl: formData.pdfUrl || null,
-        // pdfKey: formData.pdfKey || null
+        remarks: formData.remarks,
+        imageUrl: formData.imageUrl || null,
+        imageKey: formData.imageKey || null,
+        pdfUrl: formData.pdfUrl || null,
+        pdfKey: formData.pdfKey || null
       };
 
       if (operation === "create") {
@@ -651,6 +662,10 @@ export default function TrainingPage() {
             beneficiaryFemale: data.data.beneficiaryFemale || 0,
             units: data.data.units,
             remarks: data.data.remarks,
+            imageUrl: data.data.imageUrl,
+            imageKey: data.data.imageKey,
+            pdfUrl: data.data.pdfUrl,
+            pdfKey: data.data.pdfKey,
             User:
               data.data.User?.id && data.data.User?.name
                 ? {
@@ -687,6 +702,10 @@ export default function TrainingPage() {
                     beneficiaryFemale: data.data.beneficiaryFemale || 0,
                     units: data.data.units,
                     remarks: data.data.remarks,
+                    imageUrl: data.data.imageUrl,
+                    imageKey: data.data.imageKey,
+                    pdfUrl: data.data.pdfUrl,
+                    pdfKey: data.data.pdfKey,
                     User:
                       data.data.User?.id && data.data.User?.name
                         ? {
@@ -706,168 +725,32 @@ export default function TrainingPage() {
         setSelectedTraining(null);
 
         return true;
+      } else {
+        // Handle unexpected success status codes
+        toast.error(`Unexpected response status: ${response?.status}`);
+        return false;
       }
-
-      // Handle unexpected success status codes
-      toast.error(`Unexpected response status: ${response?.status}`);
-      return false;
     } catch (error) {
       console.error(`Error ${operation}ing training:`, error);
 
-      // Comprehensive error handling for production
+      console.error(`Error ${operation}ing distribution:`, error);
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError<ApiErrorResponse>;
-
-        if (axiosError.response) {
-          // Server responded with error status
-          const { status, data } = axiosError.response;
-
-          switch (status) {
-            case 400:
-              // Validation errors or invalid input
-              if (data?.code === "VALIDATION_ERROR" && data.errors) {
-                toast.error("Validation Error", {
-                  description: "Please check your input and try again",
-                  duration: 5000
-                });
-                console.error("Validation errors:", data.errors);
-              } else if (data?.code === "INVALID_INPUT") {
-                toast.error("Invalid Input", {
-                  description: data.message || "Please check your input",
-                  duration: 5000
-                });
-              } else {
-                toast.error(data?.message || "Invalid input provided");
-              }
-              break;
-
-            case 401:
-              toast.error("Authentication Required", {
-                description: "Please sign in to continue",
-                duration: 5000
-              });
-              // Handle logout and redirect
-              if (typeof logOut === "function") {
-                logOut();
-              }
-              if (typeof navigate === "function") {
-                navigate("/signin");
-              }
-              break;
-
-            case 403:
-              toast.error("Access Denied", {
-                description: "You don't have permission to perform this action",
-                duration: 5000
-              });
-              break;
-
-            case 404:
-              if (data?.code === "RESOURCE_NOT_FOUND") {
-                if (data.message?.toLowerCase().includes("project")) {
-                  toast.error("Project Not Found", {
-                    description: "The selected project doesn't exist",
-                    duration: 5000
-                  });
-                } else if (data.message?.toLowerCase().includes("quarter")) {
-                  toast.error("Quarter Not Found", {
-                    description: "The selected quarter doesn't exist",
-                    duration: 5000
-                  });
-                } else if (data.message?.toLowerCase().includes("training")) {
-                  toast.error("Training Not Found", {
-                    description:
-                      "The training you're trying to update doesn't exist",
-                    duration: 5000
-                  });
-                } else {
-                  toast.error("Resource Not Found", {
-                    description:
-                      data.message || "The requested resource doesn't exist",
-                    duration: 5000
-                  });
-                }
-              } else {
-                toast.error("Not Found", {
-                  description: "The requested resource was not found",
-                  duration: 5000
-                });
-              }
-              break;
-
-            case 409:
-              toast.error("Duplicate Training", {
-                description:
-                  data?.message || "A training with this title already exists",
-                duration: 5000
-              });
-              break;
-
-            case 422:
-              toast.error("Invalid Data", {
-                description: data?.message || "The provided data is invalid",
-                duration: 5000
-              });
-              break;
-
-            case 429:
-              toast.error("Too Many Requests", {
-                description: "Please wait a moment before trying again",
-                duration: 5000
-              });
-              break;
-
-            case 500:
-            case 502:
-            case 503:
-            case 504:
-              toast.error("Server Error", {
-                description:
-                  "Something went wrong on our end. Please try again later",
-                duration: 5000
-              });
-              break;
-
-            default:
-              toast.error("Unexpected Error", {
-                description:
-                  data?.message || `Error ${status}: Something went wrong`,
-                duration: 5000
-              });
-          }
+        const errorData = axiosError.response?.data;
+        let description = "An error occurred.";
+        if (errorData) {
+          description = errorData.message || description;
         } else if (axiosError.request) {
-          // Network error - no response received
-          if (axiosError.code === "ECONNABORTED") {
-            toast.error("Request Timeout", {
-              description: "The request took too long. Please try again",
-              duration: 5000
-            });
-          } else if (axiosError.code === "ERR_NETWORK") {
-            toast.error("Network Error", {
-              description:
-                "Please check your internet connection and try again",
-              duration: 5000
-            });
-          } else {
-            toast.error("Connection Error", {
-              description:
-                "Unable to connect to the server. Please try again later",
-              duration: 5000
-            });
-          }
-        } else {
-          // Something else happened during request setup
-          toast.error("Request Error", {
-            description:
-              "An unexpected error occurred while making the request",
-            duration: 5000
-          });
+          description = "No response from server.";
+        }
+        toast.error(`Failed to ${operation}`, { description });
+        if (axiosError.response?.status === 401 && logout) {
+          logout();
+          navigate("/signin");
         }
       } else {
-        // Non-Axios error (JavaScript errors, etc.)
-        toast.error("Unexpected Error", {
-          description: "An unexpected error occurred. Please try again",
-          duration: 5000
+        toast.error(`Failed to ${operation}`, {
+          description: (error as Error).message || "An unexpected error."
         });
       }
 
@@ -1438,7 +1321,7 @@ function TrainingView({ training }: TrainingViewProps) {
         </div>
       )}
       {/* Display attachments if available */}
-      {/* {(training.imageUrl || training.pdfUrl) && (
+      {(training.imageUrl || training.pdfUrl) && (
         <div className="space-y-4">
           <Label className="text-sm font-medium text-gray-500">
             Attachments
@@ -1472,7 +1355,7 @@ function TrainingView({ training }: TrainingViewProps) {
             )}
           </div>
         </div>
-      )} */}
+      )}
       <hr />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-500">
         <div>
@@ -1524,13 +1407,58 @@ function TrainingForm({
     beneficiaryFemale: training?.beneficiaryFemale?.toString() || "0",
     units: training?.units || "",
     remarks: training?.remarks || "",
+    imageUrl: training?.imageUrl || "",
+    imageKey: training?.imageKey || "",
+    pdfUrl: training?.pdfUrl || "",
+    pdfKey: training?.pdfKey || "",
     imageFile: null,
     pdfFile: null
   });
 
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [url, setUrl] = useState<SignedUrlResponse | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<SignedUrlResponse | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [pdfPreviewInfo, setPdfPreviewInfo] = useState<{
+    name: string;
+    size: number;
+  } | null>(null);
+  const [imageToBeRemovedKey, setImageToBeRemovedKey] = useState<string | null>(
+    null
+  );
+  const [pdfToBeRemovedKey, setPdfToBeRemovedKey] = useState<string | null>(
+    null
+  );
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [isProcessingPdf, setIsProcessingPdf] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(true);
   const projects = useProjectStore((state) => state.projects);
+
+  useEffect(() => {
+    if (isEdit && training?.imageUrl) {
+      setImagePreviewUrl(training.imageUrl);
+      setFormData((prev) => ({
+        ...prev,
+        imageUrl: training.imageUrl ?? null,
+        imageKey: training.imageKey ?? null
+      }));
+    }
+    if (isEdit && training?.pdfUrl) {
+      // For existing PDFs, we'll show basic info
+      setPdfPreviewInfo({
+        name: "Training Materials.pdf",
+        size: 0 // We don't have size info for existing files
+      });
+      setFormData((prev) => ({
+        ...prev,
+        pdfUrl: training.pdfUrl ?? null,
+        pdfKey: training.pdfKey ?? null
+      }));
+    }
+  }, [isEdit, training]);
 
   const uniqueProjectTitle = useMemo(() => {
     if (!projects || projects.length === 0) return [];
@@ -1567,25 +1495,31 @@ function TrainingForm({
     }
   };
 
-  const handleFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    fileType: "image" | "pdf"
-  ): void => {
-    const file = e.target.files?.[0] || null;
+  const handleImageChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> => {
+    const file = e.target.files?.[0];
 
-    if (!file) return;
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
 
-    // Validate file size (20MB max)
-    if (file.size > 20 * 1024 * 1024) {
+    if (!file) {
+      toast.warning("File is missing", {
+        description: "Please select a file to upload."
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
       setFormErrors((prev) => ({
         ...prev,
-        [`${fileType}File`]: "File size must be less than 20MB"
+        imageFile: "File size must be less than 5MB"
       }));
       return;
     }
 
-    // Validate file type
-    if (fileType === "image" && !file.type.startsWith("image/")) {
+    if (!file.type.startsWith("image/")) {
       setFormErrors((prev) => ({
         ...prev,
         imageFile: "Please select a valid image file"
@@ -1593,7 +1527,71 @@ function TrainingForm({
       return;
     }
 
-    if (fileType === "pdf" && file.type !== "application/pdf") {
+    setIsProcessingFile(true);
+
+    const localPreviewUrl = URL.createObjectURL(file);
+    setImagePreviewUrl(localPreviewUrl);
+    setFormData((prev) => ({
+      ...prev,
+      imageFile: file,
+      imageUrl: "",
+      imageKey: ""
+    }));
+    setImageToBeRemovedKey(null);
+    setFormErrors((prev) => ({ ...prev, imageFile: "" }));
+
+    try {
+      const signedUrlData = await getSignedUrl({
+        fileName: file.name,
+        contentType: file.type
+      });
+
+      setUrl(signedUrlData);
+      toast.success("Image selected", {
+        description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(
+          2
+        )} MB)`
+      });
+    } catch {
+      toast.error("Failed to get upload URL", {
+        description: "Could not prepare image for upload. Please try again."
+      });
+      URL.revokeObjectURL(localPreviewUrl);
+      setImagePreviewUrl(
+        isEdit && training?.imageUrl ? training.imageUrl : null
+      );
+      setFormData((prev) => ({ ...prev, imageFile: null }));
+      setUrl(null);
+    } finally {
+      setIsProcessingFile(false);
+    }
+  };
+
+  const handlePdfChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> => {
+    const file = e.target.files?.[0];
+
+    if (pdfInputRef.current) {
+      pdfInputRef.current.value = "";
+    }
+
+    if (!file) {
+      toast.warning("File is missing", {
+        description: "Please select a PDF file to upload."
+      });
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      setFormErrors((prev) => ({
+        ...prev,
+        pdfFile: "File size must be less than 20MB"
+      }));
+      return;
+    }
+
+    if (file.type !== "application/pdf") {
       setFormErrors((prev) => ({
         ...prev,
         pdfFile: "Please select a valid PDF file"
@@ -1601,20 +1599,96 @@ function TrainingForm({
       return;
     }
 
-    setFormData((prev) => ({ ...prev, [`${fileType}File`]: file }));
+    setIsProcessingPdf(true);
 
-    // Clear error for this field
-    if (formErrors[`${fileType}File`]) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[`${fileType}File`];
-        return newErrors;
+    setPdfPreviewInfo({
+      name: file.name,
+      size: file.size
+    });
+    setFormData((prev) => ({
+      ...prev,
+      pdfFile: file,
+      pdfUrl: "",
+      pdfKey: ""
+    }));
+    setPdfToBeRemovedKey(null);
+    setFormErrors((prev) => ({ ...prev, pdfFile: "" }));
+
+    try {
+      const signedUrlData = await getSignedUrl({
+        fileName: file.name,
+        contentType: file.type
       });
+
+      setPdfUrl(signedUrlData);
+      toast.success("PDF selected", {
+        description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(
+          2
+        )} MB)`
+      });
+    } catch {
+      toast.error("Failed to get upload URL", {
+        description: "Could not prepare PDF for upload. Please try again."
+      });
+      setPdfPreviewInfo(null);
+      setFormData((prev) => ({ ...prev, pdfFile: null }));
+      setPdfUrl(null);
+    } finally {
+      setIsProcessingPdf(false);
+    }
+  };
+
+  const handleRemoveImage = (): void => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setImagePreviewUrl(null);
+    setFormData((prev) => ({
+      ...prev,
+      imageFile: null,
+      imageUrl: "",
+      imageKey: ""
+    }));
+    setUrl(null);
+
+    if (isEdit && training?.imageKey) {
+      setImageToBeRemovedKey(training.imageKey);
+    } else {
+      setImageToBeRemovedKey(null);
     }
 
-    toast.success(`${fileType === "image" ? "Image" : "PDF"} selected`, {
-      description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`
-    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    toast.info("Image removed");
+  };
+
+  const handleRemovePdf = (): void => {
+    setPdfPreviewInfo(null);
+    setFormData((prev) => ({
+      ...prev,
+      pdfFile: null,
+      pdfUrl: "",
+      pdfKey: ""
+    }));
+    setPdfUrl(null);
+
+    if (isEdit && training?.pdfKey) {
+      setPdfToBeRemovedKey(training.pdfKey);
+    } else {
+      setPdfToBeRemovedKey(null);
+    }
+
+    if (pdfInputRef.current) {
+      pdfInputRef.current.value = "";
+    }
+    toast.info("PDF removed");
+  };
+
+  const isSubmitDisabled = (): boolean => {
+    if (isSubmitting === true) return true;
+    if (isProcessingFile === true || isProcessingPdf === true) return true;
+    if (formData.imageFile && (!url || !url.signedUrl)) return true;
+    if (formData.pdfFile && (!pdfUrl || !pdfUrl.signedUrl)) return true;
+    return false;
   };
 
   const validateForm = (): boolean => {
@@ -1633,12 +1707,10 @@ function TrainingForm({
         beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
         units: formData.units,
         remarks: formData.remarks,
-        imageUrl: formData.imageFile
-          ? "https://example.com/image.jpg"
-          : undefined,
-        pdfUrl: formData.pdfFile
-          ? "https://example.com/document.pdf"
-          : undefined
+        imageUrl: formData.imageUrl || undefined,
+        imageKey: formData.imageKey || undefined,
+        pdfUrl: formData.pdfUrl || undefined,
+        pdfKey: formData.pdfKey || undefined
       };
 
       if (isEdit) {
@@ -1674,25 +1746,133 @@ function TrainingForm({
     }
 
     setIsSubmitting(true);
+    let finalImageUrl: string | null = training?.imageUrl || null;
+    let finalImageKey: string | null = training?.imageKey || null;
+    let finalPdfUrl: string | null = training?.pdfUrl || null;
+    let finalPdfKey: string | null = training?.pdfKey || null;
 
     try {
-      // Simulate file upload delay
-      if (formData.imageFile || formData.pdfFile) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Handle image removal
+      if (imageToBeRemovedKey) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const deleted = await deleteFileFromCloudflare(imageToBeRemovedKey);
+        if (deleted) {
+          finalImageUrl = null;
+          finalImageKey = null;
+          toast.success("Previous image deleted from storage.");
+        } else {
+          toast.warning("Previous image deletion failed", {
+            description:
+              "The old image couldn't be removed from storage, but your changes will still be saved."
+          });
+        }
       }
 
-      onSave(formData);
-    } catch {
-      toast.error("Error", {
-        description: "Failed to save training. Please try again."
-      });
-    } finally {
-      const timer = setTimeout(() => {
-        setIsSubmitting(false);
-      }, 30000); // 30000 milliseconds = 30 seconds
+      // Handle PDF removal
+      if (pdfToBeRemovedKey) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const deleted = await deleteFileFromCloudflare(pdfToBeRemovedKey);
+        if (deleted) {
+          finalPdfUrl = null;
+          finalPdfKey = null;
+          toast.success("Previous PDF deleted from storage.");
+        } else {
+          toast.warning("Previous PDF deletion failed", {
+            description:
+              "The old PDF couldn't be removed from storage, but your changes will still be saved."
+          });
+        }
+      }
 
-      // Optional: cleanup in case the component unmounts before 15s
-      clearTimeout(timer);
+      // Handle image upload
+      if (formData.imageFile && url?.signedUrl) {
+        if (
+          isEdit &&
+          training?.imageKey &&
+          !imageToBeRemovedKey &&
+          formData.imageFile
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const oldKeyDeleted = await deleteFileFromCloudflare(
+            training.imageKey
+          );
+          if (!oldKeyDeleted) {
+            toast.warning("Old Image Deletion Issue", {
+              description:
+                "Could not delete the previously existing image from storage."
+            });
+          }
+        }
+
+        const uploadResult = await uploadFileToCloudflare(
+          formData.imageFile,
+          url.signedUrl
+        );
+        if (uploadResult.success && url.publicUrl && url.key) {
+          finalImageUrl = url.publicUrl;
+          finalImageKey = url.key;
+          toast.success("Image uploaded successfully");
+        } else {
+          toast.error("Image Upload Failed", {
+            description: uploadResult.error || "Could not upload the new image."
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Handle PDF upload
+      if (formData.pdfFile && pdfUrl?.signedUrl) {
+        if (
+          isEdit &&
+          training?.pdfKey &&
+          !pdfToBeRemovedKey &&
+          formData.pdfFile
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const oldKeyDeleted = await deleteFileFromCloudflare(training.pdfKey);
+          if (!oldKeyDeleted) {
+            toast.warning("Old PDF Deletion Issue", {
+              description:
+                "Could not delete the previously existing PDF from storage."
+            });
+          }
+        }
+
+        const uploadResult = await uploadFileToCloudflare(
+          formData.pdfFile,
+          pdfUrl.signedUrl
+        );
+        if (uploadResult.success && pdfUrl.publicUrl && pdfUrl.key) {
+          finalPdfUrl = pdfUrl.publicUrl;
+          finalPdfKey = pdfUrl.key;
+          toast.success("PDF uploaded successfully");
+        } else {
+          toast.error("PDF Upload Failed", {
+            description: uploadResult.error || "Could not upload the new PDF."
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      const dataToSave: TrainingFormData = {
+        ...formData,
+        imageUrl: finalImageUrl || "",
+        imageKey: finalImageKey || "",
+        pdfUrl: finalPdfUrl || "",
+        pdfKey: finalPdfKey || ""
+      };
+
+      const success = await onSave(dataToSave);
+      if (!success) {
+        setIsSubmitting(false);
+      }
+    } catch {
+      toast.error("Submission Error", {
+        description: "An unexpected error occurred while saving."
+      });
+      setIsSubmitting(false);
     }
   };
 
@@ -1964,76 +2144,191 @@ function TrainingForm({
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-6">
         <div>
           <Label htmlFor="imageFile">Training Image</Label>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Input
-                id="imageFile"
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileChange(e, "image")}
-                className={`cursor-pointer ${
-                  formErrors.imageFile ? "border-red-500" : ""
-                }`}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Browse
-              </Button>
-            </div>
-            {formErrors.imageFile ? (
-              <p className="text-red-500 text-sm">{formErrors.imageFile}</p>
+          <div
+            className={`mt-3 p-4 border-2 ${
+              formErrors.imageFile ? "border-red-500" : "border-gray-300"
+            } border-dashed rounded-md`}
+          >
+            {imagePreviewUrl ? (
+              <div className="space-y-2">
+                <div className="relative group w-full h-auto max-h-60 md:max-h-80 rounded-md overflow-hidden">
+                  {isImageLoading && (
+                    <div className="absolute inset-0 z-10 shimmer-effect rounded-md">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
+                      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/10 to-transparent animate-[pulse_2s_ease-in-out_infinite_alternate]"></div>
+                    </div>
+                  )}
+                  <img
+                    src={imagePreviewUrl || "/placeholder.svg"}
+                    alt="Training preview"
+                    onLoad={() => setIsImageLoading(false)}
+                    onError={() => setIsImageLoading(false)}
+                    className={`w-full h-full object-contain transition-opacity duration-300 ${
+                      isImageLoading ? "opacity-0" : "opacity-100"
+                    }`}
+                  />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    onClick={handleRemoveImage}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-red-600/80 text-white"
+                    aria-label="Remove image"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                {formData.imageFile && (
+                  <p className="text-xs text-green-600">
+                    New image selected: {formData.imageFile.name} (
+                    {(formData.imageFile.size / (1024 * 1024)).toFixed(2)} MB)
+                  </p>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImageIcon className="h-4 w-4 mr-2" /> Change Image
+                </Button>
+              </div>
             ) : (
-              <p className="text-sm text-gray-500">Max file size: 20MB</p>
+              <div className="text-center">
+                <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
+                <p className="mt-1 text-sm text-gray-600">
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="p-0 h-auto font-medium text-green-600 hover:text-green-500"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Click to upload an image
+                  </Button>
+                </p>
+                <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB</p>
+              </div>
             )}
-            {formData.imageFile && (
-              <p className="text-sm text-green-600">
-                Selected: {formData.imageFile.name} (
-                {(formData.imageFile.size / (1024 * 1024)).toFixed(2)} MB)
+            <Input
+              id="imageFile"
+              name="imageFile"
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="hidden"
+            />
+            {formErrors.imageFile && (
+              <p className="text-red-500 text-sm mt-1">
+                {formErrors.imageFile}
               </p>
+            )}
+            {isProcessingFile && (
+              <div className="text-sm text-green-600 mt-2 text-center">
+                <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+                Preparing image for upload...
+              </div>
+            )}
+            {formData.imageFile && !url?.signedUrl && !isProcessingFile && (
+              <div className="text-sm text-amber-600 mt-2 text-center">
+                ⚠️ Image selected but not ready for upload. Please wait or try
+                selecting again.
+              </div>
             )}
           </div>
         </div>
+
         <div>
           <Label htmlFor="pdfFile">Training Materials (PDF)</Label>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Input
-                id="pdfFile"
-                type="file"
-                accept=".pdf"
-                onChange={(e) => handleFileChange(e, "pdf")}
-                className={`cursor-pointer ${
-                  formErrors.pdfFile ? "border-red-500" : ""
-                }`}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Browse
-              </Button>
-            </div>
-            {formErrors.pdfFile ? (
-              <p className="text-red-500 text-sm">{formErrors.pdfFile}</p>
+          <div
+            className={`mt-3 p-4 border-2 ${
+              formErrors.pdfFile ? "border-red-500" : "border-gray-300"
+            } border-dashed rounded-md`}
+          >
+            {pdfPreviewInfo ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border">
+                  <div className="flex items-center space-x-3">
+                    <FileText className="h-8 w-8 text-red-600" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {pdfPreviewInfo.name}
+                      </p>
+                      {pdfPreviewInfo.size > 0 && (
+                        <p className="text-xs text-gray-500">
+                          {(pdfPreviewInfo.size / (1024 * 1024)).toFixed(2)} MB
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    onClick={handleRemovePdf}
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    aria-label="Remove PDF"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                {formData.pdfFile && (
+                  <p className="text-xs text-green-600">
+                    New PDF selected: {formData.pdfFile.name} (
+                    {(formData.pdfFile.size / (1024 * 1024)).toFixed(2)} MB)
+                  </p>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => pdfInputRef.current?.click()}
+                >
+                  <FileText className="h-4 w-4 mr-2" /> Change PDF
+                </Button>
+              </div>
             ) : (
-              <p className="text-sm text-gray-500">Max file size: 20MB</p>
+              <div className="text-center">
+                <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                <p className="mt-1 text-sm text-gray-600">
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="p-0 h-auto font-medium text-green-600 hover:text-green-500"
+                    onClick={() => pdfInputRef.current?.click()}
+                  >
+                    Click to upload a PDF
+                  </Button>
+                </p>
+                <p className="text-xs text-gray-500">PDF files up to 20MB</p>
+              </div>
             )}
-            {formData.pdfFile && (
-              <p className="text-sm text-green-600">
-                Selected: {formData.pdfFile.name} (
-                {(formData.pdfFile.size / (1024 * 1024)).toFixed(2)} MB)
-              </p>
+            <Input
+              id="pdfFile"
+              name="pdfFile"
+              ref={pdfInputRef}
+              type="file"
+              accept=".pdf"
+              onChange={handlePdfChange}
+              className="hidden"
+            />
+            {formErrors.pdfFile && (
+              <p className="text-red-500 text-sm mt-1">{formErrors.pdfFile}</p>
+            )}
+            {isProcessingPdf && (
+              <div className="text-sm text-green-600 mt-2 text-center">
+                <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+                Preparing PDF for upload...
+              </div>
+            )}
+            {formData.pdfFile && !pdfUrl?.signedUrl && !isProcessingPdf && (
+              <div className="text-sm text-amber-600 mt-2 text-center">
+                ⚠️ PDF selected but not ready for upload. Please wait or try
+                selecting again.
+              </div>
             )}
           </div>
         </div>
@@ -2044,22 +2339,610 @@ function TrainingForm({
           type="button"
           variant="outline"
           onClick={onClose}
-          disabled={isSubmitting}
+          disabled={isSubmitDisabled()}
+          className={`${
+            isSubmitDisabled() ? "opacity-50 cursor-not-allowed" : ""
+          }`}
         >
           Cancel
         </Button>
         <Button
           type="submit"
-          className="bg-green-600 hover:bg-green-700"
-          disabled={isSubmitting}
+          className={`bg-green-600 hover:bg-green-700 ${
+            isSubmitDisabled() ? "opacity-50 cursor-not-allowed" : ""
+          }`}
+          disabled={isSubmitDisabled()}
         >
-          {isSubmitting
-            ? "Saving..."
-            : isEdit
-            ? "Update Training"
-            : "Save Training"}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+              Saving...
+            </>
+          ) : isProcessingFile || isProcessingPdf ? (
+            <>
+              <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+              Processing...
+            </>
+          ) : isEdit ? (
+            "Update Training"
+          ) : (
+            "Save Training"
+          )}
         </Button>
       </div>
     </form>
   );
 }
+
+// function TrainingForm({
+//   training,
+//   onSave,
+//   onClose,
+//   isEdit = false
+// }: TrainingFormProps) {
+//   const [formData, setFormData] = useState<TrainingFormData>({
+//     title: training?.title || "",
+//     projectId: training?.project.id || "",
+//     quarterId: training?.quarter.id || "",
+//     target: training?.target?.toString() || "",
+//     achieved: training?.achieved?.toString() || "",
+//     district: training?.district || "",
+//     village: training?.village || "",
+//     block: training?.block || "",
+//     beneficiaryMale: training?.beneficiaryMale?.toString() || "0",
+//     beneficiaryFemale: training?.beneficiaryFemale?.toString() || "0",
+//     units: training?.units || "",
+//     remarks: training?.remarks || "",
+//     imageUrl: training?.imageUrl || "",
+//     imageKey: training?.imageKey || "",
+//     pdfUrl: training?.pdfUrl || "",
+//     pdfKey: training?.pdfKey || "",
+//     imageFile: null,
+//     pdfFile: null
+//   });
+
+//   const [formErrors, setFormErrors] = useState<FormErrors>({});
+//   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+//   const projects = useProjectStore((state) => state.projects);
+//   const [url, setUrl] = useState<SignedUrlResponse | null>(null); // For storing fetched signed URL
+//   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+//   const [imageToBeRemovedKey, setImageToBeRemovedKey] = useState<string | null>(
+//     null
+//   );
+//   const [isProcessingFile, setIsProcessingFile] = useState(false);
+//   const [isImageLoading, setIsImageLoading] = useState(true);
+
+//   const uniqueProjectTitle = useMemo(() => {
+//     if (!projects || projects.length === 0) return [];
+//     return Array.from(new Set(projects.map((project) => project.title)));
+//   }, [projects]);
+
+//   const handleInputChange = (
+//     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+//   ): void => {
+//     const { name, value } = e.target;
+//     setFormData((prev) => ({ ...prev, [name]: value }));
+
+//     // Clear error for this field
+//     if (formErrors[name]) {
+//       setFormErrors((prev) => {
+//         const newErrors = { ...prev };
+//         delete newErrors[name];
+//         return newErrors;
+//       });
+//       console.log("ERRORS : ", formErrors);
+//     }
+//   };
+
+//   const handleSelectChange = (name: string, value: string): void => {
+//     setFormData((prev) => ({ ...prev, [name]: value }));
+
+//     // Clear error for this field
+//     if (formErrors[name]) {
+//       setFormErrors((prev) => {
+//         const newErrors = { ...prev };
+//         delete newErrors[name];
+//         return newErrors;
+//       });
+//     }
+//   };
+
+//   const handleFileChange = (
+//     e: React.ChangeEvent<HTMLInputElement>,
+//     fileType: "image" | "pdf"
+//   ): void => {
+//     const file = e.target.files?.[0] || null;
+
+//     if (!file) {
+//       toast.warning("File is missing", {
+//         description: "Please select a file to upload."
+//       });
+//       return;
+//     }
+//     if (file) {
+//       // Validate file size (20MB max)
+//       if (file.size > 20 * 1024 * 1024) {
+//         setFormErrors((prev) => ({
+//           ...prev,
+//           [`${fileType}File`]: "File size must be less than 20MB"
+//         }));
+//         return;
+//       }
+//       // Validate file type
+//       if (fileType === "image" && !file.type.startsWith("image/")) {
+//         setFormErrors((prev) => ({
+//           ...prev,
+//           imageFile: "Please select a valid image file"
+//         }));
+//         return;
+//       }
+
+//       if (fileType === "pdf" && file.type !== "application/pdf") {
+//         setFormErrors((prev) => ({
+//           ...prev,
+//           pdfFile: "Please select a valid PDF file"
+//         }));
+//         return;
+//       }
+//     }
+
+//     setFormData((prev) => ({ ...prev, [`${fileType}File`]: file }));
+
+//     // Clear error for this field
+//     if (formErrors[`${fileType}File`]) {
+//       setFormErrors((prev) => {
+//         const newErrors = { ...prev };
+//         delete newErrors[`${fileType}File`];
+//         return newErrors;
+//       });
+//     }
+
+//     toast.success(`${fileType === "image" ? "Image" : "PDF"} selected`, {
+//       description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`
+//     });
+//   };
+
+//   const validateForm = (): boolean => {
+//     console.log(formData);
+//     try {
+//       const dataToValidate = {
+//         title: formData.title,
+//         projectId: formData.projectId,
+//         quarterId: formData.quarterId,
+//         target: Number.parseInt(formData.target) || 0,
+//         achieved: Number.parseInt(formData.achieved) || 0,
+//         district: formData.district,
+//         village: formData.village,
+//         block: formData.block,
+//         beneficiaryMale: Number.parseInt(formData.beneficiaryMale) || 0,
+//         beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
+//         units: formData.units,
+//         remarks: formData.remarks,
+//         imageUrl: formData.imageUrl || undefined,
+//         imageKey: formData.imageKey || undefined,
+//         pdfUrl: formData.pdfUrl || undefined,
+//         pdfKey: formData.pdfKey || undefined
+//       };
+
+//       if (isEdit) {
+//         updateTrainingValidation.parse(dataToValidate);
+//       } else {
+//         createTrainingValidation.parse(dataToValidate);
+//       }
+//       setFormErrors({});
+//       return true;
+//     } catch (error) {
+//       if (error instanceof z.ZodError) {
+//         const newErrors: FormErrors = {};
+//         error.errors.forEach((err) => {
+//           const path = err.path[0].toString();
+//           newErrors[path] = err.message;
+//         });
+//         setFormErrors(newErrors);
+//       }
+//       return false;
+//     }
+//   };
+
+//   const handleSubmit = async (
+//     e: React.FormEvent<HTMLFormElement>
+//   ): Promise<void> => {
+//     e.preventDefault();
+
+//     if (!validateForm()) {
+//       toast.error("Validation Error", {
+//         description: "Please fix the errors in the form before submitting."
+//       });
+//       return;
+//     }
+
+//     setIsSubmitting(true);
+
+//     try {
+//       // Simulate file upload delay
+//       if (formData.imageFile || formData.pdfFile) {
+//         await new Promise((resolve) => setTimeout(resolve, 1000));
+//       }
+
+//       onSave(formData);
+//     } catch {
+//       toast.error("Error", {
+//         description: "Failed to save training. Please try again."
+//       });
+//     } finally {
+//       const timer = setTimeout(() => {
+//         setIsSubmitting(false);
+//       }, 30000); // 30000 milliseconds = 30 seconds
+
+//       // Optional: cleanup in case the component unmounts before 15s
+//       clearTimeout(timer);
+//     }
+//   };
+
+//   return (
+//     <form className="space-y-4" onSubmit={handleSubmit}>
+//       <div className="grid grid-cols-1 gap-4">
+//         <div>
+//           <Label>
+//             Project <span className="text-red-500">*</span>
+//           </Label>
+//           <Select
+//             value={(() => {
+//               const projectInfo = projects.find(
+//                 (p) => p.id === formData.projectId
+//               );
+//               return projectInfo ? projectInfo.title : "";
+//             })()}
+//             onValueChange={(value) => {
+//               // Find the project ID based on the selected title
+//               const selectedProject = projects.find((p) => p.title === value);
+
+//               if (selectedProject) {
+//                 handleSelectChange("projectId", selectedProject.id);
+//               }
+//             }}
+//           >
+//             <SelectTrigger
+//               className={formErrors.projectId ? "border-red-500" : ""}
+//             >
+//               <SelectValue placeholder="Select project" />
+//             </SelectTrigger>
+//             <SelectContent>
+//               {uniqueProjectTitle.map((title) => (
+//                 <SelectItem key={title} value={title}>
+//                   {title}
+//                 </SelectItem>
+//               ))}
+//             </SelectContent>
+//           </Select>
+//           {formErrors.projectId && (
+//             <p className="text-red-500 text-sm mt-1">{formErrors.projectId}</p>
+//           )}
+//         </div>
+//         <div>
+//           <Label htmlFor="title">
+//             Training Title <span className="text-red-500">*</span>
+//           </Label>
+//           <Input
+//             id="title"
+//             name="title"
+//             placeholder="Enter training title (max 255 characters)"
+//             value={formData.title}
+//             onChange={handleInputChange}
+//             maxLength={255}
+//             className={formErrors.title ? "border-red-500" : ""}
+//             required
+//           />
+//           {formErrors.title && (
+//             <p className="text-red-500 text-sm mt-1">{formErrors.title}</p>
+//           )}
+//         </div>
+//       </div>
+//       <div className="grid grid-cols-2 gap-4">
+//         <div>
+//           <Label>
+//             Quarter <span className="text-red-500">*</span>
+//           </Label>
+//           <Select
+//             value={(() => {
+//               const quarterInfo = quarterlyData.find(
+//                 (q) => q.id === formData.quarterId
+//               );
+//               return quarterInfo
+//                 ? `Q${quarterInfo.number} ${quarterInfo.year}`
+//                 : "";
+//             })()}
+//             onValueChange={(value) => {
+//               // Find the quarter ID based on the selected display value
+//               const selectedQuarter = quarterlyData.find(
+//                 (q) => `Q${q.number} ${q.year}` === value
+//               );
+//               if (selectedQuarter) {
+//                 handleSelectChange("quarterId", selectedQuarter.id);
+//               }
+//             }}
+//           >
+//             <SelectTrigger
+//               className={formErrors.quarterId ? "border-red-500" : ""}
+//             >
+//               <SelectValue placeholder="Select quarter" />
+//             </SelectTrigger>
+//             <SelectContent className="h-52">
+//               {quarterlyData.map((quarter) => (
+//                 <SelectItem
+//                   key={quarter.id}
+//                   value={`Q${quarter.number} ${quarter.year}`}
+//                 >
+//                   Q{quarter.number} {quarter.year}
+//                 </SelectItem>
+//               ))}
+//             </SelectContent>
+//           </Select>
+//           {formErrors.quarterId && (
+//             <p className="text-red-500 text-sm mt-1">{formErrors.quarterId}</p>
+//           )}
+//         </div>
+//         <div>
+//           <Label htmlFor="units">Units</Label>
+//           <Input
+//             id="units"
+//             name="units"
+//             placeholder="e.g., Participants, Sessions"
+//             value={formData.units}
+//             onChange={handleInputChange}
+//             className={formErrors.units ? "border-red-500" : ""}
+//           />
+//           {formErrors.units && (
+//             <p className="text-red-500 text-sm mt-1">{formErrors.units}</p>
+//           )}
+//         </div>
+//         <div>
+//           <Label htmlFor="target">
+//             Target <span className="text-red-500">*</span>
+//           </Label>
+//           <Input
+//             id="target"
+//             name="target"
+//             type="number"
+//             placeholder="Enter target number"
+//             value={formData.target}
+//             onChange={handleInputChange}
+//             className={formErrors.target ? "border-red-500" : ""}
+//             required
+//           />
+//           {formErrors.target && (
+//             <p className="text-red-500 text-sm mt-1">{formErrors.target}</p>
+//           )}
+//         </div>
+//         <div>
+//           <Label htmlFor="achieved">
+//             Achieved <span className="text-red-500">*</span>
+//           </Label>
+//           <Input
+//             id="achieved"
+//             name="achieved"
+//             type="number"
+//             placeholder="Enter achieved number"
+//             value={formData.achieved}
+//             onChange={handleInputChange}
+//             className={formErrors.achieved ? "border-red-500" : ""}
+//             required
+//           />
+//           {formErrors.achieved && (
+//             <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
+//           )}
+//         </div>
+//         <div>
+//           <Label htmlFor="district">
+//             District <span className="text-red-500">*</span>
+//           </Label>
+//           <Input
+//             id="district"
+//             name="district"
+//             placeholder="District name"
+//             value={formData.district}
+//             onChange={handleInputChange}
+//             maxLength={100}
+//             className={formErrors.district ? "border-red-500" : ""}
+//             required
+//           />
+//           {formErrors.district && (
+//             <p className="text-red-500 text-sm mt-1">{formErrors.district}</p>
+//           )}
+//         </div>
+//         <div>
+//           <Label htmlFor="village">
+//             Village <span className="text-red-500">*</span>
+//           </Label>
+//           <Input
+//             id="village"
+//             name="village"
+//             placeholder="Village name"
+//             value={formData.village}
+//             onChange={handleInputChange}
+//             maxLength={100}
+//             className={formErrors.village ? "border-red-500" : ""}
+//             required
+//           />
+//           {formErrors.village && (
+//             <p className="text-red-500 text-sm mt-1">{formErrors.village}</p>
+//           )}
+//         </div>
+//         <div>
+//           <Label htmlFor="block">
+//             Block <span className="text-red-500">*</span>
+//           </Label>
+//           <Input
+//             id="block"
+//             name="block"
+//             placeholder="Block name"
+//             value={formData.block}
+//             onChange={handleInputChange}
+//             maxLength={100}
+//             className={formErrors.block ? "border-red-500" : ""}
+//             required
+//           />
+//           {formErrors.block && (
+//             <p className="text-red-500 text-sm mt-1">{formErrors.block}</p>
+//           )}
+//         </div>
+//       </div>
+
+//       <div className="grid grid-cols-2 gap-4">
+//         <div>
+//           <Label htmlFor="beneficiaryMale">
+//             Male Beneficiaries <span className="text-red-500">*</span>
+//           </Label>
+//           <Input
+//             id="beneficiaryMale"
+//             name="beneficiaryMale"
+//             type="number"
+//             placeholder="0"
+//             value={formData.beneficiaryMale}
+//             onChange={handleInputChange}
+//             className={formErrors.beneficiaryMale ? "border-red-500" : ""}
+//             required
+//           />
+//           {formErrors.beneficiaryMale && (
+//             <p className="text-red-500 text-sm mt-1">
+//               {formErrors.beneficiaryMale}
+//             </p>
+//           )}
+//         </div>
+//         <div>
+//           <Label htmlFor="beneficiaryFemale">
+//             Female Beneficiaries <span className="text-red-500">*</span>
+//           </Label>
+//           <Input
+//             id="beneficiaryFemale"
+//             name="beneficiaryFemale"
+//             type="number"
+//             placeholder="0"
+//             value={formData.beneficiaryFemale}
+//             onChange={handleInputChange}
+//             className={formErrors.beneficiaryFemale ? "border-red-500" : ""}
+//             required
+//           />
+//           {formErrors.beneficiaryFemale && (
+//             <p className="text-red-500 text-sm mt-1">
+//               {formErrors.beneficiaryFemale}
+//             </p>
+//           )}
+//         </div>
+//       </div>
+
+//       <div>
+//         <Label htmlFor="remarks">Remarks</Label>
+//         <Textarea
+//           id="remarks"
+//           name="remarks"
+//           placeholder="Additional remarks (max 300 characters)"
+//           value={formData.remarks}
+//           onChange={handleInputChange}
+//           maxLength={300}
+//           className={formErrors.remarks ? "border-red-500 mt-2" : "mt-2"}
+//         />
+//         {formErrors.remarks && (
+//           <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
+//         )}
+//       </div>
+
+//       <div className="grid grid-cols-1 gap-4">
+//         <div>
+//           <Label htmlFor="imageFile">Training Image</Label>
+//           <div className="space-y-2">
+//             <div className="flex items-center space-x-2">
+//               <Input
+//                 id="imageFile"
+//                 type="file"
+//                 accept="image/*"
+//                 onChange={(e) => handleFileChange(e, "image")}
+//                 className={`cursor-pointer ${
+//                   formErrors.imageFile ? "border-red-500" : ""
+//                 }`}
+//               />
+//               <Button
+//                 type="button"
+//                 variant="outline"
+//                 size="sm"
+//                 className="shrink-0"
+//               >
+//                 <Upload className="h-4 w-4 mr-2" />
+//                 Browse
+//               </Button>
+//             </div>
+//             {formErrors.imageFile ? (
+//               <p className="text-red-500 text-sm">{formErrors.imageFile}</p>
+//             ) : (
+//               <p className="text-sm text-gray-500">Max file size: 20MB</p>
+//             )}
+//             {formData.imageFile && (
+//               <p className="text-sm text-green-600">
+//                 Selected: {formData.imageFile.name} (
+//                 {(formData.imageFile.size / (1024 * 1024)).toFixed(2)} MB)
+//               </p>
+//             )}
+//           </div>
+//         </div>
+//         <div>
+//           <Label htmlFor="pdfFile">Training Materials (PDF)</Label>
+//           <div className="space-y-2">
+//             <div className="flex items-center space-x-2">
+//               <Input
+//                 id="pdfFile"
+//                 type="file"
+//                 accept=".pdf"
+//                 onChange={(e) => handleFileChange(e, "pdf")}
+//                 className={`cursor-pointer ${
+//                   formErrors.pdfFile ? "border-red-500" : ""
+//                 }`}
+//               />
+//               <Button
+//                 type="button"
+//                 variant="outline"
+//                 size="sm"
+//                 className="shrink-0"
+//               >
+//                 <Upload className="h-4 w-4 mr-2" />
+//                 Browse
+//               </Button>
+//             </div>
+//             {formErrors.pdfFile ? (
+//               <p className="text-red-500 text-sm">{formErrors.pdfFile}</p>
+//             ) : (
+//               <p className="text-sm text-gray-500">Max file size: 20MB</p>
+//             )}
+//             {formData.pdfFile && (
+//               <p className="text-sm text-green-600">
+//                 Selected: {formData.pdfFile.name} (
+//                 {(formData.pdfFile.size / (1024 * 1024)).toFixed(2)} MB)
+//               </p>
+//             )}
+//           </div>
+//         </div>
+//       </div>
+
+//       <div className="flex justify-end space-x-2 pt-4">
+//         <Button
+//           type="button"
+//           variant="outline"
+//           onClick={onClose}
+//           disabled={isSubmitting}
+//         >
+//           Cancel
+//         </Button>
+//         <Button
+//           type="submit"
+//           className="bg-green-600 hover:bg-green-700"
+//           disabled={isSubmitting}
+//         >
+//           {isSubmitting
+//             ? "Saving..."
+//             : isEdit
+//             ? "Update Training"
+//             : "Save Training"}
+//         </Button>
+//       </div>
+//     </form>
+//   );
+// }
