@@ -46,17 +46,22 @@ import {
   Search,
   Eye,
   Edit,
-  Upload,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  Loader2,
+  ImageIcon,
+  UploadCloud
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { Base_Url, quarterlyData } from "@/lib/constants";
+import { Base_Url, quarterlyData, SignedUrlResponse } from "@/lib/constants";
 import { useAuthStore } from "@/stores/useAuthStore";
 import axios, { type AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import EnhancedShimmerTableRows from "@/components/shimmer-rows";
+import { getSignedUrl } from "@/services/cloudflare/getSignedUrl";
+import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudflare";
+import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
 
 // Zod validation schemas
 const createInputDistributionValidation = z
@@ -220,8 +225,8 @@ interface RawInputDistribution {
   quarter: { id: string; number: number; year: number }; // Assuming quarter object from API
   activityType: string;
   name: string;
-  target: number;
-  achieved: number;
+  target: string;
+  achieved: string;
   district: string;
   village: string;
   block: string;
@@ -1130,8 +1135,8 @@ function InputDistributionForm({
       ? distribution.activityType
       : "", // Initialize custom field
     name: distribution?.name || "",
-    target: distribution?.target?.toString() || "0",
-    achieved: distribution?.achieved?.toString() || "0",
+    target: distribution?.target.toString() || "0",
+    achieved: distribution?.achieved.toString() || "0",
     district: distribution?.district || "",
     village: distribution?.village || "",
     block: distribution?.block || "",
@@ -1143,12 +1148,27 @@ function InputDistributionForm({
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [filePreview, setFilePreview] = useState<string | null>(
-    distribution?.imageUrl || null
-  );
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const projects = useProjectStore((state) => state.projects);
+  const [url, setUrl] = useState<SignedUrlResponse | null>(null); // For storing fetched signed URL
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageToBeRemovedKey, setImageToBeRemovedKey] = useState<string | null>(
+    null
+  );
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(true);
+
+  useEffect(() => {
+    if (isEdit && distribution?.imageUrl) {
+      setImagePreviewUrl(distribution.imageUrl);
+      setFormData((prev) => ({
+        ...prev,
+        imageUrl: distribution.imageUrl,
+        imageKey: distribution.imageKey
+      }));
+    }
+  }, [isEdit, distribution]);
+
   const uniqueProjectItems = useMemo(() => {
     if (!projects || projects.length === 0) return [];
     return projects.map((p) => ({ id: p.id, title: p.title }));
@@ -1176,8 +1196,53 @@ function InputDistributionForm({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+  // const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+  //   const file = e.target.files?.[0];
+  //   if (file) {
+  //     if (file.size > 5 * 1024 * 1024) {
+  //       // 5MB limit
+  //       setFormErrors((prev) => ({
+  //         ...prev,
+  //         imageFile: "File size must be less than 5MB"
+  //       }));
+  //       return;
+  //     }
+  //     if (!file.type.startsWith("image/")) {
+  //       setFormErrors((prev) => ({
+  //         ...prev,
+  //         imageFile: "Please select a valid image file"
+  //       }));
+  //       return;
+  //     }
+  //     setFormData((prev) => ({
+  //       ...prev,
+  //       imageFile: file,
+  //       imageUrl: null,
+  //       imageKey: null
+  //     }));
+  //     setFilePreview(URL.createObjectURL(file));
+  //     if (formErrors.imageFile)
+  //       setFormErrors((prev) => ({ ...prev, imageFile: "" }));
+  //     toast.success("Image selected", { description: file.name });
+  //   }
+  // };
+
+  const handleFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> => {
     const file = e.target.files?.[0];
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    if (!file) {
+      toast.warning("File is missing", {
+        description: "Please select a file to upload."
+      });
+      return;
+    }
+
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
         // 5MB limit
@@ -1194,37 +1259,74 @@ function InputDistributionForm({
         }));
         return;
       }
+      setIsProcessingFile(true);
+
+      const localPreviewUrl = URL.createObjectURL(file);
+      setImagePreviewUrl(localPreviewUrl);
       setFormData((prev) => ({
         ...prev,
         imageFile: file,
         imageUrl: null,
         imageKey: null
       }));
-      setFilePreview(URL.createObjectURL(file));
-      if (formErrors.imageFile)
-        setFormErrors((prev) => ({ ...prev, imageFile: "" }));
-      toast.success("Image selected", { description: file.name });
+      setImageToBeRemovedKey(null); // If a new file is chosen, we are not removing an *existing* one without replacement
+      setFormErrors((prev) => ({ ...prev, imageFile: "" }));
+
+      try {
+        const signedUrlData = await getSignedUrl({
+          fileName: file.name,
+          contentType: file.type
+        });
+
+        setUrl(signedUrlData);
+        toast.success("Image selected", {
+          description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(
+            2
+          )} MB)`
+        });
+      } catch {
+        toast.error("Failed to get upload URL", {
+          description: "Could not prepare image for upload. Please try again."
+        });
+        // Reset if fetching signed URL fails
+        URL.revokeObjectURL(localPreviewUrl);
+        setImagePreviewUrl(
+          isEdit && distribution?.imageUrl ? distribution.imageUrl : null
+        );
+        setFormData((prev) => ({ ...prev, imageFile: null }));
+        setUrl(null);
+      } finally {
+        // File processing complete
+        setIsProcessingFile(false);
+      }
     }
   };
 
-  const removeImage = () => {
+  const handleRemoveImage = (): void => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setImagePreviewUrl(null);
     setFormData((prev) => ({
       ...prev,
       imageFile: null,
       imageUrl: null,
       imageKey: null
     }));
-    setFilePreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    setUrl(null);
+
+    // If it was an existing image from `awareness` prop, mark its key for deletion on save
+    if (isEdit && distribution?.imageKey) {
+      setImageToBeRemovedKey(distribution.imageKey);
+    } else {
+      setImageToBeRemovedKey(null);
+    }
+    // Clear file input visually
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     toast.info("Image removed");
   };
 
   const validateForm = (): boolean => {
-    const finalActivityType =
-      formData.activityType === "Other" && formData.customActivityType?.trim()
-        ? formData.customActivityType.trim()
-        : formData.activityType;
-
     if (
       formData.activityType === "Other" &&
       !formData.customActivityType?.trim()
@@ -1238,25 +1340,44 @@ function InputDistributionForm({
         description: "Custom activity type is required."
       });
       return false;
-    } else if (formErrors.customActivityType) {
-      // Clear error if it was previously set and now condition is met
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors.customActivityType;
-        return newErrors;
-      });
     }
+
+    const finalActivityType =
+      formData.activityType === "Other" && formData.customActivityType?.trim()
+        ? formData.customActivityType.trim()
+        : formData.activityType;
+
+    // if (
+    //   formData.activityType === "Other" &&
+    //   !formData.customActivityType?.trim()
+    // ) {
+    //   setFormErrors((prev) => ({
+    //     ...prev,
+    //     customActivityType:
+    //       "Custom activity type is required when 'Other' is selected."
+    //   }));
+    //   toast.error("Validation Error", {
+    //     description: "Custom activity type is required."
+    //   });
+    //   return false;
+    // } else if (formErrors.customActivityType) {
+    //   // Clear error if it was previously set and now condition is met
+    //   setFormErrors((prev) => {
+    //     const newErrors = { ...prev };
+    //     delete newErrors.customActivityType;
+    //     return newErrors;
+    //   });
+    // }
 
     const dataToValidate = {
       ...formData,
       activityType: finalActivityType, // Use the potentially custom activity type for validation
       target: Number.parseInt(formData.target) || 0,
       achieved: Number.parseInt(formData.achieved) || 0,
-      imageUrl:
-        formData.imageUrl ||
-        (formData.imageFile ? "https://mockurl.com/image.png" : null),
-      imageKey: formData.imageKey || (formData.imageFile ? "mock-key" : null)
+      imageUrl: formData.imageFile ? null : formData.imageUrl, // If new file, URL is not yet set from cloud
+      imageKey: formData.imageFile ? null : formData.imageKey
     };
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { imageFile, customActivityType, ...restToValidate } = dataToValidate; // Exclude customActivityType from Zod schema check if it's handled separately
 
@@ -1266,24 +1387,10 @@ function InputDistributionForm({
       } else {
         createInputDistributionValidation.parse(restToValidate);
       }
-      // Clear general form errors if validation passes for Zod part
-      const currentErrors = { ...formErrors };
-      // Keep customActivityType error if it was set by direct check
-      if (
-        formData.activityType !== "Other" ||
-        formData.customActivityType?.trim()
-      ) {
-        delete currentErrors.customActivityType;
-      }
-      setFormErrors(currentErrors);
-      return (
-        Object.keys(currentErrors).filter(
-          (k) =>
-            k !== "customActivityType" ||
-            (formData.activityType === "Other" &&
-              !formData.customActivityType?.trim())
-        ).length === 0
-      );
+
+      // If we reach here, validation passed
+      setFormErrors({});
+      return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
         const newErrors: FormErrors = {};
@@ -1291,9 +1398,6 @@ function InputDistributionForm({
           if (err.path.length > 0)
             newErrors[err.path[0].toString()] = err.message;
         });
-        // Preserve customActivityType error if it was set by direct check
-        if (formErrors.customActivityType)
-          newErrors.customActivityType = formErrors.customActivityType;
         setFormErrors(newErrors);
         toast.error("Validation Error", {
           description: "Please check the form for errors."
@@ -1303,6 +1407,19 @@ function InputDistributionForm({
     }
   };
 
+  const isSubmitDisabled = (): boolean => {
+    // Check if currently submitting
+    if (isSubmitting === true) return true;
+
+    // Check if currently processing file
+    if (isProcessingFile === true) return true;
+
+    // Check if file is selected but signed URL is not ready
+    if (formData.imageFile && (!url || !url.signedUrl)) return true;
+
+    return false;
+  };
+
   const handleSubmit = async (
     e: React.FormEvent<HTMLFormElement>
   ): Promise<void> => {
@@ -1310,13 +1427,89 @@ function InputDistributionForm({
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    // Note: Actual file upload to a server to get imageUrl and imageKey should happen here
-    // if formData.imageFile exists. For this example, we pass it to onSave.
-    const success = await onSave(formData);
-    if (success) {
-      // Parent component will close dialog
+    let finalImageUrl: string | null = distribution?.imageUrl || null;
+    let finalImageKey: string | null = distribution?.imageKey || null;
+
+    try {
+      // 1. Handle removal of an existing image
+      if (imageToBeRemovedKey) {
+        // Add a small delay before deletion
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        const deleted = await deleteFileFromCloudflare(imageToBeRemovedKey);
+
+        if (deleted) {
+          finalImageUrl = null;
+          finalImageKey = null;
+          toast.success("Previous image deleted from storage.");
+        } else {
+          toast.warning("Previous image deletion failed", {
+            description:
+              "The old image couldn't be removed from storage, but your changes will still be saved."
+          });
+        }
+      }
+
+      // 2. Handle upload of a new image
+      if (formData.imageFile && url?.signedUrl) {
+        // Handle replacement scenario (edit mode with existing image)
+        if (
+          isEdit &&
+          distribution?.imageKey &&
+          !imageToBeRemovedKey && // Only if we haven't already handled deletion above
+          formData.imageFile
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const oldKeyDeleted = await deleteFileFromCloudflare(
+            distribution.imageKey
+          );
+
+          if (!oldKeyDeleted) {
+            toast.warning("Old Image Deletion Issue", {
+              description:
+                "Could not delete the previously existing image from storage."
+            });
+          }
+        }
+
+        const uploadResult = await uploadFileToCloudflare(
+          formData.imageFile,
+          url.signedUrl
+        );
+
+        if (uploadResult.success && url.publicUrl && url.key) {
+          finalImageUrl = url.publicUrl;
+          finalImageKey = url.key;
+          toast.success("Image uploaded successfully");
+        } else {
+          toast.error("Image Upload Failed", {
+            description: uploadResult.error || "Could not upload the new image."
+          });
+
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Prepare data for onSave callback
+      const dataToSave: InputDistributionFormData = {
+        ...formData,
+        imageUrl: finalImageUrl,
+        imageKey: finalImageKey
+      };
+
+      const success = await onSave(dataToSave);
+
+      if (!success) {
+        setIsSubmitting(false);
+      }
+    } catch {
+      toast.error("Submission Error", {
+        description: "An unexpected error occurred while saving."
+      });
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (
@@ -1556,79 +1749,144 @@ function InputDistributionForm({
           <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
         )}
       </div>
+
       <div>
-        <Label htmlFor="imageFile">Distribution Image</Label>
-        <div className="flex items-center space-x-2 mt-1">
+        <Label htmlFor="imageFile">Input Distribution Image</Label>
+        <div
+          className={`mt-3 p-4 border-2 ${
+            formErrors.imageFile ? "border-red-500" : "border-gray-300"
+          } border-dashed rounded-md`}
+        >
+          {imagePreviewUrl ? (
+            // Image Preview and Remove Button
+            <div className="space-y-2">
+              <div className="relative group w-full h-auto max-h-60 md:max-h-80 rounded-md overflow-hidden">
+                {isImageLoading && (
+                  <div className="absolute inset-0 z-10 shimmer-effect rounded-md">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/10 to-transparent animate-[pulse_2s_ease-in-out_infinite_alternate]"></div>
+                  </div>
+                )}
+                <img
+                  src={imagePreviewUrl || "/placeholder.svg"}
+                  alt="Program preview"
+                  onLoad={() => setIsImageLoading(false)}
+                  onError={() => setIsImageLoading(false)} // in case image fails
+                  className={`w-full h-full object-contain transition-opacity duration-300 ${
+                    isImageLoading ? "opacity-0" : "opacity-100"
+                  }`}
+                />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  onClick={handleRemoveImage}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 hover:bg-red-600/80 text-white"
+                  aria-label="Remove image"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              {formData.imageFile && (
+                <p className="text-xs text-green-600">
+                  New image selected: {formData.imageFile.name} (
+                  {(formData.imageFile.size / (1024 * 1024)).toFixed(2)} MB)
+                </p>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <ImageIcon className="h-4 w-4 mr-2" /> Change Image
+              </Button>
+            </div>
+          ) : (
+            // Upload Placeholder
+            <div className="text-center">
+              <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
+              <p className="mt-1 text-sm text-gray-600">
+                <Button
+                  type="button"
+                  variant="link"
+                  className="p-0 h-auto font-medium text-green-600 hover:text-green-500"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Click to upload an image
+                </Button>
+              </p>
+              <p className="text-xs text-gray-500">PNG, JPG, GIF up to 20MB</p>
+            </div>
+          )}
+          {/* Hidden file input, triggered by button/placeholder click */}
           <Input
             id="imageFile"
             name="imageFile"
+            ref={fileInputRef}
             type="file"
             accept="image/*"
             onChange={handleFileChange}
-            ref={fileInputRef}
-            className="hidden"
+            className="hidden" // Visually hidden, functionality triggered by ref
           />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            className="mt-1"
-          >
-            <Upload className="h-4 w-4 mr-2" /> Browse
-          </Button>
+          {formErrors.imageFile && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.imageFile}</p>
+          )}
+
+          {formErrors.imageUrl && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.imageUrl}</p>
+          )}
+          {formErrors.imageKey && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.imageKey}</p>
+          )}
+          {isProcessingFile && (
+            <div className="text-sm text-green-600 mt-2  text-center">
+              <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+              Preparing file for upload...
+            </div>
+          )}
+          {formData.imageFile && !url?.signedUrl && !isProcessingFile && (
+            <div className="text-sm text-amber-600 mt-2   text-center">
+              ⚠️ File selected but not ready for upload. Please wait or try
+              selecting again.
+            </div>
+          )}
         </div>
-        {formErrors.imageFile && (
-          <p className="text-red-500 text-sm mt-1">{formErrors.imageFile}</p>
-        )}
-        {formErrors.imageUrl && (
-          <p className="text-red-500 text-sm mt-1">{formErrors.imageUrl}</p>
-        )}
-        {formErrors.imageKey && (
-          <p className="text-red-500 text-sm mt-1">{formErrors.imageKey}</p>
-        )}
-        {filePreview && (
-          <div className="mt-2 border rounded-md overflow-hidden max-w-xs relative">
-            <img
-              src={filePreview || "/placeholder.svg"}
-              alt="Preview"
-              className="w-full h-auto object-cover"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={removeImage}
-              className="absolute top-1 right-1 bg-white/70 hover:bg-white rounded-full p-1"
-            >
-              <Trash2 className="h-4 w-4 text-red-500" />
-            </Button>
-          </div>
-        )}
-        {!filePreview && formData.imageFile && (
-          <p className="text-sm text-green-600 mt-1">
-            Selected: {formData.imageFile.name}
-          </p>
-        )}
       </div>
       <DialogFooter className="pt-4">
         <Button
           type="button"
           variant="outline"
           onClick={onClose}
-          disabled={isSubmitting}
+          disabled={isSubmitDisabled()}
+          className={`your-button-classes ${
+            isSubmitDisabled() ? "opacity-50 cursor-not-allowed" : ""
+          }`}
         >
           Cancel
         </Button>
         <Button
           type="submit"
-          className="bg-green-600 hover:bg-green-700"
-          disabled={isSubmitting}
+          disabled={isSubmitDisabled()}
+          className={`your-button-classes bg-green-600 hover:bg-green-700 ${
+            isSubmitDisabled() ? "opacity-50 cursor-not-allowed" : ""
+          }`}
         >
-          {isSubmitting
-            ? "Saving..."
-            : isEdit
-            ? "Update Distribution"
-            : "Save Distribution"}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+              Saving...
+            </>
+          ) : isProcessingFile ? (
+            <>
+              <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+              Processing...
+            </>
+          ) : isEdit ? (
+            "Update Entry"
+          ) : (
+            "Save Entry"
+          )}
         </Button>
       </DialogFooter>
     </form>

@@ -1424,6 +1424,21 @@ function AwarenessView({ awareness }: AwarenessViewProps) {
           </p>
         </div>
       )}
+      {awareness.imageUrl && (
+        <>
+          <hr />
+          <div>
+            <Label>Image</Label>
+            <div className="mt-2 border rounded-md overflow-hidden max-w-sm">
+              <img
+                src={awareness.imageUrl || "/placeholder.svg"}
+                alt={awareness.imageUrl}
+                className="w-full h-auto object-cover"
+              />
+            </div>
+          </div>
+        </>
+      )}
       <hr />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-500">
         <div>
