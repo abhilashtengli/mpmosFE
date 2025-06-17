@@ -407,15 +407,14 @@ export default function AwarenessPage() {
       setAwarnessProgram(mappedAwarnessPrograms || []);
     } catch (error: unknown) {
       // console.error("Error fetching trainings:", error);
-
+      const defaultMessage =
+        "An unexpected error occurred while fetching data.";
       if (axios.isAxiosError(error)) {
-        const status = error.response?.status;
-        const message = error.response?.data?.message;
+        const err = error as AxiosError<ApiErrorResponse>;
+        const apiErrorMessage = err.response?.data?.message || err.message;
 
-        toast.error("Failed", {
-          description:
-            message ||
-            `Axios error occurred${status ? ` (Status: ${status})` : ""}`
+        toast.error("Fetch Failed", {
+          description: apiErrorMessage || defaultMessage
         });
       } else {
         toast.error("Failed", {
