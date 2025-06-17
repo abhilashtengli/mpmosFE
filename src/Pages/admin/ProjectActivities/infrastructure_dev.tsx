@@ -517,12 +517,11 @@ export default function InfrastructurePage() {
             duration: 6000
           }
         );
-
         const newOrUpdatedInfra: Infrastructure = {
           ...apiResponse.data,
-          imageUrl: apiResponse.data.imageUrl ?? undefined,
-          imageKey: apiResponse.data.imageKey ?? undefined,
-          remarks: apiResponse.data.remarks ?? null
+          imageUrl: apiResponse.data.imageUrl,
+          imageKey: apiResponse.data.imageKey,
+          remarks: apiResponse.data.remarks
         };
 
         if (operation === "create") {
@@ -1275,11 +1274,96 @@ function InfrastructureForm({
     return false;
   };
 
+  // const handleSubmit = async (
+  //   e: React.FormEvent<HTMLFormElement>
+  // ): Promise<void> => {
+  //   e.preventDefault();
+  //   if (!validateForm()) return;
+
+  //   setIsSubmitting(true);
+
+  //   let finalImageUrl: string | null = infrastructure?.imageUrl || null;
+  //   let finalImageKey: string | null = infrastructure?.imageKey || null;
+
+  //   try {
+  //     // 1. Handle removal of an existing image
+  //     if (imageToBeRemovedKey) {
+  //       await new Promise((resolve) => setTimeout(resolve, 500));
+  //       const deleted = await deleteFileFromCloudflare(imageToBeRemovedKey);
+  //       if (deleted) {
+  //         finalImageUrl = null;
+  //         finalImageKey = null;
+  //         toast.success("Previous image deleted from storage.");
+  //       } else {
+  //         toast.error("Failed to delete previous image", {
+  //           description:
+  //             "Could not remove the old image from storage. Please check manually."
+  //         });
+  //       }
+  //     }
+
+  //     // 2. Handle upload of a new image
+  //     if (formData.imageFile && url?.signedUrl) {
+  //       if (
+  //         isEdit &&
+  //         infrastructure?.imageKey &&
+  //         !imageToBeRemovedKey &&
+  //         formData.imageFile
+  //       ) {
+  //         await new Promise((resolve) => setTimeout(resolve, 500));
+  //         const oldKeyDeleted = await deleteFileFromCloudflare(
+  //           infrastructure.imageKey
+  //         );
+  //         if (!oldKeyDeleted) {
+  //           toast.warning("Old Image Deletion Issue", {
+  //             description:
+  //               "Could not delete the previously existing image from storage."
+  //           });
+  //         }
+  //       }
+
+  //       const uploadResult = await uploadFileToCloudflare(
+  //         formData.imageFile,
+  //         url.signedUrl
+  //       );
+  //       if (uploadResult.success && url.publicUrl && url.key) {
+  //         finalImageUrl = url.publicUrl;
+  //         finalImageKey = url.key;
+  //       } else {
+  //         toast.error("Image Upload Failed", {
+  //           description: uploadResult.error || "Could not upload the new image."
+  //         });
+  //         setIsSubmitting(false);
+  //         return;
+  //       }
+  //     }
+
+  //     // Prepare data for onSave callback
+  //     const dataToSave: InfrastructureFormData = {
+  //       ...formData,
+  //       imageUrl: finalImageUrl,
+  //       imageKey: finalImageKey
+  //     };
+
+  //     const success = await onSave(dataToSave);
+  //     if (!success) {
+  //       setIsSubmitting(false);
+  //     }
+  //   } catch {
+  //     toast.error("Submission Error", {
+  //       description: "An unexpected error occurred while saving."
+  //     });
+  //     setIsSubmitting(false);
+  //   }
+  // };
+
   const handleSubmit = async (
     e: React.FormEvent<HTMLFormElement>
   ): Promise<void> => {
     e.preventDefault();
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -1289,30 +1373,38 @@ function InfrastructureForm({
     try {
       // 1. Handle removal of an existing image
       if (imageToBeRemovedKey) {
+        // Add a small delay before deletion
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
         const deleted = await deleteFileFromCloudflare(imageToBeRemovedKey);
+
         if (deleted) {
           finalImageUrl = null;
           finalImageKey = null;
           toast.success("Previous image deleted from storage.");
         } else {
-          toast.error("Failed to delete previous image", {
+          toast.warning("Previous image deletion failed", {
             description:
-              "Could not remove the old image from storage. Please check manually."
+              "The old image couldn't be removed from storage, but your changes will still be saved."
           });
         }
       }
 
       // 2. Handle upload of a new image
       if (formData.imageFile && url?.signedUrl) {
+        // Handle replacement scenario (edit mode with existing image)
         if (
           isEdit &&
           infrastructure?.imageKey &&
-          !imageToBeRemovedKey &&
+          !imageToBeRemovedKey && // Only if we haven't already handled deletion above
           formData.imageFile
         ) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
           const oldKeyDeleted = await deleteFileFromCloudflare(
             infrastructure.imageKey
           );
+
           if (!oldKeyDeleted) {
             toast.warning("Old Image Deletion Issue", {
               description:
@@ -1325,13 +1417,16 @@ function InfrastructureForm({
           formData.imageFile,
           url.signedUrl
         );
+
         if (uploadResult.success && url.publicUrl && url.key) {
           finalImageUrl = url.publicUrl;
           finalImageKey = url.key;
+          toast.success("Image uploaded successfully");
         } else {
           toast.error("Image Upload Failed", {
             description: uploadResult.error || "Could not upload the new image."
           });
+
           setIsSubmitting(false);
           return;
         }
@@ -1345,6 +1440,7 @@ function InfrastructureForm({
       };
 
       const success = await onSave(dataToSave);
+
       if (!success) {
         setIsSubmitting(false);
       }
@@ -1602,6 +1698,18 @@ function InfrastructureForm({
           {formErrors.imageKey && (
             <p className="text-red-500 text-sm mt-1">{formErrors.imageKey}</p>
           )}
+          {isProcessingFile && (
+            <div className="text-sm text-green-600 mt-2  text-center">
+              <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+              Preparing file for upload...
+            </div>
+          )}
+          {formData.imageFile && !url?.signedUrl && !isProcessingFile && (
+            <div className="text-sm text-amber-600 mt-2   text-center">
+              ⚠️ File selected but not ready for upload. Please wait or try
+              selecting again.
+            </div>
+          )}
         </div>
       </div>
 
@@ -1641,18 +1749,6 @@ function InfrastructureForm({
           )}
         </Button>
       </DialogFooter>
-      {isProcessingFile && (
-        <div className="text-sm text-blue-600 mt-2">
-          <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
-          Preparing file for upload...
-        </div>
-      )}
-      {formData.imageFile && !url?.signedUrl && !isProcessingFile && (
-        <div className="text-sm text-amber-600 mt-2">
-          ⚠️ File selected but not ready for upload. Please wait or try
-          selecting again.
-        </div>
-      )}
     </form>
   );
 }
