@@ -998,7 +998,10 @@ export default function FLDPage() {
                           <span className="text-green-600 font-medium">
                             {fld.achieved}
                           </span>
-                          <span className="text-gray-400"> / {fld.target}</span>
+                          <span className="text-gray-700">
+                            {" "}
+                            / {fld.target} {fld.units}
+                          </span>
                         </div>
                       </TableCell>
                       {userRole?.role === "admin" && (

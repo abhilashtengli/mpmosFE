@@ -880,7 +880,11 @@ export default function InputDistributionPage() {
                         <span className="text-green-600 font-medium">
                           {dist.achieved}
                         </span>{" "}
-                        / {dist.target}
+                        /
+                        <span className="text-gray-700">
+                          {" "}
+                          {dist.target} {dist.units}
+                        </span>
                       </TableCell>
                       {user?.role === "admin" && (
                         <TableCell>{dist.User?.name || "N/A"}</TableCell>

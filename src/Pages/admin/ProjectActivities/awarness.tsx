@@ -1153,9 +1153,9 @@ export default function AwarenessPage() {
                           <span className="text-green-600 font-medium">
                             {awareness.achieved}
                           </span>
-                          <span className="text-gray-400">
+                          <span className="text-gray-700">
                             {" "}
-                            / {awareness.target}
+                            / {awareness.target} {awareness.units}
                           </span>
                         </div>
                       </TableCell>

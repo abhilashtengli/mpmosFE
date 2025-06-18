@@ -673,8 +673,8 @@ export default function TrainingPage() {
                     name: data.data.User.name
                   }
                 : undefined,
-            createdAt: "",
-            updatedAt: ""
+            createdAt: data.data.createdAt,
+            updatedAt: data.data.updatedAt
           };
           setTrainings((prev) => [newTraining, ...prev]);
         } else if (operation === "update" && trainingId) {
@@ -712,7 +712,9 @@ export default function TrainingPage() {
                             id: data.data.User.id,
                             name: data.data.User.name
                           }
-                        : undefined
+                        : undefined,
+                    createdAt: data.data.createdAt,
+                    updatedAt: data.data.updatedAt
                   }
                 : t
             )
@@ -1054,7 +1056,10 @@ export default function TrainingPage() {
                           </span>
                           <span className="text-gray-400">
                             {" "}
-                            / {training.target}
+                            /
+                            <span className="text-gray-700">
+                              {training.target} {training.units}
+                            </span>
                           </span>
                         </div>
                       </TableCell>
@@ -1321,34 +1326,36 @@ function TrainingView({ training }: TrainingViewProps) {
         </div>
       )}
       {/* Display attachments if available */}
+      {training.imageUrl && (
+        <>
+          <hr />
+          <div>
+            <Label>Image</Label>
+            <div className="mt-2 border rounded-md overflow-hidden max-w-sm">
+              <img
+                src={training.imageUrl || "/placeholder.svg"}
+                alt={training.imageUrl}
+                className="w-full h-auto object-cover"
+              />
+            </div>
+          </div>
+        </>
+      )}
       {(training.imageUrl || training.pdfUrl) && (
         <div className="space-y-4">
           <Label className="text-sm font-medium text-gray-500">
             Attachments
           </Label>
           <div className="flex gap-4">
-            {training.imageUrl && (
-              <div className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4 text-blue-500" />
-                <a
-                  href={training.imageUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline text-sm"
-                >
-                  View Image
-                </a>
-              </div>
-            )}
             {training.pdfUrl && (
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-red-500" />
+              <div className="flex items-center gap-2 ">
                 <a
                   href={training.pdfUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline text-sm"
+                  className="flex items-center gap-2 bg-gray-100 text-blue-600 hover:bg-white text-sm border border-gray-300 px-3 py-1 rounded-sm"
                 >
+                  <FileText className="h-4 w-4 text-red-500" />
                   View PDF
                 </a>
               </div>
@@ -1372,7 +1379,6 @@ function TrainingView({ training }: TrainingViewProps) {
             Last Updated{" "}
             <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
           </Label>{" "}
-          <p className="text-[10px] text-gray-400">( MM/DD/YYYY )</p>
           <p className="tracking-wider mt-2">
             {new Date(training.updatedAt).toLocaleString()}
           </p>
@@ -1449,7 +1455,7 @@ function TrainingForm({
     if (isEdit && training?.pdfUrl) {
       // For existing PDFs, we'll show basic info
       setPdfPreviewInfo({
-        name: "Training Materials.pdf",
+        name: training.pdfUrl || "Training.material.Pdf",
         size: 0 // We don't have size info for existing files
       });
       setFormData((prev) => ({
@@ -2254,7 +2260,7 @@ function TrainingForm({
                   <div className="flex items-center space-x-3">
                     <FileText className="h-8 w-8 text-red-600" />
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-[10px] font-medium text-gray-900">
                         {pdfPreviewInfo.name}
                       </p>
                       {pdfPreviewInfo.size > 0 && (
@@ -2373,576 +2379,3 @@ function TrainingForm({
     </form>
   );
 }
-
-// function TrainingForm({
-//   training,
-//   onSave,
-//   onClose,
-//   isEdit = false
-// }: TrainingFormProps) {
-//   const [formData, setFormData] = useState<TrainingFormData>({
-//     title: training?.title || "",
-//     projectId: training?.project.id || "",
-//     quarterId: training?.quarter.id || "",
-//     target: training?.target?.toString() || "",
-//     achieved: training?.achieved?.toString() || "",
-//     district: training?.district || "",
-//     village: training?.village || "",
-//     block: training?.block || "",
-//     beneficiaryMale: training?.beneficiaryMale?.toString() || "0",
-//     beneficiaryFemale: training?.beneficiaryFemale?.toString() || "0",
-//     units: training?.units || "",
-//     remarks: training?.remarks || "",
-//     imageUrl: training?.imageUrl || "",
-//     imageKey: training?.imageKey || "",
-//     pdfUrl: training?.pdfUrl || "",
-//     pdfKey: training?.pdfKey || "",
-//     imageFile: null,
-//     pdfFile: null
-//   });
-
-//   const [formErrors, setFormErrors] = useState<FormErrors>({});
-//   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-//   const projects = useProjectStore((state) => state.projects);
-//   const [url, setUrl] = useState<SignedUrlResponse | null>(null); // For storing fetched signed URL
-//   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-//   const [imageToBeRemovedKey, setImageToBeRemovedKey] = useState<string | null>(
-//     null
-//   );
-//   const [isProcessingFile, setIsProcessingFile] = useState(false);
-//   const [isImageLoading, setIsImageLoading] = useState(true);
-
-//   const uniqueProjectTitle = useMemo(() => {
-//     if (!projects || projects.length === 0) return [];
-//     return Array.from(new Set(projects.map((project) => project.title)));
-//   }, [projects]);
-
-//   const handleInputChange = (
-//     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-//   ): void => {
-//     const { name, value } = e.target;
-//     setFormData((prev) => ({ ...prev, [name]: value }));
-
-//     // Clear error for this field
-//     if (formErrors[name]) {
-//       setFormErrors((prev) => {
-//         const newErrors = { ...prev };
-//         delete newErrors[name];
-//         return newErrors;
-//       });
-//       console.log("ERRORS : ", formErrors);
-//     }
-//   };
-
-//   const handleSelectChange = (name: string, value: string): void => {
-//     setFormData((prev) => ({ ...prev, [name]: value }));
-
-//     // Clear error for this field
-//     if (formErrors[name]) {
-//       setFormErrors((prev) => {
-//         const newErrors = { ...prev };
-//         delete newErrors[name];
-//         return newErrors;
-//       });
-//     }
-//   };
-
-//   const handleFileChange = (
-//     e: React.ChangeEvent<HTMLInputElement>,
-//     fileType: "image" | "pdf"
-//   ): void => {
-//     const file = e.target.files?.[0] || null;
-
-//     if (!file) {
-//       toast.warning("File is missing", {
-//         description: "Please select a file to upload."
-//       });
-//       return;
-//     }
-//     if (file) {
-//       // Validate file size (20MB max)
-//       if (file.size > 20 * 1024 * 1024) {
-//         setFormErrors((prev) => ({
-//           ...prev,
-//           [`${fileType}File`]: "File size must be less than 20MB"
-//         }));
-//         return;
-//       }
-//       // Validate file type
-//       if (fileType === "image" && !file.type.startsWith("image/")) {
-//         setFormErrors((prev) => ({
-//           ...prev,
-//           imageFile: "Please select a valid image file"
-//         }));
-//         return;
-//       }
-
-//       if (fileType === "pdf" && file.type !== "application/pdf") {
-//         setFormErrors((prev) => ({
-//           ...prev,
-//           pdfFile: "Please select a valid PDF file"
-//         }));
-//         return;
-//       }
-//     }
-
-//     setFormData((prev) => ({ ...prev, [`${fileType}File`]: file }));
-
-//     // Clear error for this field
-//     if (formErrors[`${fileType}File`]) {
-//       setFormErrors((prev) => {
-//         const newErrors = { ...prev };
-//         delete newErrors[`${fileType}File`];
-//         return newErrors;
-//       });
-//     }
-
-//     toast.success(`${fileType === "image" ? "Image" : "PDF"} selected`, {
-//       description: `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`
-//     });
-//   };
-
-//   const validateForm = (): boolean => {
-//     console.log(formData);
-//     try {
-//       const dataToValidate = {
-//         title: formData.title,
-//         projectId: formData.projectId,
-//         quarterId: formData.quarterId,
-//         target: Number.parseInt(formData.target) || 0,
-//         achieved: Number.parseInt(formData.achieved) || 0,
-//         district: formData.district,
-//         village: formData.village,
-//         block: formData.block,
-//         beneficiaryMale: Number.parseInt(formData.beneficiaryMale) || 0,
-//         beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
-//         units: formData.units,
-//         remarks: formData.remarks,
-//         imageUrl: formData.imageUrl || undefined,
-//         imageKey: formData.imageKey || undefined,
-//         pdfUrl: formData.pdfUrl || undefined,
-//         pdfKey: formData.pdfKey || undefined
-//       };
-
-//       if (isEdit) {
-//         updateTrainingValidation.parse(dataToValidate);
-//       } else {
-//         createTrainingValidation.parse(dataToValidate);
-//       }
-//       setFormErrors({});
-//       return true;
-//     } catch (error) {
-//       if (error instanceof z.ZodError) {
-//         const newErrors: FormErrors = {};
-//         error.errors.forEach((err) => {
-//           const path = err.path[0].toString();
-//           newErrors[path] = err.message;
-//         });
-//         setFormErrors(newErrors);
-//       }
-//       return false;
-//     }
-//   };
-
-//   const handleSubmit = async (
-//     e: React.FormEvent<HTMLFormElement>
-//   ): Promise<void> => {
-//     e.preventDefault();
-
-//     if (!validateForm()) {
-//       toast.error("Validation Error", {
-//         description: "Please fix the errors in the form before submitting."
-//       });
-//       return;
-//     }
-
-//     setIsSubmitting(true);
-
-//     try {
-//       // Simulate file upload delay
-//       if (formData.imageFile || formData.pdfFile) {
-//         await new Promise((resolve) => setTimeout(resolve, 1000));
-//       }
-
-//       onSave(formData);
-//     } catch {
-//       toast.error("Error", {
-//         description: "Failed to save training. Please try again."
-//       });
-//     } finally {
-//       const timer = setTimeout(() => {
-//         setIsSubmitting(false);
-//       }, 30000); // 30000 milliseconds = 30 seconds
-
-//       // Optional: cleanup in case the component unmounts before 15s
-//       clearTimeout(timer);
-//     }
-//   };
-
-//   return (
-//     <form className="space-y-4" onSubmit={handleSubmit}>
-//       <div className="grid grid-cols-1 gap-4">
-//         <div>
-//           <Label>
-//             Project <span className="text-red-500">*</span>
-//           </Label>
-//           <Select
-//             value={(() => {
-//               const projectInfo = projects.find(
-//                 (p) => p.id === formData.projectId
-//               );
-//               return projectInfo ? projectInfo.title : "";
-//             })()}
-//             onValueChange={(value) => {
-//               // Find the project ID based on the selected title
-//               const selectedProject = projects.find((p) => p.title === value);
-
-//               if (selectedProject) {
-//                 handleSelectChange("projectId", selectedProject.id);
-//               }
-//             }}
-//           >
-//             <SelectTrigger
-//               className={formErrors.projectId ? "border-red-500" : ""}
-//             >
-//               <SelectValue placeholder="Select project" />
-//             </SelectTrigger>
-//             <SelectContent>
-//               {uniqueProjectTitle.map((title) => (
-//                 <SelectItem key={title} value={title}>
-//                   {title}
-//                 </SelectItem>
-//               ))}
-//             </SelectContent>
-//           </Select>
-//           {formErrors.projectId && (
-//             <p className="text-red-500 text-sm mt-1">{formErrors.projectId}</p>
-//           )}
-//         </div>
-//         <div>
-//           <Label htmlFor="title">
-//             Training Title <span className="text-red-500">*</span>
-//           </Label>
-//           <Input
-//             id="title"
-//             name="title"
-//             placeholder="Enter training title (max 255 characters)"
-//             value={formData.title}
-//             onChange={handleInputChange}
-//             maxLength={255}
-//             className={formErrors.title ? "border-red-500" : ""}
-//             required
-//           />
-//           {formErrors.title && (
-//             <p className="text-red-500 text-sm mt-1">{formErrors.title}</p>
-//           )}
-//         </div>
-//       </div>
-//       <div className="grid grid-cols-2 gap-4">
-//         <div>
-//           <Label>
-//             Quarter <span className="text-red-500">*</span>
-//           </Label>
-//           <Select
-//             value={(() => {
-//               const quarterInfo = quarterlyData.find(
-//                 (q) => q.id === formData.quarterId
-//               );
-//               return quarterInfo
-//                 ? `Q${quarterInfo.number} ${quarterInfo.year}`
-//                 : "";
-//             })()}
-//             onValueChange={(value) => {
-//               // Find the quarter ID based on the selected display value
-//               const selectedQuarter = quarterlyData.find(
-//                 (q) => `Q${q.number} ${q.year}` === value
-//               );
-//               if (selectedQuarter) {
-//                 handleSelectChange("quarterId", selectedQuarter.id);
-//               }
-//             }}
-//           >
-//             <SelectTrigger
-//               className={formErrors.quarterId ? "border-red-500" : ""}
-//             >
-//               <SelectValue placeholder="Select quarter" />
-//             </SelectTrigger>
-//             <SelectContent className="h-52">
-//               {quarterlyData.map((quarter) => (
-//                 <SelectItem
-//                   key={quarter.id}
-//                   value={`Q${quarter.number} ${quarter.year}`}
-//                 >
-//                   Q{quarter.number} {quarter.year}
-//                 </SelectItem>
-//               ))}
-//             </SelectContent>
-//           </Select>
-//           {formErrors.quarterId && (
-//             <p className="text-red-500 text-sm mt-1">{formErrors.quarterId}</p>
-//           )}
-//         </div>
-//         <div>
-//           <Label htmlFor="units">Units</Label>
-//           <Input
-//             id="units"
-//             name="units"
-//             placeholder="e.g., Participants, Sessions"
-//             value={formData.units}
-//             onChange={handleInputChange}
-//             className={formErrors.units ? "border-red-500" : ""}
-//           />
-//           {formErrors.units && (
-//             <p className="text-red-500 text-sm mt-1">{formErrors.units}</p>
-//           )}
-//         </div>
-//         <div>
-//           <Label htmlFor="target">
-//             Target <span className="text-red-500">*</span>
-//           </Label>
-//           <Input
-//             id="target"
-//             name="target"
-//             type="number"
-//             placeholder="Enter target number"
-//             value={formData.target}
-//             onChange={handleInputChange}
-//             className={formErrors.target ? "border-red-500" : ""}
-//             required
-//           />
-//           {formErrors.target && (
-//             <p className="text-red-500 text-sm mt-1">{formErrors.target}</p>
-//           )}
-//         </div>
-//         <div>
-//           <Label htmlFor="achieved">
-//             Achieved <span className="text-red-500">*</span>
-//           </Label>
-//           <Input
-//             id="achieved"
-//             name="achieved"
-//             type="number"
-//             placeholder="Enter achieved number"
-//             value={formData.achieved}
-//             onChange={handleInputChange}
-//             className={formErrors.achieved ? "border-red-500" : ""}
-//             required
-//           />
-//           {formErrors.achieved && (
-//             <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
-//           )}
-//         </div>
-//         <div>
-//           <Label htmlFor="district">
-//             District <span className="text-red-500">*</span>
-//           </Label>
-//           <Input
-//             id="district"
-//             name="district"
-//             placeholder="District name"
-//             value={formData.district}
-//             onChange={handleInputChange}
-//             maxLength={100}
-//             className={formErrors.district ? "border-red-500" : ""}
-//             required
-//           />
-//           {formErrors.district && (
-//             <p className="text-red-500 text-sm mt-1">{formErrors.district}</p>
-//           )}
-//         </div>
-//         <div>
-//           <Label htmlFor="village">
-//             Village <span className="text-red-500">*</span>
-//           </Label>
-//           <Input
-//             id="village"
-//             name="village"
-//             placeholder="Village name"
-//             value={formData.village}
-//             onChange={handleInputChange}
-//             maxLength={100}
-//             className={formErrors.village ? "border-red-500" : ""}
-//             required
-//           />
-//           {formErrors.village && (
-//             <p className="text-red-500 text-sm mt-1">{formErrors.village}</p>
-//           )}
-//         </div>
-//         <div>
-//           <Label htmlFor="block">
-//             Block <span className="text-red-500">*</span>
-//           </Label>
-//           <Input
-//             id="block"
-//             name="block"
-//             placeholder="Block name"
-//             value={formData.block}
-//             onChange={handleInputChange}
-//             maxLength={100}
-//             className={formErrors.block ? "border-red-500" : ""}
-//             required
-//           />
-//           {formErrors.block && (
-//             <p className="text-red-500 text-sm mt-1">{formErrors.block}</p>
-//           )}
-//         </div>
-//       </div>
-
-//       <div className="grid grid-cols-2 gap-4">
-//         <div>
-//           <Label htmlFor="beneficiaryMale">
-//             Male Beneficiaries <span className="text-red-500">*</span>
-//           </Label>
-//           <Input
-//             id="beneficiaryMale"
-//             name="beneficiaryMale"
-//             type="number"
-//             placeholder="0"
-//             value={formData.beneficiaryMale}
-//             onChange={handleInputChange}
-//             className={formErrors.beneficiaryMale ? "border-red-500" : ""}
-//             required
-//           />
-//           {formErrors.beneficiaryMale && (
-//             <p className="text-red-500 text-sm mt-1">
-//               {formErrors.beneficiaryMale}
-//             </p>
-//           )}
-//         </div>
-//         <div>
-//           <Label htmlFor="beneficiaryFemale">
-//             Female Beneficiaries <span className="text-red-500">*</span>
-//           </Label>
-//           <Input
-//             id="beneficiaryFemale"
-//             name="beneficiaryFemale"
-//             type="number"
-//             placeholder="0"
-//             value={formData.beneficiaryFemale}
-//             onChange={handleInputChange}
-//             className={formErrors.beneficiaryFemale ? "border-red-500" : ""}
-//             required
-//           />
-//           {formErrors.beneficiaryFemale && (
-//             <p className="text-red-500 text-sm mt-1">
-//               {formErrors.beneficiaryFemale}
-//             </p>
-//           )}
-//         </div>
-//       </div>
-
-//       <div>
-//         <Label htmlFor="remarks">Remarks</Label>
-//         <Textarea
-//           id="remarks"
-//           name="remarks"
-//           placeholder="Additional remarks (max 300 characters)"
-//           value={formData.remarks}
-//           onChange={handleInputChange}
-//           maxLength={300}
-//           className={formErrors.remarks ? "border-red-500 mt-2" : "mt-2"}
-//         />
-//         {formErrors.remarks && (
-//           <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
-//         )}
-//       </div>
-
-//       <div className="grid grid-cols-1 gap-4">
-//         <div>
-//           <Label htmlFor="imageFile">Training Image</Label>
-//           <div className="space-y-2">
-//             <div className="flex items-center space-x-2">
-//               <Input
-//                 id="imageFile"
-//                 type="file"
-//                 accept="image/*"
-//                 onChange={(e) => handleFileChange(e, "image")}
-//                 className={`cursor-pointer ${
-//                   formErrors.imageFile ? "border-red-500" : ""
-//                 }`}
-//               />
-//               <Button
-//                 type="button"
-//                 variant="outline"
-//                 size="sm"
-//                 className="shrink-0"
-//               >
-//                 <Upload className="h-4 w-4 mr-2" />
-//                 Browse
-//               </Button>
-//             </div>
-//             {formErrors.imageFile ? (
-//               <p className="text-red-500 text-sm">{formErrors.imageFile}</p>
-//             ) : (
-//               <p className="text-sm text-gray-500">Max file size: 20MB</p>
-//             )}
-//             {formData.imageFile && (
-//               <p className="text-sm text-green-600">
-//                 Selected: {formData.imageFile.name} (
-//                 {(formData.imageFile.size / (1024 * 1024)).toFixed(2)} MB)
-//               </p>
-//             )}
-//           </div>
-//         </div>
-//         <div>
-//           <Label htmlFor="pdfFile">Training Materials (PDF)</Label>
-//           <div className="space-y-2">
-//             <div className="flex items-center space-x-2">
-//               <Input
-//                 id="pdfFile"
-//                 type="file"
-//                 accept=".pdf"
-//                 onChange={(e) => handleFileChange(e, "pdf")}
-//                 className={`cursor-pointer ${
-//                   formErrors.pdfFile ? "border-red-500" : ""
-//                 }`}
-//               />
-//               <Button
-//                 type="button"
-//                 variant="outline"
-//                 size="sm"
-//                 className="shrink-0"
-//               >
-//                 <Upload className="h-4 w-4 mr-2" />
-//                 Browse
-//               </Button>
-//             </div>
-//             {formErrors.pdfFile ? (
-//               <p className="text-red-500 text-sm">{formErrors.pdfFile}</p>
-//             ) : (
-//               <p className="text-sm text-gray-500">Max file size: 20MB</p>
-//             )}
-//             {formData.pdfFile && (
-//               <p className="text-sm text-green-600">
-//                 Selected: {formData.pdfFile.name} (
-//                 {(formData.pdfFile.size / (1024 * 1024)).toFixed(2)} MB)
-//               </p>
-//             )}
-//           </div>
-//         </div>
-//       </div>
-
-//       <div className="flex justify-end space-x-2 pt-4">
-//         <Button
-//           type="button"
-//           variant="outline"
-//           onClick={onClose}
-//           disabled={isSubmitting}
-//         >
-//           Cancel
-//         </Button>
-//         <Button
-//           type="submit"
-//           className="bg-green-600 hover:bg-green-700"
-//           disabled={isSubmitting}
-//         >
-//           {isSubmitting
-//             ? "Saving..."
-//             : isEdit
-//             ? "Update Training"
-//             : "Save Training"}
-//         </Button>
-//       </div>
-//     </form>
-//   );
-// }
