@@ -866,7 +866,7 @@ export default function AwarenessPage() {
     setSearchTerm(e.target.value);
   };
 
-  const handleDeleteTraining = async () => {
+  const handleDeleteAwarness = async () => {
     if (!selectedAwareness) {
       toast.error("No Training selected", {
         description: "Please select a training to delete"
@@ -888,10 +888,19 @@ export default function AwarenessPage() {
       );
 
       if (response.status === 200 && response.data.success) {
-        toast.success("Training deleted", {
-          description: selectedAwareness.title + " deleted successfully",
-          duration: 5000
-        });
+        if (response.data.warning) {
+          // Show warning toast for partial success
+          toast.warning("Training deleted with warnings", {
+            description: `${selectedAwareness.title} was removed from database, but ${response.data.warning}`,
+            duration: 8000 // Longer duration for warnings
+          });
+        } else {
+          // Show success toast for complete success
+          toast.success("Training deleted", {
+            description: `${selectedAwareness.title} deleted successfully`,
+            duration: 5000
+          });
+        }
         setAwarnessProgram((prevTrainings) =>
           prevTrainings.filter(
             (training) => training.id !== selectedAwareness.id
@@ -1308,7 +1317,7 @@ export default function AwarenessPage() {
               <Button
                 variant="destructive"
                 onClick={() => {
-                  handleDeleteTraining();
+                  handleDeleteAwarness();
                 }}
                 disabled={isLoading}
                 className="cursor-pointer"

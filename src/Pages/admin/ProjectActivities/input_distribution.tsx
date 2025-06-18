@@ -624,6 +624,7 @@ export default function InputDistributionPage() {
         success: boolean;
         message: string;
         code: string;
+        warning: string;
       }>(`${Base_Url}/delete-input-dist/${selectedDistribution.id}`, {
         withCredentials: true,
         timeout: 30000
@@ -633,9 +634,18 @@ export default function InputDistributionPage() {
         response.data.success &&
         response.data.code === "RESOURCE_DELETED"
       ) {
-        toast.success(response.data.message || "Distribution deleted.", {
-          description: `ID: ${selectedDistribution.inputDistId}`
-        });
+        if (response.data.warning) {
+          // Show warning toast for partial success
+          toast.warning("Training deleted with warnings", {
+            description: `Input Distribution was removed from database, but ${response.data.warning}`,
+            duration: 8000 // Longer duration for warnings
+          });
+        } else {
+          // Show success toast for complete success
+          toast.success(response.data.message || "Distribution deleted.", {
+            description: `ID: ${selectedDistribution.inputDistId}`
+          });
+        }
         setDistributions((prev) =>
           prev.filter((d) => d.id !== selectedDistribution.id)
         );

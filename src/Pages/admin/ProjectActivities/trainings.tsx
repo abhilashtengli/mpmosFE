@@ -785,10 +785,17 @@ export default function TrainingPage() {
       );
 
       if (response.status === 200 && response.data.success) {
-        toast.success("Training deleted", {
-          description: selectedTraining.title + " deleted successfully",
-          duration: 5000
-        });
+        if (response.data.warning) {
+          toast.warning("Training deleted with file issues", {
+            description: `${selectedTraining.title} was removed from your account, but ${response.data.warning}`,
+            duration: 6000
+          });
+        } else {
+          toast.success("Training deleted successfully", {
+            description: `${selectedTraining.title} and all associated files have been deleted`,
+            duration: 5000
+          });
+        }
         setTrainings((prevTrainings) =>
           prevTrainings.filter(
             (training) => training.id !== selectedTraining.id

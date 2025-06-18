@@ -593,22 +593,29 @@ export default function InfrastructurePage() {
         success: boolean;
         message: string;
         code: string;
+        warning: string;
       }>(`${Base_Url}/delete-infraDev/${selectedInfrastructure.id}`, {
         withCredentials: true,
         timeout: 30000
       });
 
-      if (
-        response.status === 200 &&
-        response.data.success &&
-        response.data.code === "RESOURCE_DELETED"
-      ) {
-        toast.success(
-          response.data.message || "Infrastructure entry deleted successfully.",
-          {
-            description: `ID: ${selectedInfrastructure.InfraDevId}`
-          }
-        );
+      if (response.status === 200 && response.data.success) {
+        if (response.data.warning) {
+          // Show warning toast for partial success
+          toast.warning("Training deleted with warnings", {
+            description: `${selectedInfrastructure.InfraDevId} was removed from database, but ${response.data.warning}`,
+            duration: 8000 // Longer duration for warnings
+          });
+        } else {
+          // Show success toast for complete success
+          toast.success(
+            response.data.message ||
+              "Infrastructure entry deleted successfully.",
+            {
+              description: `ID: ${selectedInfrastructure.InfraDevId}`
+            }
+          );
+        }
         setInfrastructures((prev) =>
           prev.filter((infra) => infra.id !== selectedInfrastructure.id)
         );
