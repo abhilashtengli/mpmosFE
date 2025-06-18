@@ -313,6 +313,8 @@ export default function InputDistributionPage() {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [selectedActivityType, setSelectedActivityType] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [pageError, setPageError] = useState<string | null>(null);
 
   const projects = useProjectStore((state) => state.projects);
@@ -616,6 +618,7 @@ export default function InputDistributionPage() {
       toast.error("No distribution selected.");
       return;
     }
+    setIsDeleting(true);
     const loadingToast = toast.loading(
       `Deleting ID: ${selectedDistribution.inputDistId}...`
     );
@@ -669,6 +672,7 @@ export default function InputDistributionPage() {
         });
       }
     } finally {
+      setIsDeleting(false);
       toast.dismiss(loadingToast);
     }
   };
@@ -989,7 +993,14 @@ export default function InputDistributionPage() {
                 onClick={handleDeleteDistribution}
                 disabled={isLoading}
               >
-                {isLoading ? "Deleting..." : "Delete"}
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

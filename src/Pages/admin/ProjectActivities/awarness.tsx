@@ -49,7 +49,8 @@ import {
   ImageIcon,
   UserRound,
   Trash2,
-  UploadCloud
+  UploadCloud,
+  Loader2
 } from "lucide-react";
 import axios, { AxiosError } from "axios";
 import { Base_Url, quarterlyData, SignedUrlResponse } from "@/lib/constants";
@@ -346,6 +347,8 @@ export default function AwarenessPage() {
   const [selectedQuarter, setSelectedQuarter] = useState<string>("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const projects = useProjectStore((state) => state.projects);
   const logOut = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
@@ -873,7 +876,7 @@ export default function AwarenessPage() {
       });
       return;
     }
-
+    setIsDeleting(true);
     const loadingToast = toast.loading(
       `Deleting "${selectedAwareness.title}"...`
     );
@@ -960,6 +963,7 @@ export default function AwarenessPage() {
         });
       }
     } finally {
+      setIsDeleting(false);
       toast.dismiss(loadingToast);
     }
   };
@@ -1322,7 +1326,14 @@ export default function AwarenessPage() {
                 disabled={isLoading}
                 className="cursor-pointer"
               >
-                {isLoading ? "Deleting..." : "Delete"}
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

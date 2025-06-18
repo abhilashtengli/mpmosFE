@@ -382,6 +382,7 @@ export default function TrainingPage() {
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const projects = useProjectStore((state) => state.projects);
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
@@ -770,7 +771,7 @@ export default function TrainingPage() {
       });
       return;
     }
-
+    setIsDeleting(true);
     const loadingToast = toast.loading(
       `Deleting "${selectedTraining.title}"...`
     );
@@ -855,6 +856,7 @@ export default function TrainingPage() {
         });
       }
     } finally {
+      setIsDeleting(false);
       toast.dismiss(loadingToast);
     }
   };
@@ -1222,7 +1224,14 @@ export default function TrainingPage() {
                 disabled={isLoading}
                 className="cursor-pointer"
               >
-                {isLoading ? "Deleting..." : "Delete"}
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1705,7 +1714,6 @@ function TrainingForm({
   };
 
   const validateForm = (): boolean => {
-    console.log(formData);
     try {
       const dataToValidate = {
         title: formData.title,
@@ -1725,7 +1733,7 @@ function TrainingForm({
         pdfUrl: formData.pdfUrl || undefined,
         pdfKey: formData.pdfKey || undefined
       };
-
+      console.log("dv : ", dataToValidate);
       if (isEdit) {
         updateTrainingValidation.parse(dataToValidate);
       } else {
@@ -1750,7 +1758,7 @@ function TrainingForm({
     e: React.FormEvent<HTMLFormElement>
   ): Promise<void> => {
     e.preventDefault();
-
+    console.log("FE : ", formErrors);
     if (!validateForm()) {
       toast.error("Validation Error", {
         description: "Please fix the errors in the form before submitting."

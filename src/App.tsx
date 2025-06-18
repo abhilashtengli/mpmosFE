@@ -10,7 +10,6 @@ import AdminBody from "./Pages/admin/AdminBody";
 import ReportsAdPage from "./Pages/admin/reports";
 import GalleryAdPage from "./Pages/admin/Content/gallery";
 import ProjectsAdPage from "./Pages/admin/ProjectActivities/projects";
-import PublicationsAdPage from "./Pages/admin/Content/publications";
 import EventsAdPage from "./Pages/admin/Content/upcoming_events";
 import AwarenessAdPage from "./Pages/admin/ProjectActivities/awarness";
 import FLDAdPage from "./Pages/admin/ProjectActivities/fld";
@@ -25,6 +24,7 @@ import { useAuthStore } from "./stores/useAuthStore";
 import { useEffect } from "react";
 import { Toaster } from "sonner";
 import ProjectDetailsAdPage from "./Pages/admin/Content/project_details";
+import PublicationsPage from "./Pages/admin/Content/publications";
 
 function App() {
   const { isAuthenticated, fetchUser } = useAuthStore();
@@ -66,7 +66,7 @@ function App() {
             <Route path="reports" element={<ReportsAdPage />} />
             <Route path="gallery" element={<GalleryAdPage />} />
             <Route path="project_details" element={<ProjectDetailsAdPage />} />
-            <Route path="publications" element={<PublicationsAdPage />} />
+            <Route path="publications" element={<PublicationsPage />} />
             <Route path="upcoming_events" element={<EventsAdPage />} />
             <Route path="awarness_programs" element={<AwarenessAdPage />} />
             <Route path="fld" element={<FLDAdPage />} />

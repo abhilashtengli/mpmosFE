@@ -1238,7 +1238,11 @@ export default function ProjectsPage() {
                 </div>
                 <div>
                   <span className="font-medium text-foreground">Budget : </span>
-                  ₹{selectedProject.budget.toLocaleString("en-IN")}
+                  {selectedProject.budget
+                    ? `₹ ${Number(selectedProject.budget).toLocaleString(
+                        "en-IN"
+                      )}`
+                    : "N/A"}
                 </div>
                 <div>
                   <span className="font-medium text-foreground">Status : </span>

@@ -41,7 +41,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Sprout, Plus, Search, Eye, Edit, Trash2 } from "lucide-react";
+import { Sprout, Plus, Search, Eye, Edit, Trash2, Loader2 } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router-dom";
@@ -243,6 +243,8 @@ export default function FLDPage() {
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const projects = useProjectStore((state) => state.projects);
   const logOut = useAuthStore((state) => state.logout);
@@ -398,7 +400,7 @@ export default function FLDPage() {
       });
       return;
     }
-
+    setIsDeleting(true);
     const loadingToast = toast.loading(`Deleting FLD...`);
 
     try {
@@ -472,6 +474,7 @@ export default function FLDPage() {
         });
       }
     } finally {
+      setIsDeleting(false);
       toast.dismiss(loadingToast);
     }
   };
@@ -1136,7 +1139,14 @@ export default function FLDPage() {
                 disabled={isLoading}
                 className="cursor-pointer"
               >
-                {isLoading ? "Deleting..." : "Delete"}
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -297,6 +297,8 @@ export default function InfrastructurePage() {
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [pageError, setPageError] = useState<string | null>(null); // For page-level errors
 
   const projects = useProjectStore((state) => state.projects);
@@ -584,7 +586,7 @@ export default function InfrastructurePage() {
       toast.error("No infrastructure entry selected for deletion.");
       return;
     }
-
+    setIsDeleting(true);
     const loadingToast = toast.loading(
       `Deleting infrastructure ID: ${selectedInfrastructure.InfraDevId}...`
     );
@@ -642,6 +644,7 @@ export default function InfrastructurePage() {
         });
       }
     } finally {
+      setIsDeleting(false);
       toast.dismiss(loadingToast);
     }
   };
@@ -943,7 +946,14 @@ export default function InfrastructurePage() {
                 onClick={handleDeleteInfrastructure}
                 disabled={isLoading}
               >
-                {isLoading ? "Deleting..." : "Delete"}
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
