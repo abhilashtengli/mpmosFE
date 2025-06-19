@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
   GraduationCap,
@@ -18,6 +17,7 @@ import {
   ImageIcon
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 const navigation = [
   { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
@@ -75,6 +75,7 @@ export function Sidebar() {
     "Activities",
     "Content"
   ]);
+  const user = useAuthStore((state) => state.user);
 
   const toggleExpanded = (name: string) => {
     setExpandedItems((prev) =>
@@ -192,16 +193,18 @@ export function Sidebar() {
       {!collapsed && (
         <div className="p-4 border-t border-gray-200">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-medium">AD</span>
+            <div className="w-8 h-8 bg-green-600 rounded-full flex items-center pb-0.5 justify-center">
+              <span className="text-white text-sm font-medium">
+                {user?.name.slice(0, 2).toUpperCase()}
+              </span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">
-                Admin Director
+                {user?.name}
               </p>
-              <Badge variant="outline" className="text-xs">
-                Admin
-              </Badge>
+              <div className="text-[12px] border w-fit px-1 rounded-sm pb-0.5">
+                {user?.role}
+              </div>
             </div>
           </div>
         </div>
