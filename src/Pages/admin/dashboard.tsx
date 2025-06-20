@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useEffect } from "react";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 // Mock data for demonstration
 const summaryData = {
@@ -126,6 +127,7 @@ const getActivityIcon = (type: string) => {
 export default function DashboardAdPage() {
   //   const [selectedQuarter, setSelectedQuarter] = useState("Q2 2024");
   const { fetchProjects } = useProjectStore();
+  const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
     fetchProjects();
@@ -140,7 +142,7 @@ export default function DashboardAdPage() {
             <div className="flex items-center space-x-2">
               <Sprout className="h-8 w-8 text-green-600" />
               <h1 className="text-2xl font-bold text-gray-900">
-                AgriProject Dashboard
+                Millet Project Monitoring System Dashboard
               </h1>
             </div>
           </div>
@@ -152,18 +154,26 @@ export default function DashboardAdPage() {
               {summaryData.currentQuarter}
             </Badge>
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">AD</span>
+              <div className="w-8 h-8 bg-green-600 rounded-full pb-0.5 flex items-center justify-center">
+                <span className="text-white text-sm font-medium">
+                  {user?.name.slice(0, 2).toUpperCase()}
+                </span>
               </div>
               <span className="text-sm font-medium text-gray-700">
-                Admin Director
+                {user?.name}
               </span>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="p-6">
+      <div className="p-6 border-red-500">
+        <div className="mb-3">
+          <h1 className="text-xl font-semibold">Millet Promo-meter</h1>
+          <h3 className="text-md text-gray-700">
+            Real-time metrics of our impact in NEH
+          </h3>
+        </div>
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card className="border-l-4 border-l-green-500">

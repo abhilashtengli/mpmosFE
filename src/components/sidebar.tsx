@@ -21,6 +21,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 
 const navigation = [
   { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+  { name: "Projects", href: "/admin/projects", icon: FileText },
   {
     name: "Activities",
     icon: BarChart3,
@@ -44,7 +45,7 @@ const navigation = [
       }
     ]
   },
-  { name: "Projects", href: "/admin/projects", icon: FileText },
+
   {
     name: "Content",
     icon: BookOpen,
@@ -100,7 +101,7 @@ export function Sidebar() {
               <Sprout className="h-8 w-8 text-green-600" />
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
-                  Millet Project mos
+                  Millet-PMoS
                 </h2>
                 <p className="text-xs text-gray-500">Management System</p>
               </div>

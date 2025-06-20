@@ -72,6 +72,11 @@ const createInfrastructureValidation = z
       .number({ invalid_type_error: "Target must be a number" })
       .int({ message: "Target must be an integer" })
       .positive({ message: "Target must be a positive number" }),
+    title: z
+      .string()
+      .trim()
+      .min(2, { message: "Title must be at least 2 characters" })
+      .max(100, { message: "Title cannot exceed 100 characters" }),
     achieved: z
       .number({ invalid_type_error: "Achieved must be a number" })
       .int({ message: "Achieved must be an integer" })
@@ -135,6 +140,12 @@ const updateInfrastructureValidation = z
     quarterId: z
       .string()
       .uuid({ message: "Valid quarter ID is required" })
+      .optional(),
+    title: z
+      .string()
+      .trim()
+      .min(2, { message: "Title must be at least 2 characters" })
+      .max(100, { message: "Title cannot exceed 100 characters" })
       .optional(),
     target: z
       .number({ invalid_type_error: "Target must be a number" })
@@ -213,6 +224,7 @@ interface RawInfrastructure {
   district: string;
   village: string;
   block: string;
+  title: string;
   remarks: string | null;
   imageUrl: string | null;
   imageKey?: string | null;
@@ -227,6 +239,7 @@ interface Infrastructure {
   project: { id: string; title: string };
   quarter: { id: string; number: number; year: number };
   target: number;
+  title: string;
   achieved: number;
   district: string;
   village: string;
@@ -243,6 +256,7 @@ interface InfrastructureFormData {
   projectId: string;
   quarterId: string;
   target: string; // Input as string
+  title: string;
   achieved: string; // Input as string
   district: string;
   village: string;
@@ -332,7 +346,18 @@ export default function InfrastructurePage() {
           imageKey: item.imageKey ?? undefined,
           remarks: item.remarks ?? null
         }));
+
         setInfrastructures(mappedInfrastructures);
+      } else if (response.data.code === "UNAUTHORIZED") {
+        toast.success("UNAUTHORIZED", {
+          description: `${response.data.message}`
+        });
+        logout();
+      } else if (response.data.code === "NO_INFRA_DEV_FOUND") {
+        toast.info("No Infrastructure Found", {
+          description: "No Infrastructure data available. Please add new data."
+        });
+        return;
       } else {
         throw new Error(
           response.data.message || "Failed to fetch infrastructure data"
@@ -372,6 +397,7 @@ export default function InfrastructurePage() {
         const matchesSearch: boolean =
           infra.InfraDevId.toLowerCase().includes(searchLower) ||
           infra.project.title.toLowerCase().includes(searchLower) ||
+          infra.title.toLowerCase().includes(searchLower) ||
           infra.district.toLowerCase().includes(searchLower) ||
           infra.village.toLowerCase().includes(searchLower) ||
           infra.block.toLowerCase().includes(searchLower);
@@ -474,6 +500,7 @@ export default function InfrastructurePage() {
         achieved: Number.parseInt(formData.achieved),
         district: formData.district,
         village: formData.village,
+        title: formData.title,
         block: formData.block,
         remarks: formData.remarks || null,
         imageUrl: formData.imageUrl || null,
@@ -797,6 +824,7 @@ export default function InfrastructurePage() {
                 <TableRow>
                   <TableHead>Infra. ID</TableHead>
                   <TableHead>Project</TableHead>
+                  <TableHead>Title</TableHead>
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Target/Achieved</TableHead>
@@ -824,6 +852,9 @@ export default function InfrastructurePage() {
                       </TableCell>
                       <TableCell className="truncate max-w-[200px]">
                         {infra.project?.title}
+                      </TableCell>
+                      <TableCell className="truncate max-w-[200px]">
+                        {infra.title}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
@@ -944,7 +975,7 @@ export default function InfrastructurePage() {
               <Button
                 variant="destructive"
                 onClick={handleDeleteInfrastructure}
-                disabled={isLoading}
+                disabled={isDeleting}
               >
                 {isDeleting ? (
                   <>
@@ -984,7 +1015,11 @@ function InfrastructureView({ infrastructure }: InfrastructureViewProps) {
         </div>
         <div>
           <Label>Project</Label>
-          <p>{projectTitle}</p>
+          <p className="text-md">{projectTitle}</p>
+        </div>
+        <div>
+          <Label>Title</Label>
+          <p>{infrastructure.title}</p>
         </div>
       </div>
       <hr />
@@ -1093,6 +1128,7 @@ function InfrastructureForm({
     target: infrastructure?.target?.toString() || "0",
     achieved: infrastructure?.achieved?.toString() || "0",
     district: infrastructure?.district || "",
+    title: infrastructure?.title || "",
     village: infrastructure?.village || "",
     block: infrastructure?.block || "",
     remarks: infrastructure?.remarks || "",
@@ -1248,6 +1284,7 @@ function InfrastructureForm({
       achieved: Number.parseInt(formData.achieved) || 0,
       district: formData.district,
       village: formData.village,
+      title: formData.title,
       block: formData.block,
       remarks: formData.remarks || null,
       imageUrl: formData.imageFile ? null : formData.imageUrl, // If new file, URL is not yet set from cloud
@@ -1496,6 +1533,22 @@ function InfrastructureForm({
           </Select>
           {formErrors.projectId && (
             <p className="text-red-500 text-sm mt-1">{formErrors.projectId}</p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="village">
+            Title <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="title"
+            name="title"
+            placeholder="Infrastructure title.."
+            value={formData.title}
+            onChange={handleInputChange}
+            className={formErrors.title ? "border-red-500" : ""}
+          />
+          {formErrors.village && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.title}</p>
           )}
         </div>
       </div>

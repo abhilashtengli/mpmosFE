@@ -370,10 +370,19 @@ export default function AwarenessPage() {
 
       const data = response.data;
 
-      if (!data.success || response.status !== 200) {
+      if (response.data.code === "NO_PROGRAMS_FOUND") {
+        toast.info("No Programs Found", {
+          description: "No program data available. Please add new data."
+        });
+        return;
+      } else if (response.data.code === "UNAUTHORIZED") {
+        toast.info("UNAUTHORIZED", {
+          description: `${response.data.message}`
+        });
+        logOut();
+      } else if (!data.success || response.status !== 200) {
         throw new Error(data.message || "Failed to fetch Awarness programs");
       }
-      // console.log("data : ", data.data);
       const mappedAwarnessPrograms: AwarenessProgram[] = (data.data || []).map(
         (item: AwarenessProgram) => ({
           id: item.id,
@@ -406,10 +415,8 @@ export default function AwarenessPage() {
             : undefined
         })
       );
-      // console.log("MAPPEDDAT : ", mappedAwarnessPrograms);
       setAwarnessProgram(mappedAwarnessPrograms || []);
     } catch (error: unknown) {
-      // console.error("Error fetching trainings:", error);
       const defaultMessage =
         "An unexpected error occurred while fetching data.";
       if (axios.isAxiosError(error)) {
@@ -1323,7 +1330,7 @@ export default function AwarenessPage() {
                 onClick={() => {
                   handleDeleteAwarness();
                 }}
-                disabled={isLoading}
+                disabled={isDeleting}
                 className="cursor-pointer"
               >
                 {isDeleting ? (

@@ -403,8 +403,17 @@ export default function TrainingPage() {
       });
 
       const data = response.data;
-
-      if (!data.success || response.status !== 200) {
+      if (response.data.code === "UNAUTHORIZED") {
+        toast.success("UNAUTHORIZED", {
+          description: `${response.data.message}`
+        });
+        logout();
+      } else if (response.data.code === "RESOURCE_NOT_FOUND") {
+        toast.info("No Training Found", {
+          description: "No Training data available. Please add new data."
+        });
+        return;
+      } else if (!data.success || response.status !== 200) {
         throw new Error(data.message || "Failed to fetch trainings");
       }
       // console.log("data : ", data.data);
@@ -1221,7 +1230,7 @@ export default function TrainingPage() {
                 onClick={() => {
                   handleDeleteTraining();
                 }}
-                disabled={isLoading}
+                disabled={isDeleting}
                 className="cursor-pointer"
               >
                 {isDeleting ? (

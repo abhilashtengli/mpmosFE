@@ -265,9 +265,18 @@ export default function FLDPage() {
       });
 
       const data = response.data;
-
-      if (!data.success || response.status !== 200) {
-        throw new Error(data.message || "Failed to fetch Fld's");
+      if (response.data.code === "NO_FLD_FOUND") {
+        toast.info("No FLD Found", {
+          description: "No FLD data available. Please add new data."
+        });
+        return;
+      } else if (response.data.code === "UNAUTHORIZED") {
+        toast.success("UNAUTHORIZED", {
+          description: `${response.data.message}`
+        });
+        logOut();
+      } else if (!data.success || response.status !== 200) {
+        throw new Error(data.message || "Failed to fetch FLD's");
       }
       // console.log("data : ", data.data);
       const mappedFld: FLD[] = (data.data || []).map((item: FLD) => ({
@@ -816,7 +825,7 @@ export default function FLDPage() {
             <Sprout className="h-8 w-8 text-green-600" />
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                Field Level Demonstrations
+                Front Line Demonstrations
               </h1>
               <p className="text-sm text-gray-600">
                 Manage FLD programs and track demonstrations
@@ -1136,7 +1145,7 @@ export default function FLDPage() {
                 onClick={() => {
                   handleDeleteFLD();
                 }}
-                disabled={isLoading}
+                disabled={isDeleting}
                 className="cursor-pointer"
               >
                 {isDeleting ? (

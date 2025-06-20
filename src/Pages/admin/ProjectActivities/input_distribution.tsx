@@ -351,7 +351,11 @@ export default function InputDistributionPage() {
         setDistributions(mappedData);
       } else if (response.data.code === "NO_INPUT_DIST_FOUND") {
         setDistributions([]);
-        toast.info("No input distribution data found.");
+        toast.info("No Input Distribution Found", {
+          description:
+            "No Input Distribution data available. Please add new data."
+        });
+        return;
       } else {
         throw new Error(
           response.data.message || "Failed to fetch input distributions"
@@ -991,7 +995,7 @@ export default function InputDistributionPage() {
               <Button
                 variant="destructive"
                 onClick={handleDeleteDistribution}
-                disabled={isLoading}
+                disabled={isDeleting}
               >
                 {isDeleting ? (
                   <>
