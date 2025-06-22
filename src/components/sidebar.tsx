@@ -1,6 +1,9 @@
+"use client";
+
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   LayoutDashboard,
   GraduationCap,
@@ -14,10 +17,34 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  ImageIcon
+  ImageIcon,
+  Plus,
+  Check,
+  X
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/stores/useAuthStore";
+
+// Default activity categories
+const defaultActivityCategories = [
+  { name: "Training", href: "/admin/trainings", icon: GraduationCap },
+  {
+    name: "Awareness Programs",
+    href: "/admin/awarness_programs",
+    icon: Users
+  },
+  { name: "FLD", href: "/admin/fld", icon: Sprout },
+  {
+    name: "Infrastructure Dev",
+    href: "/admin/infrastructure_development",
+    icon: Building
+  },
+  {
+    name: "Input Distribution",
+    href: "/admin/input_distribution",
+    icon: Package
+  }
+];
 
 const navigation = [
   { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
@@ -25,27 +52,8 @@ const navigation = [
   {
     name: "Activities",
     icon: BarChart3,
-    children: [
-      { name: "Training", href: "/admin/trainings", icon: GraduationCap },
-      {
-        name: "Awareness Programs",
-        href: "/admin/awarness_programs",
-        icon: Users
-      },
-      { name: "FLD", href: "/admin/fld", icon: Sprout },
-      {
-        name: "Infrastructure Dev",
-        href: "/admin/infrastructure_development",
-        icon: Building
-      },
-      {
-        name: "Input Distribution",
-        href: "/admin/input_distribution",
-        icon: Package
-      }
-    ]
+    children: [] // Will be populated dynamically
   },
-
   {
     name: "Content",
     icon: BookOpen,
@@ -65,7 +73,6 @@ const navigation = [
     ]
   },
   { name: "Reports", href: "/admin/reports", icon: BarChart3 }
-  //   { name: "Settings", href: "/settings", icon: Settings }
 ];
 
 export function Sidebar() {
@@ -76,7 +83,23 @@ export function Sidebar() {
     "Activities",
     "Content"
   ]);
+  const [activityCategories, setActivityCategories] = useState(
+    defaultActivityCategories
+  );
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
   const user = useAuthStore((state) => state.user);
+
+  // Update navigation with current activity categories
+  const updatedNavigation = navigation.map((item) => {
+    if (item.name === "Activities") {
+      return {
+        ...item,
+        children: activityCategories
+      };
+    }
+    return item;
+  });
 
   const toggleExpanded = (name: string) => {
     setExpandedItems((prev) =>
@@ -84,6 +107,25 @@ export function Sidebar() {
         ? prev.filter((item) => item !== name)
         : [...prev, name]
     );
+  };
+
+  const handleAddCategory = () => {
+    if (newCategoryName.trim()) {
+      const categoryId = newCategoryName.toLowerCase().replace(/\s+/g, "_");
+      const newCategory = {
+        name: newCategoryName.trim(),
+        href: `/admin/activity/${categoryId}`,
+        icon: BarChart3 // Default icon for new categories
+      };
+      setActivityCategories([...activityCategories, newCategory]);
+      setNewCategoryName("");
+      setShowAddForm(false);
+    }
+  };
+
+  const handleCancelAdd = () => {
+    setNewCategoryName("");
+    setShowAddForm(false);
   };
 
   return (
@@ -124,7 +166,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-2">
-        {navigation.map((item) => (
+        {updatedNavigation.map((item) => (
           <div key={item.name}>
             {item.children ? (
               <div>
@@ -167,6 +209,57 @@ export function Sidebar() {
                         </Button>
                       </Link>
                     ))}
+
+                    {/* Add New Category Section - Only for Activities */}
+                    {item.name === "Activities" && (
+                      <div className="mt-2">
+                        {!showAddForm ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-left font-normal cursor-pointer text-green-600 hover:bg-green-50"
+                            onClick={() => setShowAddForm(true)}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add New Category
+                          </Button>
+                        ) : (
+                          <div className="space-y-2 p-2 bg-gray-50 rounded-md">
+                            <Input
+                              placeholder="Category name"
+                              value={newCategoryName}
+                              onChange={(e) =>
+                                setNewCategoryName(e.target.value)
+                              }
+                              className="h-8 text-sm"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleAddCategory();
+                                if (e.key === "Escape") handleCancelAdd();
+                              }}
+                              autoFocus
+                            />
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                onClick={handleAddCategory}
+                                className="h-6 px-2 text-xs"
+                                disabled={!newCategoryName.trim()}
+                              >
+                                <Check className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleCancelAdd}
+                                className="h-6 px-2 text-xs"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
