@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,20 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { Base_Url } from "@/lib/constants";
+import { toast } from "sonner";
+import axios from "axios";
+
+interface ActivityCategories {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  User: {
+    id: string;
+    name: string;
+  };
+}
 
 // Default activity categories
 const defaultActivityCategories = [
@@ -88,7 +102,50 @@ export function Sidebar() {
   );
   const [showAddForm, setShowAddForm] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
   const user = useAuthStore((state) => state.user);
+
+  const fetchActCat = async () => {
+    try {
+      setIsLoading(true);
+      const endpoint =
+        user?.role === "admin"
+          ? "get-admin-activity-category"
+          : "get-user-activity-category";
+
+      const response = await axios.get(`${Base_Url}/${endpoint}`, {
+        withCredentials: true
+      });
+
+      // Transform the fetched data to match the expected format
+      const fetchedCategories = response.data.data.map(
+        (category: ActivityCategories) => ({
+          name: category.name,
+          href: `/admin/activity/${category.id}`,
+          icon: BarChart3 // Default icon for fetched categories
+        })
+      );
+
+      // Combine default categories with fetched ones
+      setActivityCategories([
+        ...defaultActivityCategories,
+        ...fetchedCategories
+      ]);
+    } catch (error) {
+      console.error("Error fetching activity categories:", error);
+      toast.error("Failed", {
+        description:
+          "An unexpected error occurred while fetching Activity categories"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  useEffect(() => {
+    fetchActCat();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Update navigation with current activity categories
   const updatedNavigation = navigation.map((item) => {
@@ -109,17 +166,46 @@ export function Sidebar() {
     );
   };
 
-  const handleAddCategory = () => {
-    if (newCategoryName.trim()) {
-      const categoryId = newCategoryName.toLowerCase().replace(/\s+/g, "_");
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast.error("Please enter a category name");
+      return;
+    }
+
+    const capitalizedName = newCategoryName
+      .trim()
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ");
+
+    try {
+      setIsLoading(true);
+      const response = await axios.post(
+        `${Base_Url}/create-activity-category`,
+        { name: capitalizedName }, // Send the name in request body
+        { withCredentials: true }
+      );
+
       const newCategory = {
-        name: newCategoryName.trim(),
-        href: `/admin/activity/${categoryId}`,
+        name: response.data.data.name,
+        href: `/admin/activity/${response.data.data.id}`,
         icon: BarChart3 // Default icon for new categories
       };
+
       setActivityCategories([...activityCategories, newCategory]);
       setNewCategoryName("");
       setShowAddForm(false);
+
+      toast.success("Success", {
+        description: "Activity category created successfully"
+      });
+    } catch (error) {
+      console.error("Error creating activity category:", error);
+      toast.error("Failed", {
+        description: "Failed to create activity category. Please try again."
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -243,7 +329,7 @@ export function Sidebar() {
                                 size="sm"
                                 onClick={handleAddCategory}
                                 className="h-6 px-2 text-xs"
-                                disabled={!newCategoryName.trim()}
+                                disabled={!newCategoryName.trim() || isLoading}
                               >
                                 <Check className="h-3 w-3" />
                               </Button>
