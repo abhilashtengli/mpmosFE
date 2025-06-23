@@ -179,13 +179,11 @@ export const useActivityCategoriesStore = create<ActivityCategoriesState>()(
       // Delete category
       deleteCategory: async (id: string) => {
         set({ isLoading: true, error: null });
-        console.log("Store id : ", id);
         try {
           const response = await axios.delete(
             `${Base_Url}/delete-activity-category/${id}`,
             { withCredentials: true }
           );
-          console.log("Store response", response.data);
           if (response.data.success) {
             set((state) => ({
               categories: state.categories.filter((cat) => cat.id !== id),

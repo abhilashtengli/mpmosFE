@@ -428,7 +428,6 @@ export default function ActivityPage() {
       );
 
       const data = response.data;
-      console.log("Data : ", data);
       if (response.data.code === "UNAUTHORIZED") {
         toast.success("UNAUTHORIZED", {
           description: `${response.data.message}`
@@ -476,7 +475,7 @@ export default function ActivityPage() {
             ? { id: item.User.id, name: item.User.name }
             : undefined
         })
-      );
+        );
       setActivities(mappedActivities || []);
     } catch (error: unknown) {
       const defaultMessage =
@@ -907,7 +906,6 @@ export default function ActivityPage() {
     }
 
     const success = await deleteCategory(activityCategoryId);
-    console.log("Id : ", activityCategoryId);
     if (success) {
       navigate("/admin/dashboard");
     }
