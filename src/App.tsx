@@ -25,6 +25,7 @@ import { useEffect } from "react";
 import { Toaster } from "sonner";
 import ProjectDetailsAdPage from "./Pages/admin/Content/project_details";
 import PublicationsPage from "./Pages/admin/Content/publications";
+import ActivityPage from "./Pages/admin/ProjectActivities/CustomActivityCategory";
 
 function App() {
   const { isAuthenticated, fetchUser } = useAuthStore();
@@ -70,6 +71,10 @@ function App() {
             <Route path="upcoming_events" element={<EventsAdPage />} />
             <Route path="awarness_programs" element={<AwarenessAdPage />} />
             <Route path="fld" element={<FLDAdPage />} />
+            <Route
+              path="/admin/activity/:activityCategoryId"
+              element={<ActivityPage />}
+            />
             <Route
               path="infrastructure_development"
               element={<InfrastructureAdPage />}
