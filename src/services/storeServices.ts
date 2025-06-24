@@ -4,7 +4,7 @@ import axios from "axios";
 export const fetchProjectsAPI = async () => {
   try {
     const response = await axios.get(`${Base_Url}/get-user-projects`, {
-      withCredentials: true
+      withCredentials: true,
     });
     return response.data;
   } catch (error) {
@@ -16,8 +16,9 @@ export const fetchProjectsAPI = async () => {
 export const fetchloggedInUser = async () => {
   try {
     const response = await axios.get(`${Base_Url}/get-me`, {
-      withCredentials: true
+      withCredentials: true,
     });
+    console.log("ME : ", response.data);
     return response.data.data;
   } catch (error) {
     console.error("Failed to fetch user:", error);

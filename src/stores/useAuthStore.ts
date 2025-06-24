@@ -13,6 +13,7 @@ export type User = {
 };
 
 type AuthState = {
+  handleAuthError: (errorMessage?: string) => void;
   user: User | null;
   isLoading: boolean;
   error: string | null;
@@ -35,7 +36,7 @@ export const useAuthStore = create<AuthState>()(
         set({
           user,
           isAuthenticated: true,
-          error: null
+          error: null,
         }),
 
       fetchUser: async () => {
@@ -45,7 +46,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: data,
             isAuthenticated: true,
-            error: null
+            error: null,
           });
         } catch (error) {
           const errorMessage =
@@ -57,7 +58,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: null,
             isAuthenticated: false,
-            error: errorMessage
+            error: errorMessage,
           });
         } finally {
           set({ isLoading: false });
@@ -68,22 +69,41 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           isAuthenticated: false,
-          error: null
+          error: null,
         });
         // Only clear auth-related localStorage
         localStorage.removeItem("auth-storage");
 
         document.cookie =
           "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        window.location.href = `${window.location.origin}/admin/signin`;
       },
-      clearError: () => set({ error: null })
+      handleAuthError: (errorMessage?: string) => {
+        set({
+          user: null,
+          isAuthenticated: false,
+          error: errorMessage || "Authentication error",
+        });
+
+        // Clear auth-related localStorage
+        localStorage.removeItem("auth-storage");
+
+        // Clear cookie
+        document.cookie =
+          "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+
+        // Redirect to login page
+        window.location.href = `${window.location.origin}/admin/signin`;
+        // or use your routing method
+      },
+      clearError: () => set({ error: null }),
     }),
     {
       name: "auth-storage", // key in localStorage
       partialize: (state) => ({
         user: state.user,
-        isAuthenticated: state.isAuthenticated
-      }) // only persist `user`
+        isAuthenticated: state.isAuthenticated,
+      }), // only persist `user`
     }
   )
 );

@@ -227,7 +227,7 @@ export function Sidebar() {
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full justify-start text-left font-normal cursor-pointer",
+                    "w-full justify-start  text-left font-normal cursor-pointer",
                     collapsed && "justify-center"
                   )}
                   onClick={() => !collapsed && toggleExpanded(item.name)}
@@ -246,14 +246,14 @@ export function Sidebar() {
                   )}
                 </Button>
                 {!collapsed && expandedItems.includes(item.name) && (
-                  <div className="ml-4 mt-2 space-y-1">
+                  <div className="ml-4 mt-2 space-y-1 ">
                     {item.children.map((child) => (
                       <Link key={child.name} to={child.href}>
                         <Button
                           variant="ghost"
                           size="sm"
                           className={cn(
-                            "justify-start text-left font-normal cursor-pointer",
+                            "justify-start text-left  w-full font-normal cursor-pointer",
                             pathname === child.href &&
                               "bg-green-50 text-green-700"
                           )}

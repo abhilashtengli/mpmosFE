@@ -351,6 +351,7 @@ export default function AwarenessPage() {
 
   const projects = useProjectStore((state) => state.projects);
   const logOut = useAuthStore((state) => state.logout);
+  const handleAuthError = useAuthStore((state) => state.handleAuthError);
   const navigate = useNavigate();
 
   const userRole = useAuthStore((state) => state.user);
@@ -365,23 +366,30 @@ export default function AwarenessPage() {
           ? "get-admin-awarness-programs"
           : "get-user-awarness-programs";
       const response = await axios.get(`${Base_Url}/${endpoint}`, {
-        withCredentials: true
+        withCredentials: true,
+        validateStatus: (status) => status < 500
       });
 
       const data = response.data;
+      console.log("Data : ", data);
 
       if (response.data.code === "NO_PROGRAMS_FOUND") {
         toast.info("No Programs Found", {
           description: "No program data available. Please add new data."
         });
         return;
-      } else if (response.data.code === "UNAUTHORIZED") {
-        toast.info("UNAUTHORIZED", {
-          description: `${response.data.message}`
-        });
-        logOut();
+      } else if (
+        [
+          "UNAUTHORIZED",
+          "USER_NOT_FOUND",
+          "SESSION_NOT_FOUND",
+          "SESSION_EXPIRED"
+        ].includes(response.data.code)
+      ) {
+        handleAuthError(response.data.message);
+        return;
       } else if (!data.success || response.status !== 200) {
-        throw new Error(data.message || "Failed to fetch Awarness programs");
+        throw new Error(data.message || "Failed to fetch Awareness programs");
       }
       const mappedAwarnessPrograms: AwarenessProgram[] = (data.data || []).map(
         (item: AwarenessProgram) => ({
@@ -745,7 +753,7 @@ export default function AwarenessPage() {
                 logOut();
               }
               if (typeof navigate === "function") {
-                navigate("/signin");
+                navigate("/admin/signin");
               }
               break;
 

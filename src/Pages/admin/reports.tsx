@@ -1,7 +1,5 @@
 "use client";
-
-import type React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -12,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -20,94 +19,66 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger
-} from "@/components/ui/dialog";
-import {
   BarChart3,
   Download,
   FileText,
-  Users,
-  MapPin,
-  Calendar,
-  TrendingUp,
-  Award,
-  Target,
   Search,
-  Plus
+  Loader2,
+  Calendar,
+  Building
 } from "lucide-react";
+import { toast } from "sonner";
+import { useProjectStore } from "@/stores/useProjectStore";
+import { Base_Url, quarterlyData } from "@/lib/constants";
+import axios from "axios";
 
 // TypeScript interfaces
-interface ReportType {
-  id: string;
-  title: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-}
-
 interface QuickStat {
   label: string;
   value: string;
   change: string;
 }
 
-interface RecentReport {
-  name: string;
-  type: string;
-  date: string;
-  size: string;
+interface GeneratedReport {
+  id: string;
+  project: {
+    id: string;
+    implementingAgency: string;
+    title: string;
+    locationState: string;
+    director: string;
+    budget: string;
+    status: string;
+    startDate: string;
+    endDate: string;
+    createdAt: string;
+    updatedAt: string;
+    userId: string;
+  };
+  quarter: string;
+  year: number;
+  fileUrl: string;
+  fileKey: string;
+  fileName: string;
+  createdAt: string;
+  updatedAt: string;
+  User: {
+    id: string;
+    name: string;
+  };
 }
 
-const reportTypes: ReportType[] = [
-  {
-    id: "achievement",
-    title: "Achievement Report",
-    description:
-      "Comprehensive report showing target vs achievement across all activities",
-    icon: Award,
-    color: "bg-green-100 text-green-700"
-  },
-  {
-    id: "beneficiary",
-    title: "Beneficiary Analysis",
-    description: "Detailed analysis of beneficiaries with gender breakdown",
-    icon: Users,
-    color: "bg-blue-100 text-blue-700"
-  },
-  {
-    id: "geographic",
-    title: "Geographic Report",
-    description: "State-wise and district-wise project distribution analysis",
-    icon: MapPin,
-    color: "bg-purple-100 text-purple-700"
-  },
-  {
-    id: "quarterly",
-    title: "Quarterly Summary",
-    description: "Quarter-wise performance summary and trends",
-    icon: Calendar,
-    color: "bg-orange-100 text-orange-700"
-  },
-  {
-    id: "performance",
-    title: "Performance Trends",
-    description: "Long-term performance trends and comparative analysis",
-    icon: TrendingUp,
-    color: "bg-indigo-100 text-indigo-700"
-  },
-  {
-    id: "project",
-    title: "Project Status Report",
-    description: "Detailed project status and budget utilization report",
-    icon: Target,
-    color: "bg-red-100 text-red-700"
-  }
-];
+interface FormData {
+  projectId: string;
+  quarter: number;
+  year: number;
+}
+
+interface FormErrors {
+  projectId?: string;
+  quarter?: string;
+  year?: string;
+}
 
 const quickStats: QuickStat[] = [
   { label: "Total Reports Generated", value: "1,247", change: "+12%" },
@@ -116,68 +87,205 @@ const quickStats: QuickStat[] = [
   { label: "Export Formats", value: "PDF, Excel, CSV", change: "Available" }
 ];
 
-const recentReports: RecentReport[] = [
-  {
-    name: "Q2 2024 Achievement Report",
-    type: "PDF",
-    date: "2024-06-05",
-    size: "2.4 MB"
-  },
-  {
-    name: "Beneficiary Analysis May 2024",
-    type: "Excel",
-    date: "2024-06-04",
-    size: "1.8 MB"
-  },
-  {
-    name: "Geographic Distribution Report",
-    type: "PDF",
-    date: "2024-06-03",
-    size: "3.1 MB"
-  },
-  {
-    name: "Performance Trends Q1-Q2",
-    type: "CSV",
-    date: "2024-06-02",
-    size: "0.9 MB"
-  }
-];
-
 export default function ReportsAdPage() {
-  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [selectedType, setSelectedType] = useState<string>("");
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [isLoadingReports, setIsLoadingReports] = useState<boolean>(true);
+  const [generatedReports, setGeneratedReports] = useState<GeneratedReport[]>(
+    []
+  );
+  const [formData, setFormData] = useState<FormData>({
+    projectId: "",
+    quarter: 0,
+    year: 0
+  });
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
 
-  const filteredReportTypes: ReportType[] = reportTypes.filter(
-    (report: ReportType) => {
-      const matchesSearch: boolean =
-        report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.description.toLowerCase().includes(searchTerm.toLowerCase());
+  // Get projects from store
+  const projects = useProjectStore((state) => state.projects);
 
-      const matchesType: boolean =
-        !selectedType || selectedType === "all" || report.id === selectedType;
-
-      return matchesSearch && matchesType;
-    }
+  // Get unique project titles
+  const uniqueProjectTitle = Array.from(
+    new Set(projects.map((project) => project.title))
   );
 
-  const handleGenerateReport = (reportId: string): void => {
-    console.log("Generating report:", reportId);
-    // In a real app, this would trigger report generation
+  // Get unique years and quarters for dropdowns
+  const availableYears = Array.from(
+    new Set(quarterlyData.map((q) => q.year))
+  ).sort((a, b) => b + a);
+
+  const quarters = [1, 2, 3, 4];
+
+  useEffect(() => {
+    fetchGeneratedReports();
+  }, []);
+
+  const fetchGeneratedReports = async () => {
+    try {
+      setIsLoadingReports(true);
+
+      const response = await axios.get(`${Base_Url}/get-project-reports`, {
+        withCredentials: true
+      });
+
+      console.log("GR : ", response.data.data);
+      if (response.data.success) {
+        setGeneratedReports(response.data.data || []);
+      } else {
+        toast.error(response.data.data.message || "Failed to fetch reports");
+      }
+    } catch (error) {
+      console.error("Error fetching reports:", error);
+      toast.error("Failed to fetch reports");
+    } finally {
+      setIsLoadingReports(false);
+    }
   };
 
-  const handleExportReport = (reportId: string): void => {
-    console.log("Exporting report:", reportId);
-    // In a real app, this would trigger report export
+  const handleSelectChange = (
+    field: keyof FormData,
+    value: string | number
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value
+    }));
+
+    // Clear error when user makes a selection
+    if (formErrors[field]) {
+      setFormErrors((prev) => ({
+        ...prev,
+        [field]: undefined
+      }));
+    }
   };
 
-  const handleDownloadReport = (reportName: string): void => {
-    console.log("Downloading report:", reportName);
-    // In a real app, this would trigger file download
+  const validateForm = (): boolean => {
+    const errors: FormErrors = {};
+
+    if (!formData.projectId) {
+      errors.projectId = "Please select a project";
+    }
+    if (!formData.quarter) {
+      errors.quarter = "Please select a quarter";
+    }
+    if (!formData.year) {
+      errors.year = "Please select a year";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    setSearchTerm(e.target.value);
+  const getQuarterId = (quarter: number, year: number): string | null => {
+    const quarterData = quarterlyData.find(
+      (q) => q.number === quarter && q.year === year
+    );
+    return quarterData ? quarterData.id : null;
+  };
+
+  const handleGenerateReport = async () => {
+    if (!validateForm()) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    const quarterId = getQuarterId(formData.quarter, formData.year);
+    if (!quarterId) {
+      toast.error("Invalid quarter and year combination");
+      return;
+    }
+
+    try {
+      setIsGenerating(true);
+      const projectData = {
+        projectId: formData.projectId,
+        quarterId: quarterId
+      };
+      // const response = await fetch("/generate-report", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json"
+      //   },
+      //   body: JSON.stringify({
+      //     projectId: formData.projectId,
+      //     quarterId: quarterId
+      //   })
+      // });
+      const response = await axios.post(`${Base_Url}/generate-report`, {
+        withCredentials: true,
+        projectData
+      });
+
+      const data = await response.data;
+
+      if (data.success) {
+        toast.success("Report generated successfully!");
+        // Reset form
+        setFormData({
+          projectId: "",
+          quarter: 0,
+          year: 0
+        });
+        // Refresh the reports list
+        await fetchGeneratedReports();
+      } else {
+        toast.error(data.error || "Failed to generate report");
+      }
+    } catch (error) {
+      console.error("Error generating report:", error);
+      toast.error("Failed to generate report. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleDownloadReport = async (fileUrl: string, fileName: string) => {
+    try {
+      toast.loading("Downloading report...");
+
+      const response = await fetch(fileUrl);
+      if (!response.ok) {
+        throw new Error("Failed to download file");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.dismiss();
+      toast.success("Report downloaded successfully!");
+    } catch (error) {
+      console.error("Error downloading report:", error);
+      toast.dismiss();
+      toast.error("Failed to download report");
+    }
+  };
+
+  const filteredReports = generatedReports.filter(
+    (report) =>
+      report.project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.project.implementingAgency
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      report.quarter.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.year.toString().includes(searchTerm)
+  );
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
   };
 
   return (
@@ -194,33 +302,6 @@ export default function ReportsAdPage() {
                 Generate comprehensive reports and export data
               </p>
             </div>
-          </div>
-          <div className="flex space-x-2">
-            <Button variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Export All Data
-            </Button>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-green-600 hover:bg-green-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Custom Report
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Create Custom Report</DialogTitle>
-                  <DialogDescription>
-                    Configure and generate a custom report
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="p-4">
-                  <p className="text-gray-600">
-                    Custom report builder coming soon...
-                  </p>
-                </div>
-              </DialogContent>
-            </Dialog>
           </div>
         </div>
       </header>
@@ -249,142 +330,236 @@ export default function ReportsAdPage() {
           ))}
         </div>
 
-        {/* Filters */}
+        {/* Generate Report Section */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="text-lg">Filters & Search</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Generate New Report
+            </CardTitle>
+            <CardDescription>
+              Select a project, quarter, and year to generate a comprehensive
+              report
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search reports..."
-                  value={searchTerm}
-                  onChange={handleSearchChange}
-                  className="pl-10"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div>
+                <Label>
+                  Project <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={
+                    projects.find((p) => p.id === formData.projectId)?.title ||
+                    ""
+                  }
+                  onValueChange={(value) => {
+                    const selectedProject = projects.find(
+                      (p) => p.title === value
+                    );
+                    if (selectedProject)
+                      handleSelectChange("projectId", selectedProject.id);
+                  }}
+                >
+                  <SelectTrigger
+                    className={formErrors.projectId ? "border-red-500" : ""}
+                  >
+                    <SelectValue placeholder="Select project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueProjectTitle.map((title) => (
+                      <SelectItem key={title} value={title}>
+                        {title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formErrors.projectId && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {formErrors.projectId}
+                  </p>
+                )}
               </div>
-              <Select value={selectedType} onValueChange={setSelectedType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Report Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  {reportTypes.map((report: ReportType) => (
-                    <SelectItem key={report.id} value={report.id}>
-                      {report.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+              <div>
+                <Label>
+                  Quarter <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={formData.quarter ? formData.quarter.toString() : ""}
+                  onValueChange={(value) =>
+                    handleSelectChange("quarter", Number.parseInt(value))
+                  }
+                >
+                  <SelectTrigger
+                    className={formErrors.quarter ? "border-red-500" : ""}
+                  >
+                    <SelectValue placeholder="Select quarter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {quarters.map((quarter) => (
+                      <SelectItem key={quarter} value={quarter.toString()}>
+                        Q{quarter}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formErrors.quarter && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {formErrors.quarter}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label>
+                  Year <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={formData.year ? formData.year.toString() : ""}
+                  onValueChange={(value) =>
+                    handleSelectChange("year", Number.parseInt(value))
+                  }
+                >
+                  <SelectTrigger
+                    className={formErrors.year ? "border-red-500" : ""}
+                  >
+                    <SelectValue placeholder="Select year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableYears.map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formErrors.year && (
+                  <p className="text-red-500 text-sm mt-1">{formErrors.year}</p>
+                )}
+              </div>
+            </div>
+
+            <Button
+              onClick={handleGenerateReport}
+              disabled={isGenerating}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating Report...
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Generate Report
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Search Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-lg">Search Reports</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search by project name, agency, quarter, or year..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
             </div>
           </CardContent>
         </Card>
 
-        {/* Report Types */}
-        <Card className="mb-8">
+        {/* Latest Generated Reports */}
+        <Card>
           <CardHeader>
-            <CardTitle>Available Reports</CardTitle>
+            <CardTitle>Latest Generated Reports</CardTitle>
             <CardDescription>
-              Select a report type to generate and download
-              {filteredReportTypes.length !== reportTypes.length && (
+              Recently generated reports and downloads
+              {filteredReports.length !== generatedReports.length && (
                 <span className="text-green-600">
                   {" "}
-                  ({filteredReportTypes.length} of {reportTypes.length} shown)
+                  ({filteredReports.length} of {generatedReports.length} shown)
                 </span>
               )}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredReportTypes.map((report: ReportType) => (
-                <Card
-                  key={report.id}
-                  className="hover:shadow-lg transition-shadow cursor-pointer"
-                >
-                  <CardContent className="p-6">
-                    <div className="flex items-start space-x-4">
-                      <div className={`p-3 rounded-lg ${report.color}`}>
-                        <report.icon className="h-6 w-6" />
+            {isLoadingReports ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                <span className="ml-2 text-gray-600">Loading reports...</span>
+              </div>
+            ) : filteredReports.length === 0 ? (
+              <div className="text-center py-12">
+                <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-500">
+                  {searchTerm
+                    ? "No reports found matching your search"
+                    : "No reports generated yet"}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredReports.map((report: GeneratedReport) => (
+                  <div
+                    key={report.id}
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="p-2 bg-green-100 rounded-lg">
+                        <FileText className="h-6 w-6 text-green-600" />
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 mb-2">
-                          {report.title}
-                        </h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                          {report.description}
-                        </p>
-                        <div className="flex space-x-2">
-                          <Button
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700"
-                            onClick={() => handleGenerateReport(report.id)}
-                          >
-                            Generate
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleExportReport(report.id)}
-                          >
-                            <Download className="h-3 w-3 mr-1" />
-                            Export
-                          </Button>
+                        <h4 className="font-medium text-gray-900 flex gap-x-2">
+                          {report.project.title}
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {report.quarter} {report.year}
+                          </span>
+                        </h4>
+                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                          <span className="flex items-center gap-1">
+                            <Building className="h-3 w-3" />
+                            {report.project.implementingAgency}
+                          </span>
+
+                          <span>Generated by {report.User.name}</span>
+                          <span>{formatDate(report.createdAt)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="outline" className="text-xs">
+                            {report.project.locationState}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {report.project.status}
+                          </Badge>
                         </div>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            {filteredReportTypes.length === 0 && (
-              <div className="text-center py-12">
-                <BarChart3 className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                <p className="text-gray-500">
-                  No reports found matching your criteria
-                </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        handleDownloadReport(report.fileUrl, report.fileName)
+                      }
+                      className="shrink-0"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </Button>
+                  </div>
+                ))}
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Reports */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Reports</CardTitle>
-            <CardDescription>
-              Recently generated reports and downloads
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentReports.map((report: RecentReport, index: number) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-4 border rounded-lg"
-                >
-                  <div className="flex items-center space-x-4">
-                    <FileText className="h-8 w-8 text-gray-400" />
-                    <div>
-                      <h4 className="font-medium">{report.name}</h4>
-                      <p className="text-sm text-gray-500">
-                        {report.type} • {report.date} • {report.size}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleDownloadReport(report.name)}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </Button>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
       </div>
