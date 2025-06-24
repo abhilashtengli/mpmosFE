@@ -84,7 +84,7 @@ const quickStats: QuickStat[] = [
   { label: "Total Reports Generated", value: "1,247", change: "+12%" },
   { label: "Last Report Generated", value: "2 hours ago", change: "Recent" },
   { label: "Most Downloaded", value: "Achievement Report", change: "Popular" },
-  { label: "Export Formats", value: "PDF, Excel, CSV", change: "Available" }
+  { label: "Export Formats", value: "Word", change: "Available" }
 ];
 
 export default function ReportsAdPage() {
