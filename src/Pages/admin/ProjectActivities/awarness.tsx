@@ -1,6 +1,3 @@
-"use client";
-
-import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -50,7 +47,9 @@ import {
   UserRound,
   Trash2,
   UploadCloud,
-  Loader2
+  Loader2,
+  PlusCircle,
+  X
 } from "lucide-react";
 import axios, { type AxiosError } from "axios";
 import {
@@ -66,7 +65,7 @@ import { getSignedUrl } from "@/services/cloudflare/getSignedUrl";
 import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
 import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudflare";
 
-// Add these validation schemas (you'll need to create the validation file)
+// Updated validation schemas with new fields
 const baseAwarenessSchema = z.object({
   title: z
     .string()
@@ -78,11 +77,23 @@ const baseAwarenessSchema = z.object({
   target: z
     .number({ invalid_type_error: "Target must be a number" })
     .int({ message: "Target must be an integer" })
-    .nonnegative({ message: "Target must be zero or positive" }),
+    .nonnegative({ message: "Target must be zero or positive" })
+    .optional(),
   achieved: z
     .number({ invalid_type_error: "Achieved must be a number" })
     .int({ message: "Achieved must be an integer" })
-    .nonnegative({ message: "Achieved must be zero or positive" }),
+    .nonnegative({ message: "Achieved must be zero or positive" })
+    .optional(),
+  targetSentence: z
+    .array(z.string().trim())
+    .max(20, { message: "Cannot have more than 20 target points" })
+    .default([])
+    .optional(),
+  achievedSentence: z
+    .array(z.string().trim())
+    .max(20, { message: "Cannot have more than 20 achievements" })
+    .default([])
+    .optional(),
   district: z
     .string()
     .trim()
@@ -127,13 +138,32 @@ const baseAwarenessSchema = z.object({
     .nullable()
 });
 
-const createAwarenessValidation = baseAwarenessSchema.refine(
-  (data) => data.achieved <= data.target,
-  {
-    message: "Achieved count cannot exceed target count",
-    path: ["achieved"]
-  }
-);
+const createAwarenessValidation = baseAwarenessSchema
+  .refine(
+    (data) => {
+      const bothPresent =
+        data.target !== undefined && data.achieved !== undefined;
+      const bothAbsent =
+        data.target === undefined && data.achieved === undefined;
+      return bothPresent || bothAbsent;
+    },
+    {
+      message: "Either both target and achieved must be provided, or neither",
+      path: ["target"]
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.target !== undefined && data.achieved !== undefined) {
+        return data.achieved <= data.target;
+      }
+      return true;
+    },
+    {
+      message: "Achieved count cannot exceed target count",
+      path: ["achieved"]
+    }
+  );
 
 const updateAwarenessProgramValidation = z
   .object({
@@ -162,6 +192,16 @@ const updateAwarenessProgramValidation = z
       .number({ invalid_type_error: "Achieved must be a number" })
       .int({ message: "Achieved must be an integer" })
       .nonnegative({ message: "Achieved must be zero or positive" })
+      .optional(),
+    targetSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 target points" })
+      .default([])
+      .optional(),
+    achievedSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 achievements" })
+      .default([])
       .optional(),
     district: z
       .string()
@@ -222,11 +262,9 @@ const updateAwarenessProgramValidation = z
   })
   .refine(
     (data) => {
-      // Skip refinement if we don't have both target and achieved
       if (data.target === undefined || data.achieved === undefined) {
         return true;
       }
-      // For update validation, we need to compare the values only if both are provided
       return data.achieved <= data.target;
     },
     {
@@ -236,15 +274,12 @@ const updateAwarenessProgramValidation = z
   )
   .refine(
     (data) => {
-      // Skip if imageUrl is not being updated
       if (data.imageUrl === undefined) {
         return true;
       }
-      // If imageUrl is null, we don't need to check for imageKey
       if (data.imageUrl === null) {
         return true;
       }
-      // If setting a new imageUrl, ensure imageKey is also set
       if (data.imageUrl && !data.imageKey) {
         return false;
       }
@@ -256,6 +291,7 @@ const updateAwarenessProgramValidation = z
     }
   );
 
+// Updated interfaces
 interface AwarenessProgram {
   id: string;
   awarnessprogramId: string;
@@ -269,8 +305,10 @@ interface AwarenessProgram {
     number: number;
     year: number;
   };
-  target: number;
-  achieved: number;
+  target?: number;
+  achieved?: number;
+  targetSentence?: string[];
+  achievedSentence?: string[];
   district: string;
   village: string;
   block: string;
@@ -299,18 +337,20 @@ interface AwarenessFormProps {
   isEdit?: boolean;
 }
 
-// Changed: Modified form data interface to handle numbers as strings like training page
+// Updated form data interface
 interface AwarenessFormData {
   title: string;
   projectId: string;
   quarterId: string;
-  target: string; // Changed from number to string
-  achieved: string; // Changed from number to string
+  target: string;
+  achieved: string;
+  targetSentence: string[];
+  achievedSentence: string[];
   district: string;
   village: string;
   block: string;
-  beneficiaryMale: string; // Changed from number to string
-  beneficiaryFemale: string; // Changed from number to string
+  beneficiaryMale: string;
+  beneficiaryFemale: string;
   imageUrl?: string | null;
   imageKey?: string | null;
   units: string;
@@ -321,6 +361,7 @@ interface AwarenessFormData {
 type FormErrors = {
   [key: string]: string;
 };
+
 interface ApiErrorResponse {
   success: boolean;
   message: string;
@@ -334,6 +375,76 @@ interface ApiSuccessResponse {
   message: string;
   data: AwarenessProgram;
   code: string;
+}
+
+// ArrayInputManager component
+function ArrayInputManager({
+  label,
+  items,
+  setItems,
+  placeholder,
+  error
+}: {
+  label: string;
+  items: string[];
+  setItems: (items: string[]) => void;
+  placeholder: string;
+  error?: string;
+}) {
+  const [inputValue, setInputValue] = useState("");
+
+  const handleAddItem = () => {
+    if (inputValue.trim()) {
+      setItems([...items, inputValue.trim()]);
+      setInputValue("");
+    }
+  };
+
+  const handleRemoveItem = (indexToRemove: number) => {
+    setItems(items.filter((_, index) => index !== indexToRemove));
+  };
+
+  return (
+    <div className="border rounded-lg p-1 bg-zinc-50">
+      <Label className="">{label}</Label>
+      <div className="flex flex-col items-end border-red-500 space-y-2 mt-1">
+        <Textarea
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAddItem();
+            }
+          }}
+          className="mt-1 max-h-72"
+        />
+        <Button type="button" variant="outline" onClick={handleAddItem}>
+          <PlusCircle className="h-4 w-4 mr-2" /> Add
+        </Button>
+      </div>
+      {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+      <div className="mt-2 space-y-2">
+        {items.map((item, index) => (
+          <div
+            key={index}
+            className="flex items-center justify-between bg-gray-100 p-2 rounded-md"
+          >
+            <span className="text-sm flex-grow">{item}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleRemoveItem(index)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function AwarenessPage() {
@@ -361,13 +472,13 @@ export default function AwarenessPage() {
 
   const userRole = useAuthStore((state) => state.user);
 
-  //Fetch training Data
+  //Fetch awareness programs
   const fetchAwarnessPrograms = async () => {
     try {
       setIsLoading(true);
 
       const endpoint =
-        userRole?.role === "admin" // Changed from userRole?.role
+        userRole?.role === "admin"
           ? "get-admin-awarness-programs"
           : "get-user-awarness-programs";
       const response = await axios.get(`${Base_Url}/${endpoint}`, {
@@ -412,6 +523,8 @@ export default function AwarenessPage() {
           },
           target: item.target,
           achieved: item.achieved,
+          targetSentence: item.targetSentence || [],
+          achievedSentence: item.achievedSentence || [],
           district: item.district,
           village: item.village,
           block: item.block,
@@ -539,9 +652,7 @@ export default function AwarenessPage() {
     operation: "create" | "update" = "create",
     awarnessId?: string
   ): Promise<boolean> => {
-    // Input validation
-
-    // console.log("DATA : ", formData);
+    console.log("DATA : ", formData);
 
     if (operation === "update" && !awarnessId) {
       toast.error("Awarness program ID is required for update operation");
@@ -564,12 +675,6 @@ export default function AwarenessPage() {
       return false;
     }
 
-    // Changed: Parse string to number like training page
-    if (!formData.target || Number.parseInt(formData.target) <= 0) {
-      toast.error("Valid target number is required");
-      return false;
-    }
-
     // Show loading toast
     const loadingToast = toast.loading(
       `${operation === "create" ? "Creating" : "Updating"} Awarness program...`
@@ -585,13 +690,17 @@ export default function AwarenessPage() {
         }
       };
 
-      // Changed: Prepare request data with proper number conversion like training page
+      // Prepare request data with new array fields
       const requestData = {
         projectId: formData.projectId,
         quarterId: formData.quarterId,
         title: formData.title,
-        target: Number.parseInt(formData.target) || 0,
-        achieved: Number.parseInt(formData.achieved) || 0,
+        target: formData.target ? Number.parseInt(formData.target) : undefined,
+        achieved: formData.achieved
+          ? Number.parseInt(formData.achieved)
+          : undefined,
+        targetSentence: formData.targetSentence || [],
+        achievedSentence: formData.achievedSentence || [],
         district: formData.district,
         village: formData.village,
         block: formData.block,
@@ -621,24 +730,23 @@ export default function AwarenessPage() {
       if (response?.status === 201 || response?.status === 200) {
         const data = response.data as ApiSuccessResponse;
 
-        // Refresh trainings list
-        // fetchTrainings();
-        toast.success(data.message || `Training ${operation}d successfully`, {
-          description: `${data.data.title} `,
-          duration: 6000
-        });
-
-        // console.log(`Training `, data.data);
+        toast.success(
+          data.message || `Awareness program ${operation}d successfully`,
+          {
+            description: `${data.data.title} `,
+            duration: 6000
+          }
+        );
 
         // Update local state
         if (operation === "create") {
-          const newTraining: AwarenessProgram = {
+          const newAwareness: AwarenessProgram = {
             id: data.data.id,
             awarnessprogramId: data.data.awarnessprogramId,
             title: data.data.title,
             project: {
-              id: data.data.project.id, // assuming this is coming from the form
-              title: data.data.project.title // you must get this from `projects` store or from form
+              id: data.data.project.id,
+              title: data.data.project.title
             },
             quarter: {
               id: data.data.quarter.id,
@@ -646,7 +754,9 @@ export default function AwarenessPage() {
               year: Number(data.data.quarter.year)
             },
             target: data.data.target,
-            achieved: data.data.achieved || 0,
+            achieved: data.data.achieved,
+            targetSentence: data.data.targetSentence || [],
+            achievedSentence: data.data.achievedSentence || [],
             district: data.data.district,
             village: data.data.village,
             block: data.data.block,
@@ -666,7 +776,7 @@ export default function AwarenessPage() {
                   }
                 : undefined
           };
-          setAwarnessProgram((prev) => [newTraining, ...prev]);
+          setAwarnessProgram((prev) => [newAwareness, ...prev]);
         } else if (operation === "update" && awarnessId) {
           setAwarnessProgram((prev) =>
             prev.map((t) =>
@@ -675,8 +785,8 @@ export default function AwarenessPage() {
                     ...t,
                     title: data.data.title,
                     project: {
-                      id: data.data.project.id, // assuming this is coming from the form
-                      title: data.data.project.title // you must get this from `projects` store or from form
+                      id: data.data.project.id,
+                      title: data.data.project.title
                     },
                     quarter: {
                       id: data.data.quarter.id,
@@ -684,7 +794,9 @@ export default function AwarenessPage() {
                       year: Number(data.data.quarter.year)
                     },
                     target: data.data.target,
-                    achieved: data.data.achieved || 0,
+                    achieved: data.data.achieved,
+                    targetSentence: data.data.targetSentence || [],
+                    achievedSentence: data.data.achievedSentence || [],
                     district: data.data.district,
                     village: data.data.village,
                     block: data.data.block,
@@ -719,7 +831,7 @@ export default function AwarenessPage() {
       toast.error(`Unexpected response status: ${response?.status}`);
       return false;
     } catch (error) {
-      console.error(`Error ${operation}ing training:`, error);
+      console.error(`Error ${operation}ing awareness program:`, error);
 
       // Comprehensive error handling for production
       if (axios.isAxiosError(error)) {
@@ -782,10 +894,10 @@ export default function AwarenessPage() {
                     description: "The selected quarter doesn't exist",
                     duration: 5000
                   });
-                } else if (data.message?.toLowerCase().includes("training")) {
-                  toast.error("Training Not Found", {
+                } else if (data.message?.toLowerCase().includes("awareness")) {
+                  toast.error("Awareness Program Not Found", {
                     description:
-                      "The training you're trying to update doesn't exist",
+                      "The awareness program you're trying to update doesn't exist",
                     duration: 5000
                   });
                 } else {
@@ -804,9 +916,10 @@ export default function AwarenessPage() {
               break;
 
             case 409:
-              toast.error("Duplicate Training", {
+              toast.error("Duplicate Program", {
                 description:
-                  data?.message || "A training with this title already exists",
+                  data?.message ||
+                  "An awareness program with this title already exists",
                 duration: 5000
               });
               break;
@@ -892,8 +1005,8 @@ export default function AwarenessPage() {
 
   const handleDeleteAwarness = async () => {
     if (!selectedAwareness) {
-      toast.error("No Training selected", {
-        description: "Please select a training to delete"
+      toast.error("No Awareness Program selected", {
+        description: "Please select an awareness program to delete"
       });
       return;
     }
@@ -914,21 +1027,19 @@ export default function AwarenessPage() {
       if (response.status === 200 && response.data.success) {
         if (response.data.warning) {
           // Show warning toast for partial success
-          toast.warning("Training deleted with warnings", {
+          toast.warning("Awareness program deleted with warnings", {
             description: `${selectedAwareness.title} was removed from database, but ${response.data.warning}`,
             duration: 8000 // Longer duration for warnings
           });
         } else {
           // Show success toast for complete success
-          toast.success("Training deleted", {
+          toast.success("Awareness program deleted", {
             description: `${selectedAwareness.title} deleted successfully`,
             duration: 5000
           });
         }
-        setAwarnessProgram((prevTrainings) =>
-          prevTrainings.filter(
-            (training) => training.id !== selectedAwareness.id
-          )
+        setAwarnessProgram((prevPrograms) =>
+          prevPrograms.filter((program) => program.id !== selectedAwareness.id)
         );
         setSelectedAwareness(null);
         setIsDeleteDialogOpen(false);
@@ -939,7 +1050,7 @@ export default function AwarenessPage() {
         });
       }
     } catch (error: unknown) {
-      console.error("Delete project error:", error);
+      console.error("Delete awareness program error:", error);
 
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
@@ -948,13 +1059,13 @@ export default function AwarenessPage() {
         const errorMap: Record<number, { title: string; fallback: string }> = {
           400: {
             title: "Invalid request",
-            fallback: "The project ID is invalid"
+            fallback: "The program ID is invalid"
           },
           401: { title: "Authentication required", fallback: "Please sign in" },
           403: { title: "Access denied", fallback: "Permission denied" },
           404: {
-            title: "Awarness program not found",
-            fallback: "Awarness program may already be deleted"
+            title: "Awareness program not found",
+            fallback: "Awareness program may already be deleted"
           },
           409: {
             title: "Conflict",
@@ -1039,7 +1150,7 @@ export default function AwarenessPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-4.5 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search trainings..."
+                  placeholder="Search programs..."
                   value={searchTerm}
                   onChange={handleSearchChange}
                   className="pl-10"
@@ -1137,7 +1248,7 @@ export default function AwarenessPage() {
                   <TableHead>Location</TableHead>
                   <TableHead>Achieved/Target</TableHead>
                   {userRole?.role === "admin" && (
-                    <TableHead>Creadted By</TableHead>
+                    <TableHead>Created By</TableHead>
                   )}
                   <TableHead>Beneficiaries</TableHead>
                   <TableHead>Actions</TableHead>
@@ -1185,11 +1296,15 @@ export default function AwarenessPage() {
                       <TableCell>
                         <div className="text-sm">
                           <span className="text-green-600 font-medium">
-                            {awareness.achieved}
+                            {awareness.achieved ?? "N/A"}
                           </span>
-                          <span className="text-gray-700">
+                          <span className="text-gray-400">
                             {" "}
-                            / {awareness.target} {awareness.units}
+                            /
+                            <span className="text-gray-700">
+                              {" "}
+                              {awareness.target ?? "N/A"} {awareness.units}
+                            </span>
                           </span>
                         </div>
                       </TableCell>
@@ -1286,12 +1401,12 @@ export default function AwarenessPage() {
           </DialogContent>
         </Dialog>
 
-        {/*Delete awarness Dialog */}
+        {/*Delete awareness Dialog */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="text-black">
-                ⚠️ Confirm Awarness Program Deletion
+                ⚠️ Confirm Awareness Program Deletion
               </DialogTitle>
               <DialogDescription>
                 <br />
@@ -1422,13 +1537,13 @@ function AwarenessView({ awareness }: AwarenessViewProps) {
         <div>
           <Label className="text-sm font-medium text-gray-500">Target</Label>
           <p className="text-lg font-semibold text-gray-600">
-            {awareness.target}
+            {awareness.target ?? "N/A"}
           </p>
         </div>
         <div>
           <Label className="text-sm font-medium text-gray-500">Achieved</Label>
           <p className="text-lg font-semibold text-green-600">
-            {awareness.achieved}
+            {awareness.achieved ?? "N/A"}
           </p>
         </div>
         <div>
@@ -1436,6 +1551,50 @@ function AwarenessView({ awareness }: AwarenessViewProps) {
           <p>{awareness.units}</p>
         </div>
       </div>
+      <hr />
+
+      {/* Display Target Sentences */}
+      {awareness.targetSentence && awareness.targetSentence.length > 0 && (
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Target Objectives
+          </h3>
+          <ul className="space-y-3">
+            {awareness.targetSentence.map((objective, index) => (
+              <li key={index} className="flex items-start">
+                <span className="text-blue-600 font-semibold mr-2.5 text-sm pt-0.5">
+                  {index + 1}.
+                </span>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {objective}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Display Achieved Sentences */}
+      {awareness.achievedSentence && awareness.achievedSentence.length > 0 && (
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Achieved Objectives
+          </h3>
+          <ul className="space-y-3">
+            {awareness.achievedSentence.map((objective, index) => (
+              <li key={index} className="flex items-start">
+                <span className="text-green-600 font-semibold mr-2.5 text-sm pt-0.5">
+                  {index + 1}.
+                </span>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {objective}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <hr />
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -1516,13 +1675,15 @@ function AwarenessForm({
   onClose,
   isEdit = false
 }: AwarenessFormProps) {
-  // Changed: Initialize form data with string values like training page
+  // Initialize form data with new array fields
   const [formData, setFormData] = useState<AwarenessFormData>({
     title: awareness?.title || "",
     projectId: awareness?.project.id || "",
     quarterId: awareness?.quarter.id || "",
     target: awareness?.target?.toString() || "",
     achieved: awareness?.achieved?.toString() || "",
+    targetSentence: awareness?.targetSentence || [],
+    achievedSentence: awareness?.achievedSentence || [],
     district: awareness?.district || "",
     village: awareness?.village || "",
     block: awareness?.block || "",
@@ -1530,28 +1691,26 @@ function AwarenessForm({
     beneficiaryFemale: awareness?.beneficiaryFemale?.toString() || "0",
     units: awareness?.units || "",
     remarks: awareness?.remarks || "",
-    // Initialize image fields from awareness prop if editing
-    imageUrl: awareness?.imageUrl, // Use null for consistency
-    imageKey: awareness?.imageKey, // Use null for consistency
-    imageFile: null // This is for the NEW file selection
+    imageUrl: awareness?.imageUrl,
+    imageKey: awareness?.imageKey,
+    imageFile: null
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const projects = useProjectStore((state) => state.projects);
-  const [url, setUrl] = useState<SignedUrlResponse | null>(null); // For storing fetched signed URL
+  const [url, setUrl] = useState<SignedUrlResponse | null>(null);
 
   // State for image preview and tracking removal
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageToBeRemovedKey, setImageToBeRemovedKey] = useState<string | null>(
     null
-  ); // Stores key of image to delete on save
-  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for file input
+  );
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Effect to set initial image preview if editing and image exists
   useEffect(() => {
     if (isEdit && awareness?.imageUrl) {
       setImagePreviewUrl(awareness.imageUrl);
-      // Set initial formData imageUrl and imageKey from awareness prop
       setFormData((prev) => ({
         ...prev,
         imageUrl: awareness.imageUrl,
@@ -1587,7 +1746,6 @@ function AwarenessForm({
     e: React.ChangeEvent<HTMLInputElement>
   ): Promise<void> => {
     const file = e.target.files?.[0] || null;
-    // Clear previous file input value to allow re-selecting the same file after removal
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -1600,7 +1758,6 @@ function AwarenessForm({
     }
 
     if (file.size > 20 * 1024 * 1024) {
-      // 20MB
       setFormErrors((prev) => ({ ...prev, imageFile: "Max file size: 20MB" }));
       toast.error("File too large", {
         description: "Image size must be less than 20MB."
@@ -1617,14 +1774,14 @@ function AwarenessForm({
 
     // Generate local URL for preview
     const localPreviewUrl = URL.createObjectURL(file);
-    setImagePreviewUrl(localPreviewUrl); // Update preview
+    setImagePreviewUrl(localPreviewUrl);
     setFormData((prev) => ({
       ...prev,
       imageFile: file,
       imageUrl: null,
       imageKey: null
-    })); // Set file, clear existing cloud URL/Key
-    setImageToBeRemovedKey(null); // If a new file is chosen, we are not removing an *existing* one without replacement
+    }));
+    setImageToBeRemovedKey(null);
     setFormErrors((prev) => ({ ...prev, imageFile: "" }));
 
     // Fetch signed URL for the new file
@@ -1680,13 +1837,17 @@ function AwarenessForm({
 
   const validateForm = (): boolean => {
     try {
-      // Changed: Create a proper validation data object without type conflicts
+      // Create a proper validation data object
       const validationData = {
         title: formData.title,
         projectId: formData.projectId,
         quarterId: formData.quarterId,
-        target: Number.parseInt(formData.target) || 0,
-        achieved: Number.parseInt(formData.achieved) || 0,
+        target: formData.target ? Number.parseInt(formData.target) : undefined,
+        achieved: formData.achieved
+          ? Number.parseInt(formData.achieved)
+          : undefined,
+        targetSentence: formData.targetSentence || [],
+        achievedSentence: formData.achievedSentence || [],
         district: formData.district,
         village: formData.village,
         block: formData.block,
@@ -1694,8 +1855,7 @@ function AwarenessForm({
         beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
         units: formData.units,
         remarks: formData.remarks,
-        // Pass current state of imageUrl and imageKey for validation
-        imageUrl: formData.imageFile ? null : formData.imageUrl, // If new file, URL is not yet set from cloud
+        imageUrl: formData.imageFile ? null : formData.imageUrl,
         imageKey: formData.imageFile ? null : formData.imageKey
       };
 
@@ -1745,8 +1905,6 @@ function AwarenessForm({
             description:
               "Could not remove the old image from storage. Please check manually."
           });
-          // Decide if you want to stop submission or continue
-          // setIsSubmitting(false); return;
         }
       }
 
@@ -1757,7 +1915,6 @@ function AwarenessForm({
           awareness?.imageKey &&
           awareness.imageKey !== imageToBeRemovedKey
         ) {
-          console.log("Image-key : ", awareness.imageKey);
           const oldKeyDeleted = await deleteFileFromCloudflare(
             awareness.imageKey
           );
@@ -1792,7 +1949,7 @@ function AwarenessForm({
         imageKey: finalImageKey
       };
 
-      onSave(dataToSave); // This now passes the correct imageUrl and imageKey
+      onSave(dataToSave);
     } catch {
       toast.error("Submission Error", {
         description: "An unexpected error occurred while saving."
@@ -1917,9 +2074,7 @@ function AwarenessForm({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="target">
-            Target <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="target">Target</Label>
           <Input
             id="target"
             name="target"
@@ -1929,16 +2084,13 @@ function AwarenessForm({
             onChange={handleInputChange}
             className={formErrors.target ? "border-red-500" : ""}
             min="0"
-            required
           />
           {formErrors.target && (
             <p className="text-red-500 text-sm mt-1">{formErrors.target}</p>
           )}
         </div>
         <div>
-          <Label htmlFor="achieved">
-            Achieved <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="achieved">Achieved</Label>
           <Input
             id="achieved"
             name="achieved"
@@ -1948,7 +2100,6 @@ function AwarenessForm({
             onChange={handleInputChange}
             className={formErrors.achieved ? "border-red-500" : ""}
             min="0"
-            required
           />
           {formErrors.achieved && (
             <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
@@ -1956,7 +2107,29 @@ function AwarenessForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Array Input Managers for Target and Achieved Sentences */}
+      <div className="grid grid-cols-1 gap-4">
+        <ArrayInputManager
+          label="Target Objectives"
+          items={formData.targetSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, targetSentence: items }))
+          }
+          placeholder="Add a target objective"
+          error={formErrors.targetSentence}
+        />
+        <ArrayInputManager
+          label="Achieved Objectives"
+          items={formData.achievedSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, achievedSentence: items }))
+          }
+          placeholder="Add an achieved objective"
+          error={formErrors.achievedSentence}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="district">
             District <span className="text-red-500">*</span>
@@ -2011,9 +2184,7 @@ function AwarenessForm({
             <p className="text-red-500 text-sm mt-1">{formErrors.block}</p>
           )}
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="beneficiaryMale">
             Male Beneficiaries <span className="text-red-500">*</span>
@@ -2057,7 +2228,6 @@ function AwarenessForm({
           )}
         </div>
       </div>
-
       <div>
         <Label htmlFor="remarks">Remarks</Label>
         <Textarea
@@ -2074,7 +2244,7 @@ function AwarenessForm({
         )}
       </div>
 
-      {/* --- Enhanced Image Upload Section --- */}
+      {/* Enhanced Image Upload Section */}
       <div>
         <Label htmlFor="imageFile">Program Image</Label>
         <div
@@ -2089,7 +2259,7 @@ function AwarenessForm({
                 <img
                   src={imagePreviewUrl || "/placeholder.svg"}
                   alt="Program preview"
-                  className="w-full h-full object-contain" // object-contain to see full image
+                  className="w-full h-full object-contain"
                 />
                 <Button
                   type="button"
@@ -2141,14 +2311,13 @@ function AwarenessForm({
             type="file"
             accept="image/*"
             onChange={handleFileChange}
-            className="hidden" // Visually hidden, functionality triggered by ref
+            className="hidden"
           />
           {formErrors.imageFile && (
             <p className="text-red-500 text-sm mt-1">{formErrors.imageFile}</p>
           )}
         </div>
       </div>
-      {/* --- End of Image Upload Section --- */}
 
       <div className="flex justify-end space-x-2 pt-4">
         <Button
