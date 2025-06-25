@@ -1,4 +1,4 @@
-"use client"; // Assuming this might be needed if it's a Next.js app page, though context is react-router-dom
+"use client";
 
 import type React from "react";
 import { useEffect, useMemo, useState, useRef } from "react";
@@ -50,37 +50,55 @@ import {
   AlertCircle,
   ImageIcon,
   UploadCloud,
-  Loader2
+  Loader2,
+  PlusCircle,
+  X
 } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert"; // For pageError
-import { useProjectStore } from "@/stores/useProjectStore"; // Assuming path is correct
-import { Base_Url, quarterlyData, SignedUrlResponse } from "@/lib/constants"; // Assuming path is correct
-import { useAuthStore } from "@/stores/useAuthStore"; // Assuming path is correct
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useProjectStore } from "@/stores/useProjectStore";
+import {
+  Base_Url,
+  quarterlyData,
+  type SignedUrlResponse
+} from "@/lib/constants";
+import { useAuthStore } from "@/stores/useAuthStore";
 import axios, { type AxiosError } from "axios";
-import { useNavigate } from "react-router-dom"; // From training-page
-import EnhancedShimmerTableRows from "@/components/shimmer-rows"; // From training-page
+import { useNavigate } from "react-router-dom";
+import EnhancedShimmerTableRows from "@/components/shimmer-rows";
 import { getSignedUrl } from "@/services/cloudflare/getSignedUrl";
 import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudflare";
 import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
 
-// Zod validation schemas (provided by user)
+// Updated validation schemas with new fields
 const createInfrastructureValidation = z
   .object({
     projectId: z.string().uuid({ message: "Valid project ID is required" }),
     quarterId: z.string().uuid({ message: "Valid quarter ID is required" }),
-    target: z
-      .number({ invalid_type_error: "Target must be a number" })
-      .int({ message: "Target must be an integer" })
-      .positive({ message: "Target must be a positive number" }),
     title: z
       .string()
       .trim()
       .min(2, { message: "Title must be at least 2 characters" })
       .max(100, { message: "Title cannot exceed 100 characters" }),
+    target: z
+      .number({ invalid_type_error: "Target must be a number" })
+      .int({ message: "Target must be an integer" })
+      .nonnegative({ message: "Target must be zero or positive" })
+      .optional(),
     achieved: z
       .number({ invalid_type_error: "Achieved must be a number" })
       .int({ message: "Achieved must be an integer" })
-      .nonnegative({ message: "Achieved must be zero or positive" }),
+      .nonnegative({ message: "Achieved must be zero or positive" })
+      .optional(),
+    targetSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 target points" })
+      .default([])
+      .optional(),
+    achievedSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 achievements" })
+      .default([])
+      .optional(),
     district: z
       .string()
       .trim()
@@ -111,7 +129,23 @@ const createInfrastructureValidation = z
   })
   .refine(
     (data) => {
-      return data.achieved <= data.target;
+      const bothPresent =
+        data.target !== undefined && data.achieved !== undefined;
+      const bothAbsent =
+        data.target === undefined && data.achieved === undefined;
+      return bothPresent || bothAbsent;
+    },
+    {
+      message: "Either both target and achieved must be provided, or neither",
+      path: ["target"]
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.target !== undefined && data.achieved !== undefined) {
+        return data.achieved <= data.target;
+      }
+      return true;
     },
     {
       message: "Achieved count cannot exceed target count",
@@ -150,12 +184,22 @@ const updateInfrastructureValidation = z
     target: z
       .number({ invalid_type_error: "Target must be a number" })
       .int({ message: "Target must be an integer" })
-      .positive({ message: "Target must be a positive number" })
+      .nonnegative({ message: "Target must be zero or positive" })
       .optional(),
     achieved: z
       .number({ invalid_type_error: "Achieved must be a number" })
       .int({ message: "Achieved must be an integer" })
       .nonnegative({ message: "Achieved must be zero or positive" })
+      .optional(),
+    targetSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 target points" })
+      .default([])
+      .optional(),
+    achievedSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 achievements" })
+      .default([])
       .optional(),
     district: z
       .string()
@@ -213,14 +257,16 @@ const updateInfrastructureValidation = z
     }
   );
 
-// Interfaces
+// Updated interfaces
 interface RawInfrastructure {
   id: string;
   InfraDevId: string;
   project: { id: string; title: string };
   quarter: { id: string; number: number; year: number };
-  target: number;
-  achieved: number;
+  target?: number;
+  achieved?: number;
+  targetSentence?: string[];
+  achievedSentence?: string[];
   district: string;
   village: string;
   block: string;
@@ -238,9 +284,11 @@ interface Infrastructure {
   InfraDevId: string;
   project: { id: string; title: string };
   quarter: { id: string; number: number; year: number };
-  target: number;
+  target?: number;
   title: string;
-  achieved: number;
+  achieved?: number;
+  targetSentence?: string[];
+  achievedSentence?: string[];
   district: string;
   village: string;
   block: string;
@@ -255,21 +303,23 @@ interface Infrastructure {
 interface InfrastructureFormData {
   projectId: string;
   quarterId: string;
-  target: string; // Input as string
+  target: string;
   title: string;
-  achieved: string; // Input as string
+  achieved: string;
+  targetSentence: string[];
+  achievedSentence: string[];
   district: string;
   village: string;
   block: string;
   remarks: string | null;
   imageFile?: File | null;
-  imageUrl?: string | null; // For existing or newly uploaded image URL
-  imageKey?: string | null; // For existing or newly uploaded image key
+  imageUrl?: string | null;
+  imageKey?: string | null;
 }
 
 interface InfrastructureFormProps {
   infrastructure?: Infrastructure;
-  onSave: (data: InfrastructureFormData) => Promise<boolean>; // Make onSave async to handle submission status
+  onSave: (data: InfrastructureFormData) => Promise<boolean>;
   onClose: () => void;
   isEdit?: boolean;
 }
@@ -286,7 +336,7 @@ interface ApiErrorResponse {
   success: boolean;
   message: string;
   code: string;
-  errors?: unknown; // Can be more specific if error structure is known
+  errors?: unknown;
   path?: string[];
 }
 
@@ -295,6 +345,76 @@ interface ApiSuccessResponse<T> {
   message: string;
   data: T;
   code: string;
+}
+
+// ArrayInputManager component
+function ArrayInputManager({
+  label,
+  items,
+  setItems,
+  placeholder,
+  error
+}: {
+  label: string;
+  items: string[];
+  setItems: (items: string[]) => void;
+  placeholder: string;
+  error?: string;
+}) {
+  const [inputValue, setInputValue] = useState("");
+
+  const handleAddItem = () => {
+    if (inputValue.trim()) {
+      setItems([...items, inputValue.trim()]);
+      setInputValue("");
+    }
+  };
+
+  const handleRemoveItem = (indexToRemove: number) => {
+    setItems(items.filter((_, index) => index !== indexToRemove));
+  };
+
+  return (
+    <div className="border rounded-lg p-1 bg-zinc-50">
+      <Label className="">{label}</Label>
+      <div className="flex flex-col items-end space-y-2 mt-1">
+        <Textarea
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAddItem();
+            }
+          }}
+          className="mt-1 max-h-72"
+        />
+        <Button type="button" variant="outline" onClick={handleAddItem}>
+          <PlusCircle className="h-4 w-4 mr-2" /> Add
+        </Button>
+      </div>
+      {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+      <div className="mt-2 space-y-2">
+        {items.map((item, index) => (
+          <div
+            key={index}
+            className="flex items-center justify-between bg-gray-100 p-2 rounded-md"
+          >
+            <span className="text-sm flex-grow">{item}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleRemoveItem(index)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function InfrastructurePage() {
@@ -313,7 +433,7 @@ export default function InfrastructurePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [pageError, setPageError] = useState<string | null>(null); // For page-level errors
+  const [pageError, setPageError] = useState<string | null>(null);
 
   const projects = useProjectStore((state) => state.projects);
   const user = useAuthStore((state) => state.user);
@@ -344,7 +464,11 @@ export default function InfrastructurePage() {
           ...item,
           imageUrl: item.imageUrl ?? undefined,
           imageKey: item.imageKey ?? undefined,
-          remarks: item.remarks ?? null
+          remarks: item.remarks ?? null,
+          target: item.target,
+          achieved: item.achieved,
+          targetSentence: item.targetSentence || [],
+          achievedSentence: item.achievedSentence || []
         }));
 
         setInfrastructures(mappedInfrastructures);
@@ -370,7 +494,7 @@ export default function InfrastructurePage() {
       if (axios.isAxiosError(error)) {
         const err = error as AxiosError<ApiErrorResponse>;
         const apiErrorMessage = err.response?.data?.message || err.message;
-        setPageError(apiErrorMessage); // Show error on page
+        setPageError(apiErrorMessage);
         toast.error("Fetch Failed", {
           description: apiErrorMessage || defaultMessage
         });
@@ -451,7 +575,6 @@ export default function InfrastructurePage() {
 
   const uniqueProjectItems = useMemo(() => {
     if (!projects || projects.length === 0) return [];
-    // Assuming projects have { id: string, title: string }
     return projects.map((p) => ({ id: p.id, title: p.title }));
   }, [projects]);
 
@@ -496,8 +619,12 @@ export default function InfrastructurePage() {
       const requestData = {
         projectId: formData.projectId,
         quarterId: formData.quarterId,
-        target: Number.parseInt(formData.target),
-        achieved: Number.parseInt(formData.achieved),
+        target: formData.target ? Number.parseInt(formData.target) : undefined,
+        achieved: formData.achieved
+          ? Number.parseInt(formData.achieved)
+          : undefined,
+        targetSentence: formData.targetSentence || [],
+        achievedSentence: formData.achievedSentence || [],
         district: formData.district,
         village: formData.village,
         title: formData.title,
@@ -550,7 +677,11 @@ export default function InfrastructurePage() {
           ...apiResponse.data,
           imageUrl: apiResponse.data.imageUrl,
           imageKey: apiResponse.data.imageKey,
-          remarks: apiResponse.data.remarks
+          remarks: apiResponse.data.remarks,
+          target: apiResponse.data.target,
+          achieved: apiResponse.data.achieved,
+          targetSentence: apiResponse.data.targetSentence || [],
+          achievedSentence: apiResponse.data.achievedSentence || []
         };
 
         if (operation === "create") {
@@ -567,7 +698,6 @@ export default function InfrastructurePage() {
         setSelectedInfrastructure(null);
         return true;
       } else {
-        // If backend returns success:false or unexpected code/status
         const message =
           apiResponse.message ||
           `Failed to ${operation} infrastructure. Unexpected response.`;
@@ -630,13 +760,11 @@ export default function InfrastructurePage() {
 
       if (response.status === 200 && response.data.success) {
         if (response.data.warning) {
-          // Show warning toast for partial success
-          toast.warning("Training deleted with warnings", {
+          toast.warning("Infrastructure deleted with warnings", {
             description: `${selectedInfrastructure.InfraDevId} was removed from database, but ${response.data.warning}`,
-            duration: 8000 // Longer duration for warnings
+            duration: 8000
           });
         } else {
-          // Show success toast for complete success
           toast.success(
             response.data.message ||
               "Infrastructure entry deleted successfully.",
@@ -732,7 +860,7 @@ export default function InfrastructurePage() {
               <div className="relative">
                 <Search className="absolute left-3 top-4.5 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search trainings..."
+                  placeholder="Search infrastructure..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -803,7 +931,7 @@ export default function InfrastructurePage() {
             </div>
           </CardContent>
         </Card>
-        {/* TrainingList  */}
+
         <Card>
           <CardHeader>
             <CardTitle>Infrastructure Entries</CardTitle>
@@ -871,10 +999,19 @@ export default function InfrastructurePage() {
                       </TableCell>
                       <TableCell className="truncate max-w-[200px]">{`${infra.district}, ${infra.village}, ${infra.block}`}</TableCell>
                       <TableCell>
-                        <span className="text-green-600 font-medium">
-                          {infra.achieved}
-                        </span>{" "}
-                        / {infra.target}
+                        <div className="text-sm">
+                          <span className="text-green-600 font-medium">
+                            {infra.achieved ?? "N/A"}
+                          </span>
+                          <span className="text-gray-400">
+                            {" "}
+                            /
+                            <span className="text-gray-700">
+                              {" "}
+                              {infra.target ?? "N/A"}
+                            </span>
+                          </span>
+                        </div>
                       </TableCell>
                       {user?.role === "admin" && (
                         <TableCell>{infra.User?.name || "N/A"}</TableCell>
@@ -915,7 +1052,8 @@ export default function InfrastructurePage() {
             </Table>
           </CardContent>
         </Card>
-        {/* View  */}
+
+        {/* View Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
           <DialogContent
             aria-describedby={undefined}
@@ -929,7 +1067,8 @@ export default function InfrastructurePage() {
             )}
           </DialogContent>
         </Dialog>
-        {/* Edit  */}
+
+        {/* Edit Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent
             aria-describedby={undefined}
@@ -954,7 +1093,8 @@ export default function InfrastructurePage() {
             )}
           </DialogContent>
         </Dialog>
-        {/* Delete  */}
+
+        {/* Delete Dialog */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
@@ -1050,15 +1190,61 @@ function InfrastructureView({ infrastructure }: InfrastructureViewProps) {
         </div>
         <div>
           <Label>Target</Label>
-          <p className="font-semibold">{infrastructure.target}</p>
+          <p className="font-semibold">{infrastructure.target ?? "N/A"}</p>
         </div>
         <div>
           <Label>Achieved</Label>
           <p className="font-semibold text-green-600">
-            {infrastructure.achieved}
+            {infrastructure.achieved ?? "N/A"}
           </p>
         </div>
       </div>
+      <hr />
+
+      {/* Display Target Sentences */}
+      {infrastructure.targetSentence &&
+        infrastructure.targetSentence.length > 0 && (
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Target Objectives
+            </h3>
+            <ul className="space-y-3">
+              {infrastructure.targetSentence.map((objective, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="text-blue-600 font-semibold mr-2.5 text-sm pt-0.5">
+                    {index + 1}.
+                  </span>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    {objective}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+      {/* Display Achieved Sentences */}
+      {infrastructure.achievedSentence &&
+        infrastructure.achievedSentence.length > 0 && (
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Achieved Objectives
+            </h3>
+            <ul className="space-y-3">
+              {infrastructure.achievedSentence.map((objective, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="text-green-600 font-semibold mr-2.5 text-sm pt-0.5">
+                    {index + 1}.
+                  </span>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    {objective}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
       {infrastructure.remarks && (
         <>
           <hr />
@@ -1125,8 +1311,10 @@ function InfrastructureForm({
   const [formData, setFormData] = useState<InfrastructureFormData>({
     projectId: infrastructure?.project.id || "",
     quarterId: infrastructure?.quarter.id || "",
-    target: infrastructure?.target?.toString() || "0",
-    achieved: infrastructure?.achieved?.toString() || "0",
+    target: infrastructure?.target?.toString() || "",
+    achieved: infrastructure?.achieved?.toString() || "",
+    targetSentence: infrastructure?.targetSentence || [],
+    achievedSentence: infrastructure?.achievedSentence || [],
     district: infrastructure?.district || "",
     title: infrastructure?.title || "",
     village: infrastructure?.village || "",
@@ -1139,7 +1327,7 @@ function InfrastructureForm({
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const projects = useProjectStore((state) => state.projects);
-  const [url, setUrl] = useState<SignedUrlResponse | null>(null); // For storing fetched signed URL
+  const [url, setUrl] = useState<SignedUrlResponse | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageToBeRemovedKey, setImageToBeRemovedKey] = useState<string | null>(
     null
@@ -1195,7 +1383,6 @@ function InfrastructureForm({
 
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        // 5MB limit
         setFormErrors((prev) => ({
           ...prev,
           imageFile: "File size must be less than 5MB"
@@ -1219,7 +1406,7 @@ function InfrastructureForm({
         imageUrl: null,
         imageKey: null
       }));
-      setImageToBeRemovedKey(null); // If a new file is chosen, we are not removing an *existing* one without replacement
+      setImageToBeRemovedKey(null);
       setFormErrors((prev) => ({ ...prev, imageFile: "" }));
 
       try {
@@ -1238,7 +1425,6 @@ function InfrastructureForm({
         toast.error("Failed to get upload URL", {
           description: "Could not prepare image for upload. Please try again."
         });
-        // Reset if fetching signed URL fails
         URL.revokeObjectURL(localPreviewUrl);
         setImagePreviewUrl(
           isEdit && infrastructure?.imageUrl ? infrastructure.imageUrl : null
@@ -1246,7 +1432,6 @@ function InfrastructureForm({
         setFormData((prev) => ({ ...prev, imageFile: null }));
         setUrl(null);
       } finally {
-        // File processing complete
         setIsProcessingFile(false);
       }
     }
@@ -1263,13 +1448,11 @@ function InfrastructureForm({
     }));
     setUrl(null);
 
-    // If it was an existing image from `awareness` prop, mark its key for deletion on save
     if (isEdit && infrastructure?.imageKey) {
       setImageToBeRemovedKey(infrastructure.imageKey);
     } else {
       setImageToBeRemovedKey(null);
     }
-    // Clear file input visually
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -1280,14 +1463,18 @@ function InfrastructureForm({
     const dataToValidate = {
       projectId: formData.projectId,
       quarterId: formData.quarterId,
-      target: Number.parseInt(formData.target) || 0,
-      achieved: Number.parseInt(formData.achieved) || 0,
+      target: formData.target ? Number.parseInt(formData.target) : undefined,
+      achieved: formData.achieved
+        ? Number.parseInt(formData.achieved)
+        : undefined,
+      targetSentence: formData.targetSentence || [],
+      achievedSentence: formData.achievedSentence || [],
       district: formData.district,
       village: formData.village,
       title: formData.title,
       block: formData.block,
       remarks: formData.remarks || null,
-      imageUrl: formData.imageFile ? null : formData.imageUrl, // If new file, URL is not yet set from cloud
+      imageUrl: formData.imageFile ? null : formData.imageUrl,
       imageKey: formData.imageFile ? null : formData.imageKey
     };
 
@@ -1316,100 +1503,11 @@ function InfrastructureForm({
   };
 
   const isSubmitDisabled = (): boolean => {
-    // Check if currently submitting
     if (isSubmitting === true) return true;
-
-    // Check if currently processing file
     if (isProcessingFile === true) return true;
-
-    // Check if file is selected but signed URL is not ready
     if (formData.imageFile && (!url || !url.signedUrl)) return true;
-
     return false;
   };
-
-  // const handleSubmit = async (
-  //   e: React.FormEvent<HTMLFormElement>
-  // ): Promise<void> => {
-  //   e.preventDefault();
-  //   if (!validateForm()) return;
-
-  //   setIsSubmitting(true);
-
-  //   let finalImageUrl: string | null = infrastructure?.imageUrl || null;
-  //   let finalImageKey: string | null = infrastructure?.imageKey || null;
-
-  //   try {
-  //     // 1. Handle removal of an existing image
-  //     if (imageToBeRemovedKey) {
-  //       await new Promise((resolve) => setTimeout(resolve, 500));
-  //       const deleted = await deleteFileFromCloudflare(imageToBeRemovedKey);
-  //       if (deleted) {
-  //         finalImageUrl = null;
-  //         finalImageKey = null;
-  //         toast.success("Previous image deleted from storage.");
-  //       } else {
-  //         toast.error("Failed to delete previous image", {
-  //           description:
-  //             "Could not remove the old image from storage. Please check manually."
-  //         });
-  //       }
-  //     }
-
-  //     // 2. Handle upload of a new image
-  //     if (formData.imageFile && url?.signedUrl) {
-  //       if (
-  //         isEdit &&
-  //         infrastructure?.imageKey &&
-  //         !imageToBeRemovedKey &&
-  //         formData.imageFile
-  //       ) {
-  //         await new Promise((resolve) => setTimeout(resolve, 500));
-  //         const oldKeyDeleted = await deleteFileFromCloudflare(
-  //           infrastructure.imageKey
-  //         );
-  //         if (!oldKeyDeleted) {
-  //           toast.warning("Old Image Deletion Issue", {
-  //             description:
-  //               "Could not delete the previously existing image from storage."
-  //           });
-  //         }
-  //       }
-
-  //       const uploadResult = await uploadFileToCloudflare(
-  //         formData.imageFile,
-  //         url.signedUrl
-  //       );
-  //       if (uploadResult.success && url.publicUrl && url.key) {
-  //         finalImageUrl = url.publicUrl;
-  //         finalImageKey = url.key;
-  //       } else {
-  //         toast.error("Image Upload Failed", {
-  //           description: uploadResult.error || "Could not upload the new image."
-  //         });
-  //         setIsSubmitting(false);
-  //         return;
-  //       }
-  //     }
-
-  //     // Prepare data for onSave callback
-  //     const dataToSave: InfrastructureFormData = {
-  //       ...formData,
-  //       imageUrl: finalImageUrl,
-  //       imageKey: finalImageKey
-  //     };
-
-  //     const success = await onSave(dataToSave);
-  //     if (!success) {
-  //       setIsSubmitting(false);
-  //     }
-  //   } catch {
-  //     toast.error("Submission Error", {
-  //       description: "An unexpected error occurred while saving."
-  //     });
-  //     setIsSubmitting(false);
-  //   }
-  // };
 
   const handleSubmit = async (
     e: React.FormEvent<HTMLFormElement>
@@ -1427,7 +1525,6 @@ function InfrastructureForm({
     try {
       // 1. Handle removal of an existing image
       if (imageToBeRemovedKey) {
-        // Add a small delay before deletion
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         const deleted = await deleteFileFromCloudflare(imageToBeRemovedKey);
@@ -1446,11 +1543,10 @@ function InfrastructureForm({
 
       // 2. Handle upload of a new image
       if (formData.imageFile && url?.signedUrl) {
-        // Handle replacement scenario (edit mode with existing image)
         if (
           isEdit &&
           infrastructure?.imageKey &&
-          !imageToBeRemovedKey && // Only if we haven't already handled deletion above
+          !imageToBeRemovedKey &&
           formData.imageFile
         ) {
           await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1536,7 +1632,7 @@ function InfrastructureForm({
           )}
         </div>
         <div>
-          <Label htmlFor="village">
+          <Label htmlFor="title">
             Title <span className="text-red-500">*</span>
           </Label>
           <Input
@@ -1547,7 +1643,7 @@ function InfrastructureForm({
             onChange={handleInputChange}
             className={formErrors.title ? "border-red-500" : ""}
           />
-          {formErrors.village && (
+          {formErrors.title && (
             <p className="text-red-500 text-sm mt-1">{formErrors.title}</p>
           )}
         </div>
@@ -1581,9 +1677,7 @@ function InfrastructureForm({
           )}
         </div>
         <div>
-          <Label htmlFor="target">
-            Target <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="target">Target</Label>
           <Input
             id="target"
             name="target"
@@ -1598,9 +1692,7 @@ function InfrastructureForm({
           )}
         </div>
         <div>
-          <Label htmlFor="achieved">
-            Achieved <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="achieved">Achieved</Label>
           <Input
             id="achieved"
             name="achieved"
@@ -1663,6 +1755,29 @@ function InfrastructureForm({
           )}
         </div>
       </div>
+
+      {/* Array Input Managers for Target and Achieved Sentences */}
+      <div className="grid grid-cols-1  gap-4">
+        <ArrayInputManager
+          label="Target Objectives"
+          items={formData.targetSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, targetSentence: items }))
+          }
+          placeholder="Add a target objective"
+          error={formErrors.targetSentence}
+        />
+        <ArrayInputManager
+          label="Achieved Objectives"
+          items={formData.achievedSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, achievedSentence: items }))
+          }
+          placeholder="Add an achieved objective"
+          error={formErrors.achievedSentence}
+        />
+      </div>
+
       <div>
         <Label htmlFor="remarks">Remarks</Label>
         <Textarea
@@ -1686,12 +1801,10 @@ function InfrastructureForm({
           } border-dashed rounded-md`}
         >
           {imagePreviewUrl ? (
-            // Image Preview and Remove Button
             <div className="space-y-2">
               <div className="relative group w-full h-auto max-h-60 md:max-h-80 rounded-md overflow-hidden">
                 {isImageLoading && (
                   <div className="absolute inset-0 z-10 shimmer-effect rounded-md">
-                    {/* Pulse overlay for enhanced shimmer effect */}
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/10 to-transparent animate-[pulse_2s_ease-in-out_infinite_alternate]"></div>
                   </div>
@@ -1700,7 +1813,7 @@ function InfrastructureForm({
                   src={imagePreviewUrl || "/placeholder.svg"}
                   alt="Program preview"
                   onLoad={() => setIsImageLoading(false)}
-                  onError={() => setIsImageLoading(false)} // in case image fails
+                  onError={() => setIsImageLoading(false)}
                   className={`w-full h-full object-contain transition-opacity duration-300 ${
                     isImageLoading ? "opacity-0" : "opacity-100"
                   }`}
@@ -1732,7 +1845,6 @@ function InfrastructureForm({
               </Button>
             </div>
           ) : (
-            // Upload Placeholder
             <div className="text-center">
               <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
               <p className="mt-1 text-sm text-gray-600">
@@ -1748,7 +1860,6 @@ function InfrastructureForm({
               <p className="text-xs text-gray-500">PNG, JPG, GIF up to 20MB</p>
             </div>
           )}
-          {/* Hidden file input, triggered by button/placeholder click */}
           <Input
             id="imageFile"
             name="imageFile"
@@ -1756,7 +1867,7 @@ function InfrastructureForm({
             type="file"
             accept="image/*"
             onChange={handleFileChange}
-            className="hidden" // Visually hidden, functionality triggered by ref
+            className="hidden"
           />
           {formErrors.imageFile && (
             <p className="text-red-500 text-sm mt-1">{formErrors.imageFile}</p>
