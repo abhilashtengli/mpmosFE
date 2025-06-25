@@ -1,3 +1,7 @@
+"use client";
+
+import type React from "react";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { z } from "zod";
@@ -50,7 +54,9 @@ import {
   UploadCloud,
   ImageIcon,
   FileText,
-  Settings
+  Settings,
+  PlusCircle,
+  X
 } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import {
@@ -67,7 +73,7 @@ import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudf
 import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
 import { useActivityCategoriesStore } from "@/stores/useActivityCategoryStore";
 
-// Base validation schema
+// Updated validation schemas based on backend requirements
 const baseActivitySchema = z.object({
   title: z
     .string()
@@ -79,11 +85,23 @@ const baseActivitySchema = z.object({
   target: z
     .number({ invalid_type_error: "Target must be a number" })
     .int({ message: "Target must be an integer" })
-    .nonnegative({ message: "Target must be zero or positive" }),
+    .nonnegative({ message: "Target must be zero or positive" })
+    .optional(),
   achieved: z
     .number({ invalid_type_error: "Achieved must be a number" })
     .int({ message: "Achieved must be an integer" })
-    .nonnegative({ message: "Achieved must be zero or positive" }),
+    .nonnegative({ message: "Achieved must be zero or positive" })
+    .optional(),
+  targetSentence: z
+    .array(z.string().trim())
+    .max(20, { message: "Cannot have more than 20 target points" })
+    .default([])
+    .optional(),
+  achievedSentence: z
+    .array(z.string().trim())
+    .max(20, { message: "Cannot have more than 20 achievements" })
+    .default([])
+    .optional(),
   district: z
     .string()
     .trim()
@@ -130,24 +148,63 @@ const baseActivitySchema = z.object({
     .url({ message: "Invalid image URL format" })
     .optional()
     .nullable(),
+  imageKey: z.string().trim().optional().nullable(),
   pdfUrl: z
     .string()
     .trim()
     .url({ message: "Invalid PDF URL format" })
     .optional()
-    .nullable()
+    .nullable(),
+  pdfKey: z.string().trim().optional().nullable()
 });
 
 // Create activity validation with refinements
-const createActivityValidation = baseActivitySchema.refine(
-  (data) => {
-    return data.achieved <= data.target;
-  },
-  {
-    message: "Achieved count cannot exceed target count",
-    path: ["achieved"]
-  }
-);
+const createActivityValidation = baseActivitySchema
+  .refine(
+    (data) => {
+      const bothPresent =
+        data.target !== undefined && data.achieved !== undefined;
+      const bothAbsent =
+        data.target === undefined && data.achieved === undefined;
+      return bothPresent || bothAbsent;
+    },
+    {
+      message: "Either both target and achieved must be provided, or neither",
+      path: ["target"]
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.target != null && data.achieved != null) {
+        return data.achieved <= data.target;
+      }
+      return true;
+    },
+    {
+      message: "Achieved count cannot exceed target count",
+      path: ["achieved"]
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.imageUrl && !data.imageKey) return false;
+      return true;
+    },
+    {
+      message: "Image key is required when image URL is provided",
+      path: ["imageKey"]
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.pdfUrl && !data.pdfKey) return false;
+      return true;
+    },
+    {
+      message: "PDF key is required when PDF URL is provided",
+      path: ["pdfKey"]
+    }
+  );
 
 // Update activity validation
 const updateActivityValidation = z
@@ -177,6 +234,16 @@ const updateActivityValidation = z
       .number({ invalid_type_error: "Achieved must be a number" })
       .int({ message: "Achieved must be an integer" })
       .nonnegative({ message: "Achieved must be zero or positive" })
+      .optional(),
+    targetSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 target points" })
+      .default([])
+      .optional(),
+    achievedSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 achievements" })
+      .default([])
       .optional(),
     district: z
       .string()
@@ -231,15 +298,18 @@ const updateActivityValidation = z
       .url({ message: "Invalid image URL format" })
       .optional()
       .nullable(),
+    imageKey: z.string().trim().optional().nullable(),
     pdfUrl: z
       .string()
       .trim()
       .url({ message: "Invalid PDF URL format" })
       .optional()
-      .nullable()
+      .nullable(),
+    pdfKey: z.string().trim().optional().nullable()
   })
   .refine(
     (data) => {
+      // Skip refinement if we don't have both target and achieved
       if (data.target === undefined || data.achieved === undefined) {
         return true;
       }
@@ -248,6 +318,42 @@ const updateActivityValidation = z
     {
       message: "Achieved count cannot exceed target count",
       path: ["achieved"]
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.imageUrl === undefined) {
+        return true;
+      }
+      if (data.imageUrl === null) {
+        return true;
+      }
+      if (data.imageUrl && !data.imageKey) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "Image key is required when image URL is provided",
+      path: ["imageKey"]
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.pdfUrl === undefined) {
+        return true;
+      }
+      if (data.pdfKey === null) {
+        return true;
+      }
+      if (data.pdfUrl && !data.pdfKey) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "PDF key is required when PDF URL is provided",
+      path: ["pdfKey"]
     }
   );
 
@@ -264,8 +370,10 @@ interface RawActivity {
     number: number;
     year: number;
   };
-  target: number;
-  achieved: number;
+  target?: number;
+  achieved?: number;
+  targetSentence?: string[];
+  achievedSentence?: string[];
   district: string;
   village: string;
   block: string;
@@ -298,8 +406,10 @@ interface Activity {
     number: number;
     year: number;
   };
-  target: number;
-  achieved: number;
+  target?: number;
+  achieved?: number;
+  targetSentence?: string[];
+  achievedSentence?: string[];
   district: string;
   village: string;
   block: string;
@@ -325,6 +435,8 @@ interface ActivityFormData {
   quarterId: string;
   target: string;
   achieved: string;
+  targetSentence: string[];
+  achievedSentence: string[];
   district: string;
   village: string;
   block: string;
@@ -371,11 +483,82 @@ interface ApiSuccessResponse {
   code: string;
 }
 
+// ArrayInputManager component
+function ArrayInputManager({
+  label,
+  items,
+  setItems,
+  placeholder,
+  error
+}: {
+  label: string;
+  items: string[];
+  setItems: (items: string[]) => void;
+  placeholder: string;
+  error?: string;
+}) {
+  const [inputValue, setInputValue] = useState("");
+
+  const handleAddItem = () => {
+    if (inputValue.trim()) {
+      setItems([...items, inputValue.trim()]);
+      setInputValue("");
+    }
+  };
+
+  const handleRemoveItem = (indexToRemove: number) => {
+    setItems(items.filter((_, index) => index !== indexToRemove));
+  };
+
+  return (
+    <div className="border rounded-lg p-1 bg-zinc-50">
+      <Label className="">{label}</Label>
+      <div className="flex flex-col items-end space-y-2 mt-1">
+        <Textarea
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAddItem();
+            }
+          }}
+          className="mt-1 max-h-72"
+        />
+        <Button type="button" variant="outline" onClick={handleAddItem}>
+          <PlusCircle className="h-4 w-4 mr-2" />
+          Add
+        </Button>
+      </div>
+      {typeof error === "string" && (
+        <p className="text-red-500 text-sm mt-1">{error}</p>
+      )}
+      <div className="mt-2 space-y-2">
+        {items.map((item, index) => (
+          <div
+            key={index}
+            className="flex items-center justify-between bg-gray-100 p-2 rounded-md"
+          >
+            <span className="text-sm flex-grow">{item}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleRemoveItem(index)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ActivityPage() {
   const { activityCategoryId } = useParams<{ activityCategoryId: string }>();
   const [activities, setActivities] = useState<Activity[]>([]);
-  //   const [activityCategory, setActivityCategory] =
-  //     useState<ActivityCategory | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState<boolean>(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
@@ -392,7 +575,6 @@ export default function ActivityPage() {
   const [selectedQuarter, setSelectedQuarter] = useState<string>("");
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
-  //   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const projects = useProjectStore((state) => state.projects);
   const logout = useAuthStore((state) => state.logout);
@@ -458,6 +640,8 @@ export default function ActivityPage() {
           },
           target: item.target,
           achieved: item.achieved,
+          targetSentence: item.targetSentence || [],
+          achievedSentence: item.achievedSentence || [],
           district: item.district,
           village: item.village,
           block: item.block,
@@ -601,11 +785,6 @@ export default function ActivityPage() {
       return false;
     }
 
-    if (!formData.target || Number.parseInt(formData.target) <= 0) {
-      toast.error("Valid target number is required");
-      return false;
-    }
-
     const loadingToast = toast.loading(
       `${operation === "create" ? "Creating" : "Updating"} activity...`
     );
@@ -625,8 +804,12 @@ export default function ActivityPage() {
         projectId: formData.projectId,
         quarterId: formData.quarterId,
         title: formData.title,
-        target: Number.parseInt(formData.target),
-        achieved: Number.parseInt(formData.achieved) || 0,
+        target: formData.target ? Number.parseInt(formData.target) : undefined,
+        achieved: formData.achieved
+          ? Number.parseInt(formData.achieved)
+          : undefined,
+        targetSentence: formData.targetSentence || [],
+        achievedSentence: formData.achievedSentence || [],
         district: formData.district,
         village: formData.village,
         block: formData.block,
@@ -678,6 +861,8 @@ export default function ActivityPage() {
             },
             target: data.data.target,
             achieved: data.data.achieved || 0,
+            targetSentence: data.data.targetSentence || [],
+            achievedSentence: data.data.achievedSentence || [],
             district: data.data.district,
             village: data.data.village,
             block: data.data.block,
@@ -718,6 +903,8 @@ export default function ActivityPage() {
                     },
                     target: data.data.target,
                     achieved: data.data.achieved || 0,
+                    targetSentence: data.data.targetSentence || [],
+                    achievedSentence: data.data.achievedSentence || [],
                     district: data.data.district,
                     village: data.data.village,
                     block: data.data.block,
@@ -1180,17 +1367,24 @@ export default function ActivityPage() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          <span className="text-green-600 font-medium">
-                            {activity.achieved}
-                          </span>
-                          <span className="text-gray-400">
-                            {" "}
-                            /
-                            <span className="text-gray-700">
-                              {" "}
-                              {activity.target} {activity.units}
-                            </span>
-                          </span>
+                          {activity.achieved !== undefined &&
+                          activity.target !== undefined ? (
+                            <>
+                              <span className="text-green-600 font-medium">
+                                {activity.achieved || "N/A"}
+                              </span>
+                              <span className="text-gray-400">
+                                {" "}
+                                /
+                                <span className="text-gray-700">
+                                  {" "}
+                                  {activity.target || "N/A"} {activity.units}
+                                </span>
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-gray-500">N/A</span>
+                          )}
                         </div>
                       </TableCell>
                       {userRole?.role === "admin" && (
@@ -1479,24 +1673,76 @@ function ActivityView({ activity }: ActivityViewProps) {
         </div>
       </div>
       <hr />
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Target</Label>
-          <p className="text-lg font-semibold text-gray-600">
-            {activity.target}
-          </p>
+      {(activity.target !== undefined || activity.achieved !== undefined) && (
+        <>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label className="text-sm font-medium text-gray-500">
+                Target
+              </Label>
+              <p className="text-lg font-semibold text-gray-600">
+                {activity.target || "N/A"}
+              </p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-gray-500">
+                Achieved
+              </Label>
+              <p className="text-lg font-semibold text-green-600">
+                {activity.achieved || "N/A"}
+              </p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-gray-500">Units</Label>
+              <p>{activity.units}</p>
+            </div>
+          </div>
+          <hr />
+        </>
+      )}
+
+      {/* Target Sentences */}
+      {activity.targetSentence && activity.targetSentence.length > 0 && (
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Target Points
+          </h3>
+          <ul className="space-y-3">
+            {activity.targetSentence.map((target, index) => (
+              <li key={index} className="flex items-start">
+                <span className="text-blue-600 font-semibold mr-2.5 text-sm pt-0.5">
+                  {index + 1}.
+                </span>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {target}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Achieved</Label>
-          <p className="text-lg font-semibold text-green-600">
-            {activity.achieved}
-          </p>
+      )}
+
+      {/* Achieved Sentences */}
+      {activity.achievedSentence && activity.achievedSentence.length > 0 && (
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Achievements
+          </h3>
+          <ul className="space-y-3">
+            {activity.achievedSentence.map((achievement, index) => (
+              <li key={index} className="flex items-start">
+                <span className="text-green-600 font-semibold mr-2.5 text-sm pt-0.5">
+                  {index + 1}.
+                </span>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {achievement}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Units</Label>
-          <p>{activity.units}</p>
-        </div>
-      </div>
+      )}
+
       <hr />
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -1605,6 +1851,8 @@ function ActivityForm({
     quarterId: activity?.quarter.id || "",
     target: activity?.target?.toString() || "",
     achieved: activity?.achieved?.toString() || "",
+    targetSentence: activity?.targetSentence || [],
+    achievedSentence: activity?.achievedSentence || [],
     district: activity?.district || "",
     village: activity?.village || "",
     block: activity?.block || "",
@@ -1898,8 +2146,12 @@ function ActivityForm({
         title: formData.title,
         projectId: formData.projectId,
         quarterId: formData.quarterId,
-        target: Number.parseInt(formData.target) || 0,
-        achieved: Number.parseInt(formData.achieved) || 0,
+        target: formData.target ? Number.parseInt(formData.target) : undefined,
+        achieved: formData.achieved
+          ? Number.parseInt(formData.achieved)
+          : undefined,
+        targetSentence: formData.targetSentence,
+        achievedSentence: formData.achievedSentence,
         district: formData.district,
         village: formData.village,
         block: formData.block,
@@ -2191,36 +2443,32 @@ function ActivityForm({
           )}
         </div>
         <div>
-          <Label htmlFor="target">
-            Target <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="target">Target</Label>
           <Input
             id="target"
             name="target"
             type="number"
-            placeholder="Enter target number"
+            placeholder="Enter target number (optional)"
             value={formData.target}
             onChange={handleInputChange}
             className={formErrors.target ? "border-red-500" : ""}
-            required
+            min="0"
           />
           {formErrors.target && (
             <p className="text-red-500 text-sm mt-1">{formErrors.target}</p>
           )}
         </div>
         <div>
-          <Label htmlFor="achieved">
-            Achieved <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="achieved">Achieved</Label>
           <Input
             id="achieved"
             name="achieved"
             type="number"
-            placeholder="Enter achieved number"
+            placeholder="Enter achieved number (optional)"
             value={formData.achieved}
             onChange={handleInputChange}
             className={formErrors.achieved ? "border-red-500" : ""}
-            required
+            min="0"
           />
           {formErrors.achieved && (
             <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
@@ -2280,6 +2528,29 @@ function ActivityForm({
             <p className="text-red-500 text-sm mt-1">{formErrors.block}</p>
           )}
         </div>
+      </div>
+
+      {/* Target Sentence and Achieved Sentence Array Inputs */}
+      <div className="grid grid-cols-1 gap-4">
+        <ArrayInputManager
+          label="Target Points"
+          items={formData.targetSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, targetSentence: items }))
+          }
+          placeholder="Add a target point"
+          error={formErrors.targetSentence}
+        />
+
+        <ArrayInputManager
+          label="Achievement Points"
+          items={formData.achievedSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, achievedSentence: items }))
+          }
+          placeholder="Add an achievement point"
+          error={formErrors.achievedSentence}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4">

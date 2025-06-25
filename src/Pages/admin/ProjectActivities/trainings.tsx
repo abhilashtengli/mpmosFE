@@ -153,19 +153,32 @@ const baseTrainingSchema = z.object({
 });
 
 // Create training validation with refinements
-const createTrainingValidation = baseTrainingSchema.refine(
-  (data) => {
-    // If both target and achieved are provided, ensure achieved <= target
-    if (data.target !== undefined && data.achieved !== undefined) {
-      return data.achieved <= data.target;
+const createTrainingValidation = baseTrainingSchema
+  .refine(
+    (data) => {
+      const bothPresent =
+        data.target !== undefined && data.achieved !== undefined;
+      const bothAbsent =
+        data.target === undefined && data.achieved === undefined;
+      return bothPresent || bothAbsent;
+    },
+    {
+      message: "Either both target and achieved must be provided, or neither",
+      path: ["target"]
     }
-    return true;
-  },
-  {
-    message: "Achieved count cannot exceed target count",
-    path: ["achieved"]
-  }
-);
+  )
+  .refine(
+    (data) => {
+      if (data.target != null && data.achieved != null) {
+        return data.achieved <= data.target;
+      }
+      return true;
+    },
+    {
+      message: "Achieved count cannot exceed target count",
+      path: ["achieved"]
+    }
+  );
 
 // Update training validation - make all fields optional except refinements
 const updateTrainingValidation = z
@@ -187,15 +200,21 @@ const updateTrainingValidation = z
       .min(2, { message: "Quarter must be selected" })
       .optional(),
     target: z
-      .number({ invalid_type_error: "Target must be a number" })
-      .int({ message: "Target must be an integer" })
-      .nonnegative({ message: "Target must be zero or positive" })
-      .optional(),
+      .union([z.number().int().nonnegative(), z.null()])
+      .optional()
+      .transform((val) => {
+        // If explicitly set to null or undefined, return null to clear the field
+        if (val === null || val === undefined) return null;
+        return val;
+      }),
     achieved: z
-      .number({ invalid_type_error: "Achieved must be a number" })
-      .int({ message: "Achieved must be an integer" })
-      .nonnegative({ message: "Achieved must be zero or positive" })
-      .optional(),
+      .union([z.number().int().nonnegative(), z.null()])
+      .optional()
+      .transform((val) => {
+        // If explicitly set to null or undefined, return null to clear the field
+        if (val === null || val === undefined) return null;
+        return val;
+      }),
     targetSentence: z
       .array(z.string().trim())
       .max(20, { message: "Cannot have more than 20 target points" })
@@ -268,11 +287,10 @@ const updateTrainingValidation = z
   })
   .refine(
     (data) => {
-      // Skip refinement if we don't have both target and achieved
-      if (data.target === undefined || data.achieved === undefined) {
-        return true;
+      if (data.target != null && data.achieved != null) {
+        return data.achieved <= data.target;
       }
-      return data.achieved <= data.target;
+      return true;
     },
     {
       message: "Achieved count cannot exceed target count",
@@ -669,7 +687,6 @@ export default function TrainingPage() {
     trainingId?: string
   ): Promise<boolean> => {
     // Input validation
-    console.log("DATA : ", formData);
     if (operation === "update" && !trainingId) {
       toast.error("Training ID is required for update operation");
       return false;
@@ -1183,14 +1200,14 @@ export default function TrainingPage() {
                           training.target !== undefined ? (
                             <>
                               <span className="text-green-600 font-medium">
-                                {training.achieved}
+                                {training.achieved || "N/A"}
                               </span>
                               <span className="text-gray-400">
                                 {" "}
                                 /
                                 <span className="text-gray-700">
                                   {" "}
-                                  {training.target} {training.units}
+                                  {training.target || "N/A"} {training.units}
                                 </span>
                               </span>
                             </>
@@ -1430,7 +1447,7 @@ function TrainingView({ training }: TrainingViewProps) {
                 Target
               </Label>
               <p className="text-lg font-semibold text-gray-600">
-                {training.target ?? "N/A"}
+                {training.target || "N/A"}
               </p>
             </div>
             <div>
@@ -1438,7 +1455,7 @@ function TrainingView({ training }: TrainingViewProps) {
                 Achieved
               </Label>
               <p className="text-lg font-semibold text-green-600">
-                {training.achieved ?? "N/A"}
+                {training.achieved || "N/A"}
               </p>
             </div>
             <div>

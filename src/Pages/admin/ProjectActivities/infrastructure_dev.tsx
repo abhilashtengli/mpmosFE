@@ -142,7 +142,7 @@ const createInfrastructureValidation = z
   )
   .refine(
     (data) => {
-      if (data.target !== undefined && data.achieved !== undefined) {
+      if (data.target != null && data.achieved != null) {
         return data.achieved <= data.target;
       }
       return true;
@@ -182,15 +182,21 @@ const updateInfrastructureValidation = z
       .max(100, { message: "Title cannot exceed 100 characters" })
       .optional(),
     target: z
-      .number({ invalid_type_error: "Target must be a number" })
-      .int({ message: "Target must be an integer" })
-      .nonnegative({ message: "Target must be zero or positive" })
-      .optional(),
+      .union([z.number().int().nonnegative(), z.null()])
+      .optional()
+      .transform((val) => {
+        // If explicitly set to null or undefined, return null to clear the field
+        if (val === null || val === undefined) return null;
+        return val;
+      }),
     achieved: z
-      .number({ invalid_type_error: "Achieved must be a number" })
-      .int({ message: "Achieved must be an integer" })
-      .nonnegative({ message: "Achieved must be zero or positive" })
-      .optional(),
+      .union([z.number().int().nonnegative(), z.null()])
+      .optional()
+      .transform((val) => {
+        // If explicitly set to null or undefined, return null to clear the field
+        if (val === null || val === undefined) return null;
+        return val;
+      }),
     targetSentence: z
       .array(z.string().trim())
       .max(20, { message: "Cannot have more than 20 target points" })
@@ -234,10 +240,10 @@ const updateInfrastructureValidation = z
   })
   .refine(
     (data) => {
-      if (data.target === undefined || data.achieved === undefined) {
-        return true;
+      if (data.target != null && data.achieved != null) {
+        return data.achieved <= data.target;
       }
-      return data.achieved <= data.target;
+      return true;
     },
     {
       message: "Achieved count cannot exceed target count",
@@ -1190,12 +1196,12 @@ function InfrastructureView({ infrastructure }: InfrastructureViewProps) {
         </div>
         <div>
           <Label>Target</Label>
-          <p className="font-semibold">{infrastructure.target ?? "N/A"}</p>
+          <p className="font-semibold">{infrastructure.target || "N/A"}</p>
         </div>
         <div>
           <Label>Achieved</Label>
           <p className="font-semibold text-green-600">
-            {infrastructure.achieved ?? "N/A"}
+            {infrastructure.achieved || "N/A"}
           </p>
         </div>
       </div>

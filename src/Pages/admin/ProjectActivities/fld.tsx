@@ -126,8 +126,7 @@ const createFldValidation = z
   )
   .refine(
     (data) => {
-      // If both are present, ensure achieved <= target
-      if (data.target !== undefined && data.achieved !== undefined) {
+      if (data.target != null && data.achieved != null) {
         return data.achieved <= data.target;
       }
       return true;
@@ -167,15 +166,21 @@ const updateFldValidation = z
       .max(100, { message: "Block must be 100 characters or less" })
       .optional(),
     target: z
-      .number({ invalid_type_error: "Target must be a number" })
-      .int({ message: "Target must be an integer" })
-      .nonnegative({ message: "Target must be zero or positive" })
-      .optional(),
+      .union([z.number().int().nonnegative(), z.null()])
+      .optional()
+      .transform((val) => {
+        // If explicitly set to null or undefined, return null to clear the field
+        if (val === null || val === undefined) return null;
+        return val;
+      }),
     achieved: z
-      .number({ invalid_type_error: "Achieved must be a number" })
-      .int({ message: "Achieved must be an integer" })
-      .nonnegative({ message: "Achieved must be zero or positive" })
-      .optional(),
+      .union([z.number().int().nonnegative(), z.null()])
+      .optional()
+      .transform((val) => {
+        // If explicitly set to null or undefined, return null to clear the field
+        if (val === null || val === undefined) return null;
+        return val;
+      }),
     targetSentence: z
       .array(z.string().trim())
       .max(20, { message: "Cannot have more than 20 target points" })
@@ -198,12 +203,10 @@ const updateFldValidation = z
   })
   .refine(
     (data) => {
-      // Skip refinement if we don't have both target and achieved
-      if (data.target === undefined || data.achieved === undefined) {
-        return true;
+      if (data.target != null && data.achieved != null) {
+        return data.achieved <= data.target;
       }
-      // For update validation, we need to compare the values only if both are provided
-      return data.achieved <= data.target;
+      return true;
     },
     {
       message: "Achieved count cannot exceed target count",
@@ -1142,14 +1145,14 @@ export default function FLDPage() {
                           fld.target !== undefined ? (
                             <>
                               <span className="text-green-600 font-medium">
-                                {fld.achieved}
+                                {fld.achieved || "N/A"}
                               </span>
                               <span className="text-gray-400">
                                 {" "}
                                 /
                                 <span className="text-gray-700">
                                   {" "}
-                                  {fld.target} {fld.units}
+                                  {fld.target || "N/A"} {fld.units}
                                 </span>
                               </span>
                             </>
@@ -1362,7 +1365,7 @@ function FLDView({ fld }: FLDViewProps) {
                 Target
               </Label>
               <p className="text-lg font-semibold text-gray-600">
-                {fld.target ?? "N/A"}
+                {fld.target || "N/A"}
               </p>
             </div>
             <div>
@@ -1370,7 +1373,7 @@ function FLDView({ fld }: FLDViewProps) {
                 Achieved
               </Label>
               <p className="text-lg font-semibold text-green-600">
-                {fld.achieved ?? "N/A"}
+                {fld.achieved || "N/A"}
               </p>
             </div>
             <div>

@@ -65,7 +65,7 @@ import { getSignedUrl } from "@/services/cloudflare/getSignedUrl";
 import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
 import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudflare";
 
-// Updated validation schemas with new fields
+// Frontend validation
 const baseAwarenessSchema = z.object({
   title: z
     .string()
@@ -78,12 +78,14 @@ const baseAwarenessSchema = z.object({
     .number({ invalid_type_error: "Target must be a number" })
     .int({ message: "Target must be an integer" })
     .nonnegative({ message: "Target must be zero or positive" })
-    .optional(),
+    .optional()
+    .nullable(),
   achieved: z
     .number({ invalid_type_error: "Achieved must be a number" })
     .int({ message: "Achieved must be an integer" })
     .nonnegative({ message: "Achieved must be zero or positive" })
-    .optional(),
+    .optional()
+    .nullable(),
   targetSentence: z
     .array(z.string().trim())
     .max(20, { message: "Cannot have more than 20 target points" })
@@ -154,7 +156,7 @@ const createAwarenessValidation = baseAwarenessSchema
   )
   .refine(
     (data) => {
-      if (data.target !== undefined && data.achieved !== undefined) {
+      if (data.target != null && data.achieved != null) {
         return data.achieved <= data.target;
       }
       return true;
@@ -184,15 +186,21 @@ const updateAwarenessProgramValidation = z
       .max(100, { message: "Title cannot exceed 100 characters" })
       .optional(),
     target: z
-      .number({ invalid_type_error: "Target must be a number" })
-      .int({ message: "Target must be an integer" })
-      .nonnegative({ message: "Target must be zero or positive" })
-      .optional(),
+      .union([z.number().int().nonnegative(), z.null()])
+      .optional()
+      .transform((val) => {
+        // If explicitly set to null or undefined, return null to clear the field
+        if (val === null || val === undefined) return null;
+        return val;
+      }),
     achieved: z
-      .number({ invalid_type_error: "Achieved must be a number" })
-      .int({ message: "Achieved must be an integer" })
-      .nonnegative({ message: "Achieved must be zero or positive" })
-      .optional(),
+      .union([z.number().int().nonnegative(), z.null()])
+      .optional()
+      .transform((val) => {
+        // If explicitly set to null or undefined, return null to clear the field
+        if (val === null || val === undefined) return null;
+        return val;
+      }),
     targetSentence: z
       .array(z.string().trim())
       .max(20, { message: "Cannot have more than 20 target points" })
@@ -262,10 +270,10 @@ const updateAwarenessProgramValidation = z
   })
   .refine(
     (data) => {
-      if (data.target === undefined || data.achieved === undefined) {
-        return true;
+      if (data.target != null && data.achieved != null) {
+        return data.achieved <= data.target;
       }
-      return data.achieved <= data.target;
+      return true;
     },
     {
       message: "Achieved count cannot exceed target count",
@@ -1537,13 +1545,13 @@ function AwarenessView({ awareness }: AwarenessViewProps) {
         <div>
           <Label className="text-sm font-medium text-gray-500">Target</Label>
           <p className="text-lg font-semibold text-gray-600">
-            {awareness.target ?? "N/A"}
+            {awareness.target || "N/A"}
           </p>
         </div>
         <div>
           <Label className="text-sm font-medium text-gray-500">Achieved</Label>
           <p className="text-lg font-semibold text-green-600">
-            {awareness.achieved ?? "N/A"}
+            {awareness.achieved || "N/A"}
           </p>
         </div>
         <div>

@@ -50,11 +50,17 @@ import {
   AlertCircle,
   Loader2,
   ImageIcon,
-  UploadCloud
+  UploadCloud,
+  PlusCircle,
+  X
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { Base_Url, quarterlyData, SignedUrlResponse } from "@/lib/constants";
+import {
+  Base_Url,
+  quarterlyData,
+  type SignedUrlResponse
+} from "@/lib/constants";
 import { useAuthStore } from "@/stores/useAuthStore";
 import axios, { type AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
@@ -63,7 +69,7 @@ import { getSignedUrl } from "@/services/cloudflare/getSignedUrl";
 import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudflare";
 import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
 
-// Zod validation schemas
+// Updated Zod validation schemas based on backend requirements
 const createInputDistributionValidation = z
   .object({
     projectId: z.string().uuid({ message: "Valid project ID is required" }),
@@ -81,11 +87,23 @@ const createInputDistributionValidation = z
     target: z
       .number({ invalid_type_error: "Target must be a number" })
       .int({ message: "Target must be an integer" })
-      .positive({ message: "Target must be a positive number" }),
+      .nonnegative({ message: "Target must be zero or positive" })
+      .optional(),
     achieved: z
       .number({ invalid_type_error: "Achieved must be a number" })
       .int({ message: "Achieved must be an integer" })
-      .nonnegative({ message: "Achieved must be zero or positive" }),
+      .nonnegative({ message: "Achieved must be zero or positive" })
+      .optional(),
+    targetSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 target points" })
+      .default([])
+      .optional(),
+    achievedSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 achievements" })
+      .default([])
+      .optional(),
     district: z
       .string()
       .trim()
@@ -120,14 +138,46 @@ const createInputDistributionValidation = z
       .nullable(),
     imageKey: z.string().trim().optional().nullable()
   })
-  .refine((data) => data.achieved <= data.target, {
-    message: "Achieved count cannot exceed target count",
-    path: ["achieved"]
-  })
-  .refine((data) => !(data.imageUrl && !data.imageKey), {
-    message: "Image key is required when image URL is provided",
-    path: ["imageKey"]
-  });
+  .refine(
+    (data) => {
+      const bothPresent =
+        data.target !== undefined && data.achieved !== undefined;
+      const bothAbsent =
+        data.target === undefined && data.achieved === undefined;
+
+      // Either both should be present or both should be absent
+      return bothPresent || bothAbsent;
+    },
+    {
+      message: "Either both target and achieved must be provided, or neither",
+      path: ["target"]
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.target != null && data.achieved != null) {
+        return data.achieved <= data.target;
+      }
+      return true;
+    },
+    {
+      message: "Achieved count cannot exceed target count",
+      path: ["achieved"]
+    }
+  )
+  .refine(
+    (data) => {
+      // If imageUrl is provided, imageKey must also be provided
+      if (data.imageUrl && !data.imageKey) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "Image key is required when image URL is provided",
+      path: ["imageKey"]
+    }
+  );
 
 const updateInputDistributionValidation = z
   .object({
@@ -152,14 +202,30 @@ const updateInputDistributionValidation = z
       .max(200, { message: "Name cannot exceed 200 characters" })
       .optional(),
     target: z
-      .number({ invalid_type_error: "Target must be a number" })
-      .int({ message: "Target must be an integer" })
-      .positive({ message: "Target must be a positive number" })
-      .optional(),
+      .union([z.number().int().nonnegative(), z.null()])
+      .optional()
+      .transform((val) => {
+        // If explicitly set to null or undefined, return null to clear the field
+        if (val === null || val === undefined) return null;
+        return val;
+      }),
     achieved: z
-      .number({ invalid_type_error: "Achieved must be a number" })
-      .int({ message: "Achieved must be an integer" })
-      .nonnegative({ message: "Achieved must be zero or positive" })
+      .union([z.number().int().nonnegative(), z.null()])
+      .optional()
+      .transform((val) => {
+        // If explicitly set to null or undefined, return null to clear the field
+        if (val === null || val === undefined) return null;
+        return val;
+      }),
+    targetSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 target points" })
+      .default([])
+      .optional(),
+    achievedSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 achievements" })
+      .default([])
       .optional(),
     district: z
       .string()
@@ -200,16 +266,31 @@ const updateInputDistributionValidation = z
   })
   .refine(
     (data) => {
-      if (data.target === undefined || data.achieved === undefined) return true;
-      return data.achieved <= data.target;
+      if (data.target != null && data.achieved != null) {
+        return data.achieved <= data.target;
+      }
+      return true;
     },
-    { message: "Achieved count cannot exceed target count", path: ["achieved"] }
+    {
+      message: "Achieved count cannot exceed target count",
+      path: ["achieved"]
+    }
   )
   .refine(
     (data) => {
-      if (data.imageUrl === undefined) return true;
-      if (data.imageUrl === null) return true;
-      return !(!data.imageKey && data.imageUrl);
+      // Skip if imageUrl is not being updated
+      if (data.imageUrl === undefined) {
+        return true;
+      }
+      // If imageUrl is null, we don't need to check for imageKey
+      if (data.imageUrl === null) {
+        return true;
+      }
+      // If setting a new imageUrl, ensure imageKey is also set
+      if (data.imageUrl && !data.imageKey) {
+        return false;
+      }
+      return true;
     },
     {
       message: "Image key is required when image URL is provided",
@@ -217,16 +298,18 @@ const updateInputDistributionValidation = z
     }
   );
 
-// Interfaces
+// Updated interfaces
 interface RawInputDistribution {
   id: string;
   inputDistId: string;
-  project: { id: string; title: string }; // Assuming project object from API
-  quarter: { id: string; number: number; year: number }; // Assuming quarter object from API
+  project: { id: string; title: string };
+  quarter: { id: string; number: number; year: number };
   activityType: string;
   name: string;
-  target: string;
-  achieved: string;
+  target?: number;
+  achieved?: number;
+  targetSentence?: string[];
+  achievedSentence?: string[];
   district: string;
   village: string;
   block: string;
@@ -245,10 +328,12 @@ interface InputDistributionFormData {
   projectId: string;
   quarterId: string;
   activityType: string;
-  customActivityType?: string; // Added for custom input
+  customActivityType?: string;
   name: string;
   target: string;
   achieved: string;
+  targetSentence: string[];
+  achievedSentence: string[];
   district: string;
   village: string;
   block: string;
@@ -298,6 +383,79 @@ const PREDEFINED_ACTIVITY_TYPES = [
   "Other" // Allow custom input if "Other" is selected
 ];
 
+// ArrayInputManager component
+function ArrayInputManager({
+  label,
+  items,
+  setItems,
+  placeholder,
+  error
+}: {
+  label: string;
+  items: string[];
+  setItems: (items: string[]) => void;
+  placeholder: string;
+  error?: string;
+}) {
+  const [inputValue, setInputValue] = useState("");
+
+  const handleAddItem = () => {
+    if (inputValue.trim()) {
+      setItems([...items, inputValue.trim()]);
+      setInputValue("");
+    }
+  };
+
+  const handleRemoveItem = (indexToRemove: number) => {
+    setItems(items.filter((_, index) => index !== indexToRemove));
+  };
+
+  return (
+    <div className="border rounded-lg p-1 bg-zinc-50">
+      <Label className="">{label}</Label>
+      <div className="flex flex-col items-end space-y-2 mt-1">
+        <Textarea
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAddItem();
+            }
+          }}
+          className="mt-1 max-h-72"
+        />
+        <Button type="button" variant="outline" onClick={handleAddItem}>
+          <PlusCircle className="h-4 w-4 mr-2" />
+          Add
+        </Button>
+      </div>
+      {typeof error === "string" && (
+        <p className="text-red-500 text-sm mt-1">{error}</p>
+      )}
+      <div className="mt-2 space-y-2">
+        {items.map((item, index) => (
+          <div
+            key={index}
+            className="flex items-center justify-between bg-gray-100 p-2 rounded-md"
+          >
+            <span className="text-sm flex-grow">{item}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleRemoveItem(index)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function InputDistributionPage() {
   const [distributions, setDistributions] = useState<InputDistribution[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
@@ -345,7 +503,9 @@ export default function InputDistributionPage() {
             imageUrl: item.imageUrl ?? null,
             imageKey: item.imageKey ?? null,
             remarks: item.remarks ?? null,
-            units: item.units ?? null
+            units: item.units ?? null,
+            targetSentence: item.targetSentence || [],
+            achievedSentence: item.achievedSentence || []
           })
         );
         setDistributions(mappedData);
@@ -516,8 +676,12 @@ export default function InputDistributionPage() {
         quarterId: formData.quarterId,
         activityType: finalActivityType, // Use the determined final activity type
         name: formData.name,
-        target: Number.parseInt(formData.target),
-        achieved: Number.parseInt(formData.achieved),
+        target: formData.target ? Number.parseInt(formData.target) : undefined,
+        achieved: formData.achieved
+          ? Number.parseInt(formData.achieved)
+          : undefined,
+        targetSentence: formData.targetSentence || [],
+        achievedSentence: formData.achievedSentence || [],
         district: formData.district,
         village: formData.village,
         block: formData.block,
@@ -570,7 +734,9 @@ export default function InputDistributionPage() {
           imageUrl: apiResponse.data.imageUrl ?? null,
           imageKey: apiResponse.data.imageKey ?? null,
           remarks: apiResponse.data.remarks ?? null,
-          units: apiResponse.data.units ?? null
+          units: apiResponse.data.units ?? null,
+          targetSentence: apiResponse.data.targetSentence || [],
+          achievedSentence: apiResponse.data.achievedSentence || []
         };
 
         if (operation === "create") {
@@ -643,7 +809,7 @@ export default function InputDistributionPage() {
       ) {
         if (response.data.warning) {
           // Show warning toast for partial success
-          toast.warning("Training deleted with warnings", {
+          toast.warning("Distribution deleted with warnings", {
             description: `Input Distribution was removed from database, but ${response.data.warning}`,
             duration: 8000 // Longer duration for warnings
           });
@@ -895,14 +1061,26 @@ export default function InputDistributionPage() {
                       </TableCell>
                       <TableCell className="truncate max-w-[150px]">{`${dist.district}, ${dist.village}`}</TableCell>
                       <TableCell>
-                        <span className="text-green-600 font-medium">
-                          {dist.achieved}
-                        </span>{" "}
-                        /
-                        <span className="text-gray-700">
-                          {" "}
-                          {dist.target} {dist.units}
-                        </span>
+                        <div className="text-sm">
+                          {dist.achieved !== undefined &&
+                          dist.target !== undefined ? (
+                            <>
+                              <span className="text-green-600 font-medium">
+                                {dist.achieved || "N/A"}
+                              </span>
+                              <span className="text-gray-400">
+                                {" "}
+                                /
+                                <span className="text-gray-700">
+                                  {" "}
+                                  {dist.target || "N/A"} {dist.units}
+                                </span>
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-gray-500">N/A</span>
+                          )}
+                        </div>
                       </TableCell>
                       {user?.role === "admin" && (
                         <TableCell>{dist.User?.name || "N/A"}</TableCell>
@@ -1073,22 +1251,73 @@ function InputDistributionView({ distribution }: InputDistributionViewProps) {
         </div>
       </div>
       <hr />
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <Label>Target</Label>
-          <p className="font-semibold">{distribution.target}</p>
-        </div>
-        <div>
-          <Label>Achieved</Label>
-          <p className="font-semibold text-green-600">
-            {distribution.achieved}
-          </p>
-        </div>
-        <div>
-          <Label>Units</Label>
-          <p>{distribution.units || "N/A"}</p>
-        </div>
-      </div>
+      {(distribution.target !== undefined ||
+        distribution.achieved !== undefined) && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label>Target</Label>
+              <p className="font-semibold">{distribution.target || "N/A"}</p>
+            </div>
+            <div>
+              <Label>Achieved</Label>
+              <p className="font-semibold text-green-600">
+                {distribution.achieved || "N/A"}
+              </p>
+            </div>
+            <div>
+              <Label>Units</Label>
+              <p>{distribution.units || "N/A"}</p>
+            </div>
+          </div>
+          <hr />
+        </>
+      )}
+
+      {/* Target Sentences */}
+      {distribution.targetSentence &&
+        distribution.targetSentence.length > 0 && (
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Target Points
+            </h3>
+            <ul className="space-y-3">
+              {distribution.targetSentence.map((target, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="text-blue-600 font-semibold mr-2.5 text-sm pt-0.5">
+                    {index + 1}.
+                  </span>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    {target}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+      {/* Achieved Sentences */}
+      {distribution.achievedSentence &&
+        distribution.achievedSentence.length > 0 && (
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Achievements
+            </h3>
+            <ul className="space-y-3">
+              {distribution.achievedSentence.map((achievement, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="text-green-600 font-semibold mr-2.5 text-sm pt-0.5">
+                    {index + 1}.
+                  </span>
+                  <p className="text-sm text-gray-700 leading-relaxed">
+                    {achievement}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
       {distribution.remarks && (
         <>
           <hr />
@@ -1164,8 +1393,10 @@ function InputDistributionForm({
       ? distribution.activityType
       : "", // Initialize custom field
     name: distribution?.name || "",
-    target: distribution?.target.toString() || "0",
-    achieved: distribution?.achieved.toString() || "0",
+    target: distribution?.target?.toString() || "",
+    achieved: distribution?.achieved?.toString() || "",
+    targetSentence: distribution?.targetSentence || [],
+    achievedSentence: distribution?.achievedSentence || [],
     district: distribution?.district || "",
     village: distribution?.village || "",
     block: distribution?.block || "",
@@ -1224,37 +1455,6 @@ function InputDistributionForm({
       setFormErrors((prev) => ({ ...prev, customActivityType: "" }));
     }
   };
-
-  // const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-  //   const file = e.target.files?.[0];
-  //   if (file) {
-  //     if (file.size > 5 * 1024 * 1024) {
-  //       // 5MB limit
-  //       setFormErrors((prev) => ({
-  //         ...prev,
-  //         imageFile: "File size must be less than 5MB"
-  //       }));
-  //       return;
-  //     }
-  //     if (!file.type.startsWith("image/")) {
-  //       setFormErrors((prev) => ({
-  //         ...prev,
-  //         imageFile: "Please select a valid image file"
-  //       }));
-  //       return;
-  //     }
-  //     setFormData((prev) => ({
-  //       ...prev,
-  //       imageFile: file,
-  //       imageUrl: null,
-  //       imageKey: null
-  //     }));
-  //     setFilePreview(URL.createObjectURL(file));
-  //     if (formErrors.imageFile)
-  //       setFormErrors((prev) => ({ ...prev, imageFile: "" }));
-  //     toast.success("Image selected", { description: file.name });
-  //   }
-  // };
 
   const handleFileChange = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -1342,7 +1542,7 @@ function InputDistributionForm({
     }));
     setUrl(null);
 
-    // If it was an existing image from `awareness` prop, mark its key for deletion on save
+    // If it was an existing image from `distribution` prop, mark its key for deletion on save
     if (isEdit && distribution?.imageKey) {
       setImageToBeRemovedKey(distribution.imageKey);
     } else {
@@ -1376,33 +1576,13 @@ function InputDistributionForm({
         ? formData.customActivityType.trim()
         : formData.activityType;
 
-    // if (
-    //   formData.activityType === "Other" &&
-    //   !formData.customActivityType?.trim()
-    // ) {
-    //   setFormErrors((prev) => ({
-    //     ...prev,
-    //     customActivityType:
-    //       "Custom activity type is required when 'Other' is selected."
-    //   }));
-    //   toast.error("Validation Error", {
-    //     description: "Custom activity type is required."
-    //   });
-    //   return false;
-    // } else if (formErrors.customActivityType) {
-    //   // Clear error if it was previously set and now condition is met
-    //   setFormErrors((prev) => {
-    //     const newErrors = { ...prev };
-    //     delete newErrors.customActivityType;
-    //     return newErrors;
-    //   });
-    // }
-
     const dataToValidate = {
       ...formData,
       activityType: finalActivityType, // Use the potentially custom activity type for validation
-      target: Number.parseInt(formData.target) || 0,
-      achieved: Number.parseInt(formData.achieved) || 0,
+      target: formData.target ? Number.parseInt(formData.target) : undefined,
+      achieved: formData.achieved
+        ? Number.parseInt(formData.achieved)
+        : undefined,
       imageUrl: formData.imageFile ? null : formData.imageUrl, // If new file, URL is not yet set from cloud
       imageKey: formData.imageFile ? null : formData.imageKey
     };
@@ -1666,40 +1846,62 @@ function InputDistributionForm({
         )}
 
         <div>
-          <Label htmlFor="target">
-            Target <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="target">Target</Label>
           <Input
             id="target"
             name="target"
             type="number"
-            placeholder="0"
+            placeholder="Enter target number (optional)"
             value={formData.target}
             onChange={handleInputChange}
             className={formErrors.target ? "border-red-500" : ""}
+            min="0"
           />
           {formErrors.target && (
             <p className="text-red-500 text-sm mt-1">{formErrors.target}</p>
           )}
         </div>
         <div>
-          <Label htmlFor="achieved">
-            Achieved <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="achieved">Achieved</Label>
           <Input
             id="achieved"
             name="achieved"
             type="number"
-            placeholder="0"
+            placeholder="Enter achieved number (optional)"
             value={formData.achieved}
             onChange={handleInputChange}
             className={formErrors.achieved ? "border-red-500" : ""}
+            min="0"
           />
           {formErrors.achieved && (
             <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
           )}
         </div>
       </div>
+
+      {/* Target Sentence and Achieved Sentence Array Inputs */}
+      <div className="grid grid-cols-1 gap-4">
+        <ArrayInputManager
+          label="Target Points"
+          items={formData.targetSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, targetSentence: items }))
+          }
+          placeholder="Add a target point"
+          error={formErrors.targetSentence}
+        />
+
+        <ArrayInputManager
+          label="Achievement Points"
+          items={formData.achievedSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, achievedSentence: items }))
+          }
+          placeholder="Add an achievement point"
+          error={formErrors.achievedSentence}
+        />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="units">Units</Label>
@@ -1845,7 +2047,7 @@ function InputDistributionForm({
                   Click to upload an image
                 </Button>
               </p>
-              <p className="text-xs text-gray-500">PNG, JPG, GIF up to 20MB</p>
+              <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB</p>
             </div>
           )}
           {/* Hidden file input, triggered by button/placeholder click */}
