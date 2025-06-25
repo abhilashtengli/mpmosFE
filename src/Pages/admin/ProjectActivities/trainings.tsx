@@ -1,3 +1,5 @@
+"use client";
+
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
@@ -42,8 +44,6 @@ import {
   GraduationCap,
   Plus,
   Search,
-  // FileText,
-  // ImageIcon,
   Eye,
   Edit,
   UserRound,
@@ -51,17 +51,24 @@ import {
   Loader2,
   UploadCloud,
   ImageIcon,
-  FileText
+  FileText,
+  PlusCircle,
+  X
 } from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
-import { Base_Url, quarterlyData, SignedUrlResponse } from "@/lib/constants";
+import {
+  Base_Url,
+  quarterlyData,
+  type SignedUrlResponse
+} from "@/lib/constants";
 import { useAuthStore } from "@/stores/useAuthStore";
-import axios, { AxiosError } from "axios";
+import axios, { type AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
 import EnhancedShimmerTableRows from "@/components/shimmer-rows";
 import { getSignedUrl } from "@/services/cloudflare/getSignedUrl";
 import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudflare";
 import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
+
 // Base validation schema
 const baseTrainingSchema = z.object({
   title: z
@@ -74,11 +81,23 @@ const baseTrainingSchema = z.object({
   target: z
     .number({ invalid_type_error: "Target must be a number" })
     .int({ message: "Target must be an integer" })
-    .nonnegative({ message: "Target must be zero or positive" }),
+    .nonnegative({ message: "Target must be zero or positive" })
+    .optional(),
   achieved: z
     .number({ invalid_type_error: "Achieved must be a number" })
     .int({ message: "Achieved must be an integer" })
-    .nonnegative({ message: "Achieved must be zero or positive" }),
+    .nonnegative({ message: "Achieved must be zero or positive" })
+    .optional(),
+  targetSentence: z
+    .array(z.string().trim())
+    .max(20, { message: "Cannot have more than 20 target points" })
+    .default([])
+    .optional(),
+  achievedSentence: z
+    .array(z.string().trim())
+    .max(20, { message: "Cannot have more than 20 achievements" })
+    .default([])
+    .optional(),
   district: z
     .string()
     .trim()
@@ -136,7 +155,11 @@ const baseTrainingSchema = z.object({
 // Create training validation with refinements
 const createTrainingValidation = baseTrainingSchema.refine(
   (data) => {
-    return data.achieved <= data.target;
+    // If both target and achieved are provided, ensure achieved <= target
+    if (data.target !== undefined && data.achieved !== undefined) {
+      return data.achieved <= data.target;
+    }
+    return true;
   },
   {
     message: "Achieved count cannot exceed target count",
@@ -172,6 +195,16 @@ const updateTrainingValidation = z
       .number({ invalid_type_error: "Achieved must be a number" })
       .int({ message: "Achieved must be an integer" })
       .nonnegative({ message: "Achieved must be zero or positive" })
+      .optional(),
+    targetSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 target points" })
+      .default([])
+      .optional(),
+    achievedSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 achievements" })
+      .default([])
       .optional(),
     district: z
       .string()
@@ -260,8 +293,10 @@ interface RawTraining {
     number: number;
     year: number;
   };
-  target: number;
-  achieved: number;
+  target?: number;
+  achieved?: number;
+  targetSentence?: string[];
+  achievedSentence?: string[];
   district: string;
   village: string;
   block: string;
@@ -295,8 +330,10 @@ interface Training {
     number: number;
     year: number;
   };
-  target: number;
-  achieved: number;
+  target?: number;
+  achieved?: number;
+  targetSentence?: string[];
+  achievedSentence?: string[];
   district: string;
   village: string;
   block: string;
@@ -306,8 +343,8 @@ interface Training {
   remarks: string;
   imageUrl?: string | null;
   imageKey?: string | null;
-  pdfKey?: string | null;
   pdfUrl?: string | null;
+  pdfKey?: string | null;
   createdAt: string;
   updatedAt: string;
   User?: {
@@ -322,6 +359,8 @@ interface TrainingFormData {
   quarterId: string;
   target: string;
   achieved: string;
+  targetSentence: string[];
+  achievedSentence: string[];
   district: string;
   village: string;
   block: string;
@@ -339,7 +378,7 @@ interface TrainingFormData {
 
 interface TrainingFormProps {
   training?: Training;
-  onSave: (data: TrainingFormData) => Promise<boolean>; // This line was changed
+  onSave: (data: TrainingFormData) => Promise<boolean>;
   onClose: () => void;
   isEdit?: boolean;
 }
@@ -365,6 +404,77 @@ interface ApiSuccessResponse {
   message: string;
   data: Training;
   code: string;
+}
+
+function ArrayInputManager({
+  label,
+  items,
+  setItems,
+  placeholder,
+  error
+}: {
+  label: string;
+  items: string[];
+  setItems: (items: string[]) => void;
+  placeholder: string;
+  error?: string;
+}) {
+  const [inputValue, setInputValue] = useState("");
+
+  const handleAddItem = () => {
+    if (inputValue.trim()) {
+      setItems([...items, inputValue.trim()]);
+      setInputValue("");
+    }
+  };
+
+  const handleRemoveItem = (indexToRemove: number) => {
+    setItems(items.filter((_, index) => index !== indexToRemove));
+  };
+
+  return (
+    <div className="border rounded-lg p-1 bg-zinc-50">
+      <Label className="">{label}</Label>
+      <div className="flex flex-col items-end space-y-2 mt-1">
+        <Textarea
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAddItem();
+            }
+          }}
+          className="mt-1 max-h-72"
+        />
+        <Button type="button" variant="outline" onClick={handleAddItem}>
+          <PlusCircle className="h-4 w-4 mr-2" /> Add
+        </Button>
+      </div>
+      {typeof error === "string" && (
+        <p className="text-red-500 text-sm mt-1">{error}</p>
+      )}
+      <div className="mt-2 space-y-2">
+        {items.map((item, index) => (
+          <div
+            key={index}
+            className="flex items-center justify-between bg-gray-100 p-2 rounded-md"
+          >
+            <span className="text-sm flex-grow">{item}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleRemoveItem(index)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function TrainingPage() {
@@ -395,7 +505,7 @@ export default function TrainingPage() {
       setIsLoading(true);
 
       const endpoint =
-        userRole?.role === "admin" // Changed from userRole?.role
+        userRole?.role === "admin"
           ? "get-admin-trainings"
           : "get-user-trainings";
       const response = await axios.get(`${Base_Url}/${endpoint}`, {
@@ -416,7 +526,7 @@ export default function TrainingPage() {
       } else if (!data.success || response.status !== 200) {
         throw new Error(data.message || "Failed to fetch trainings");
       }
-      // console.log("data : ", data.data);
+
       const mappedTrainings: Training[] = (data.data || []).map(
         (item: RawTraining) => ({
           id: item.id,
@@ -433,6 +543,8 @@ export default function TrainingPage() {
           },
           target: item.target,
           achieved: item.achieved,
+          targetSentence: item.targetSentence || [],
+          achievedSentence: item.achievedSentence || [],
           district: item.district,
           village: item.village,
           block: item.block,
@@ -453,7 +565,6 @@ export default function TrainingPage() {
       );
       setTrainings(mappedTrainings || []);
     } catch (error: unknown) {
-      // console.error("Error fetching trainings:", error);
       const defaultMessage =
         "An unexpected error occurred while fetching data.";
       if (axios.isAxiosError(error)) {
@@ -487,7 +598,7 @@ export default function TrainingPage() {
         training.project.title.toLowerCase().includes(searchTerm.toLowerCase());
 
       // Get quarter IDs based on year and quarter selection
-      let matchesYearQuarter: boolean = true;
+      let matchesYearQuarter = true;
 
       if (
         (selectedYear && selectedYear !== "all") ||
@@ -499,11 +610,11 @@ export default function TrainingPage() {
             const yearMatch =
               !selectedYear ||
               selectedYear === "all" ||
-              q.year === parseInt(selectedYear);
+              q.year === Number.parseInt(selectedYear);
             const quarterMatch =
               !selectedQuarter ||
               selectedQuarter === "all" ||
-              q.number === parseInt(selectedQuarter);
+              q.number === Number.parseInt(selectedQuarter);
             return yearMatch && quarterMatch;
           })
           .map((q) => q.id);
@@ -558,7 +669,6 @@ export default function TrainingPage() {
     trainingId?: string
   ): Promise<boolean> => {
     // Input validation
-
     console.log("DATA : ", formData);
     if (operation === "update" && !trainingId) {
       toast.error("Training ID is required for update operation");
@@ -578,11 +688,6 @@ export default function TrainingPage() {
 
     if (!formData.quarterId?.trim()) {
       toast.error("Quarter is required");
-      return false;
-    }
-
-    if (!formData.target || Number.parseInt(formData.target) <= 0) {
-      toast.error("Valid target number is required");
       return false;
     }
 
@@ -606,8 +711,12 @@ export default function TrainingPage() {
         projectId: formData.projectId,
         quarterId: formData.quarterId,
         title: formData.title,
-        target: Number.parseInt(formData.target),
-        achieved: Number.parseInt(formData.achieved) || 0,
+        target: formData.target ? Number.parseInt(formData.target) : undefined,
+        achieved: formData.achieved
+          ? Number.parseInt(formData.achieved)
+          : undefined,
+        targetSentence: formData.targetSentence || [],
+        achievedSentence: formData.achievedSentence || [],
         district: formData.district,
         village: formData.village,
         block: formData.block,
@@ -639,8 +748,6 @@ export default function TrainingPage() {
       if (response?.status === 201 || response?.status === 200) {
         const data = response.data as ApiSuccessResponse;
 
-        // Refresh trainings list
-        // fetchTrainings();
         toast.success(data.message || `Training ${operation}d successfully`, {
           description: `${data.data.title} `,
           duration: 6000
@@ -655,8 +762,8 @@ export default function TrainingPage() {
             trainingId: data.data.trainingId,
             title: data.data.title,
             project: {
-              id: data.data.project.id, // assuming this is coming from the form
-              title: data.data.project.title // you must get this from `projects` store or from form
+              id: data.data.project.id,
+              title: data.data.project.title
             },
             quarter: {
               id: data.data.quarter.id,
@@ -664,7 +771,9 @@ export default function TrainingPage() {
               year: Number(data.data.quarter.year)
             },
             target: data.data.target,
-            achieved: data.data.achieved || 0,
+            achieved: data.data.achieved,
+            targetSentence: data.data.targetSentence || [],
+            achievedSentence: data.data.achievedSentence || [],
             district: data.data.district,
             village: data.data.village,
             block: data.data.block,
@@ -695,8 +804,8 @@ export default function TrainingPage() {
                     ...t,
                     title: data.data.title,
                     project: {
-                      id: data.data.project.id, // assuming this is coming from the form
-                      title: data.data.project.title // you must get this from `projects` store or from form
+                      id: data.data.project.id,
+                      title: data.data.project.title
                     },
                     quarter: {
                       id: data.data.quarter.id,
@@ -704,7 +813,9 @@ export default function TrainingPage() {
                       year: Number(data.data.quarter.year)
                     },
                     target: data.data.target,
-                    achieved: data.data.achieved || 0,
+                    achieved: data.data.achieved,
+                    targetSentence: data.data.targetSentence || [],
+                    achievedSentence: data.data.achievedSentence || [],
                     district: data.data.district,
                     village: data.data.village,
                     block: data.data.block,
@@ -745,7 +856,6 @@ export default function TrainingPage() {
     } catch (error) {
       console.error(`Error ${operation}ing training:`, error);
 
-      console.error(`Error ${operation}ing distribution:`, error);
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError<ApiErrorResponse>;
         const errorData = axiosError.response?.data;
@@ -1022,7 +1132,7 @@ export default function TrainingPage() {
                   <TableHead>Location</TableHead>
                   <TableHead>Achieved/Target</TableHead>
                   {userRole?.role === "admin" && (
-                    <TableHead>Creadted By</TableHead>
+                    <TableHead>Created By</TableHead>
                   )}
                   <TableHead>Beneficiaries</TableHead>
                   <TableHead>Actions</TableHead>
@@ -1069,16 +1179,24 @@ export default function TrainingPage() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          <span className="text-green-600 font-medium">
-                            {training.achieved}
-                          </span>
-                          <span className="text-gray-400">
-                            {" "}
-                            /
-                            <span className="text-gray-700">
-                            {" "}  {training.target} {training.units}
-                            </span>
-                          </span>
+                          {training.achieved !== undefined &&
+                          training.target !== undefined ? (
+                            <>
+                              <span className="text-green-600 font-medium">
+                                {training.achieved}
+                              </span>
+                              <span className="text-gray-400">
+                                {" "}
+                                /
+                                <span className="text-gray-700">
+                                  {" "}
+                                  {training.target} {training.units}
+                                </span>
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-gray-500">N/A</span>
+                          )}
                         </div>
                       </TableCell>
                       {userRole?.role === "admin" && (
@@ -1304,25 +1422,76 @@ function TrainingView({ training }: TrainingViewProps) {
         </div>
       </div>
       <hr />
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Target</Label>
-          <p className="text-lg font-semibold text-gray-600">
-            {training.target}
-          </p>
+      {(training.target !== undefined || training.achieved !== undefined) && (
+        <>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label className="text-sm font-medium text-gray-500">
+                Target
+              </Label>
+              <p className="text-lg font-semibold text-gray-600">
+                {training.target ?? "N/A"}
+              </p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-gray-500">
+                Achieved
+              </Label>
+              <p className="text-lg font-semibold text-green-600">
+                {training.achieved ?? "N/A"}
+              </p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-gray-500">Units</Label>
+              <p>{training.units}</p>
+            </div>
+          </div>
+          <hr />
+        </>
+      )}
+
+      {/* Target Sentences */}
+      {training.targetSentence && training.targetSentence.length > 0 && (
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Target Points
+          </h3>
+          <ul className="space-y-3">
+            {training.targetSentence.map((target, index) => (
+              <li key={index} className="flex items-start">
+                <span className="text-blue-600 font-semibold mr-2.5 text-sm pt-0.5">
+                  {index + 1}.
+                </span>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {target}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Achieved</Label>
-          <p className="text-lg font-semibold text-green-600">
-            {training.achieved}
-          </p>
+      )}
+
+      {/* Achieved Sentences */}
+      {training.achievedSentence && training.achievedSentence.length > 0 && (
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Achievements
+          </h3>
+          <ul className="space-y-3">
+            {training.achievedSentence.map((achievement, index) => (
+              <li key={index} className="flex items-start">
+                <span className="text-green-600 font-semibold mr-2.5 text-sm pt-0.5">
+                  {index + 1}.
+                </span>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {achievement}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Units</Label>
-          <p>{training.units}</p>
-        </div>
-      </div>
-      <hr />
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm font-medium text-gray-500">
@@ -1431,6 +1600,8 @@ function TrainingForm({
     quarterId: training?.quarter.id || "",
     target: training?.target?.toString() || "",
     achieved: training?.achieved?.toString() || "",
+    targetSentence: training?.targetSentence || [],
+    achievedSentence: training?.achievedSentence || [],
     district: training?.district || "",
     village: training?.village || "",
     block: training?.block || "",
@@ -1509,7 +1680,6 @@ function TrainingForm({
         delete newErrors[name];
         return newErrors;
       });
-      console.log("ERRORS : ", formErrors);
     }
   };
 
@@ -1728,8 +1898,12 @@ function TrainingForm({
         title: formData.title,
         projectId: formData.projectId,
         quarterId: formData.quarterId,
-        target: Number.parseInt(formData.target) || 0,
-        achieved: Number.parseInt(formData.achieved) || 0,
+        target: formData.target ? Number.parseInt(formData.target) : undefined,
+        achieved: formData.achieved
+          ? Number.parseInt(formData.achieved)
+          : undefined,
+        targetSentence: formData.targetSentence,
+        achievedSentence: formData.achievedSentence,
         district: formData.district,
         village: formData.village,
         block: formData.block,
@@ -1742,7 +1916,7 @@ function TrainingForm({
         pdfUrl: formData.pdfUrl || undefined,
         pdfKey: formData.pdfKey || undefined
       };
-      console.log("dv : ", dataToValidate);
+
       if (isEdit) {
         updateTrainingValidation.parse(dataToValidate);
       } else {
@@ -1767,7 +1941,7 @@ function TrainingForm({
     e: React.FormEvent<HTMLFormElement>
   ): Promise<void> => {
     e.preventDefault();
-    console.log("FE : ", formErrors);
+
     if (!validateForm()) {
       toast.error("Validation Error", {
         description: "Please fix the errors in the form before submitting."
@@ -2024,41 +2198,61 @@ function TrainingForm({
           )}
         </div>
         <div>
-          <Label htmlFor="target">
-            Target <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="target">Target</Label>
           <Input
             id="target"
             name="target"
             type="number"
-            placeholder="Enter target number"
+            placeholder="Enter target number (optional)"
             value={formData.target}
             onChange={handleInputChange}
             className={formErrors.target ? "border-red-500" : ""}
-            required
           />
           {formErrors.target && (
             <p className="text-red-500 text-sm mt-1">{formErrors.target}</p>
           )}
         </div>
         <div>
-          <Label htmlFor="achieved">
-            Achieved <span className="text-red-500">*</span>
-          </Label>
+          <Label htmlFor="achieved">Achieved</Label>
           <Input
             id="achieved"
             name="achieved"
             type="number"
-            placeholder="Enter achieved number"
+            placeholder="Enter achieved number (optional)"
             value={formData.achieved}
             onChange={handleInputChange}
             className={formErrors.achieved ? "border-red-500" : ""}
-            required
           />
           {formErrors.achieved && (
             <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
           )}
         </div>
+      </div>
+
+      {/* Target Sentence Array Input */}
+      <div className="grid grid-cols-1 gap-4">
+        <ArrayInputManager
+          label="Target Points"
+          items={formData.targetSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, targetSentence: items }))
+          }
+          placeholder="Add a target point"
+          error={formErrors.targetSentence}
+        />
+
+        <ArrayInputManager
+          label="Achievement Points"
+          items={formData.achievedSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, achievedSentence: items }))
+          }
+          placeholder="Add an achievement point"
+          error={formErrors.achievedSentence}
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
         <div>
           <Label htmlFor="district">
             District <span className="text-red-500">*</span>
