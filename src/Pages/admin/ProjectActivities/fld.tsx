@@ -41,7 +41,17 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Sprout, Plus, Search, Eye, Edit, Trash2, Loader2 } from "lucide-react";
+import {
+  Sprout,
+  Plus,
+  Search,
+  Eye,
+  Edit,
+  Trash2,
+  Loader2,
+  PlusCircle,
+  X
+} from "lucide-react";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router-dom";
@@ -49,59 +59,86 @@ import { Base_Url, quarterlyData } from "@/lib/constants";
 import axios, { type AxiosError } from "axios";
 import EnhancedShimmerTableRows from "@/components/shimmer-rows";
 
-// Validation schemas
-const baseFLDSchema = z.object({
-  projectId: z.string().trim().min(1, { message: "Project is required" }),
-  quarterId: z.string().trim().min(1, { message: "Quarter is required" }),
-  target: z
-    .number({ invalid_type_error: "Target must be a number" })
-    .int({ message: "Target must be an integer" })
-    .positive({ message: "Target must be a positive number" }),
-  achieved: z
-    .number({ invalid_type_error: "Achieved must be a number" })
-    .int({ message: "Achieved must be an integer" })
-    .nonnegative({ message: "Achieved must be zero or positive" }),
-  district: z
-    .string()
-    .trim()
-    .min(2, { message: "District must be at least 2 characters" })
-    .max(100, { message: "District cannot exceed 100 characters" }),
-  village: z
-    .string()
-    .trim()
-    .min(2, { message: "Village must be at least 2 characters" })
-    .max(100, { message: "Village cannot exceed 100 characters" }),
-  block: z
-    .string()
-    .trim()
-    .min(2, { message: "Block must be at least 2 characters" })
-    .max(100, { message: "Block cannot exceed 100 characters" }),
+// Updated validation schemas based on backend requirements
+const createFldValidation = z
+  .object({
+    projectId: z.string().uuid({ message: "Valid project ID is required" }),
+    quarterId: z.string().uuid({ message: "Valid quarter ID is required" }),
+    remarks: z
+      .string()
+      .trim()
+      .max(300, { message: "Remarks cannot exceed 300 characters" })
+      .optional()
+      .nullable(),
+    district: z
+      .string()
+      .max(100, { message: "District must be 100 characters or less" }),
+    village: z
+      .string()
+      .max(100, { message: "Village must be 100 characters or less" }),
+    block: z
+      .string()
+      .max(100, { message: "Block must be 100 characters or less" }),
+    target: z
+      .number({ invalid_type_error: "Target must be a number" })
+      .int({ message: "Target must be an integer" })
+      .nonnegative({ message: "Target must be zero or positive" })
+      .optional(),
+    achieved: z
+      .number({ invalid_type_error: "Achieved must be a number" })
+      .int({ message: "Achieved must be an integer" })
+      .nonnegative({ message: "Achieved must be zero or positive" })
+      .optional(),
+    targetSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 target points" })
+      .default([])
+      .optional(),
+    achievedSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 achievements" })
+      .default([])
+      .optional(),
+    units: z
+      .string()
+      .trim()
+      .refine((val) => val === "" || val.length >= 1, {
+        message: "Units must be specified if provided"
+      })
+      .transform((val) => (val === "" ? null : val))
+      .optional()
+      .nullable()
+  })
+  .refine(
+    (data) => {
+      const bothPresent =
+        data.target !== undefined && data.achieved !== undefined;
+      const bothAbsent =
+        data.target === undefined && data.achieved === undefined;
 
-  units: z
-    .string()
-    .trim()
-    .refine((val) => val === "" || val.length >= 1, {
-      message: "Units must be specified if provided"
-    })
-    .transform((val) => (val === "" ? null : val))
-    .optional()
-    .nullable(),
-  remarks: z
-    .string()
-    .trim()
-    .max(300, { message: "Remarks cannot exceed 300 characters" })
-    .optional()
-});
+      // Either both should be present or both should be absent
+      return bothPresent || bothAbsent;
+    },
+    {
+      message: "Either both target and achieved must be provided, or neither",
+      path: ["target"]
+    }
+  )
+  .refine(
+    (data) => {
+      // If both are present, ensure achieved <= target
+      if (data.target !== undefined && data.achieved !== undefined) {
+        return data.achieved <= data.target;
+      }
+      return true;
+    },
+    {
+      message: "Achieved count cannot exceed target count",
+      path: ["achieved"]
+    }
+  );
 
-const createFLDValidation = baseFLDSchema.refine(
-  (data) => data.achieved <= data.target,
-  {
-    message: "Achieved count cannot exceed target count",
-    path: ["achieved"]
-  }
-);
-
-const updateFLDValidation = z
+const updateFldValidation = z
   .object({
     projectId: z
       .string()
@@ -130,14 +167,24 @@ const updateFLDValidation = z
       .max(100, { message: "Block must be 100 characters or less" })
       .optional(),
     target: z
-      .number()
-      .int()
-      .positive({ message: "Target must be a positive integer" })
+      .number({ invalid_type_error: "Target must be a number" })
+      .int({ message: "Target must be an integer" })
+      .nonnegative({ message: "Target must be zero or positive" })
       .optional(),
     achieved: z
-      .number()
-      .int()
-      .nonnegative({ message: "Achieved must be a non-negative integer" })
+      .number({ invalid_type_error: "Achieved must be a number" })
+      .int({ message: "Achieved must be an integer" })
+      .nonnegative({ message: "Achieved must be zero or positive" })
+      .optional(),
+    targetSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 target points" })
+      .default([])
+      .optional(),
+    achievedSentence: z
+      .array(z.string().trim())
+      .max(20, { message: "Cannot have more than 20 achievements" })
+      .default([])
       .optional(),
     units: z
       .string()
@@ -164,11 +211,14 @@ const updateFLDValidation = z
     }
   );
 
+// Updated interfaces
 interface FLDFormData {
   projectId: string;
   quarterId: string;
   target: string;
   achieved: string;
+  targetSentence: string[];
+  achievedSentence: string[];
   district: string;
   village: string;
   block: string;
@@ -177,7 +227,7 @@ interface FLDFormData {
 }
 
 type FormErrors = {
-  [key: string]: string;
+  [key: string]: string | { [key: number]: string };
 };
 
 interface FLD {
@@ -192,8 +242,10 @@ interface FLD {
     number: number;
     year: number;
   };
-  target: number;
-  achieved: number;
+  target?: number;
+  achieved?: number;
+  targetSentence?: string[];
+  achievedSentence?: string[];
   district: string;
   village: string;
   block: string;
@@ -217,6 +269,7 @@ interface FLDFormProps {
   onClose: () => void;
   isEdit?: boolean;
 }
+
 interface ApiErrorResponse {
   success: boolean;
   message: string;
@@ -224,11 +277,85 @@ interface ApiErrorResponse {
   errors?: unknown;
   path?: string[];
 }
+
 interface ApiSuccessResponse {
   success: true;
   message: string;
   data: FLD;
   code: string;
+}
+
+// ArrayInputManager component
+function ArrayInputManager({
+  label,
+  items,
+  setItems,
+  placeholder,
+  error
+}: {
+  label: string;
+  items: string[];
+  setItems: (items: string[]) => void;
+  placeholder: string;
+  error?: string | { [key: number]: string };
+}) {
+  const [inputValue, setInputValue] = useState("");
+
+  const handleAddItem = () => {
+    if (inputValue.trim()) {
+      setItems([...items, inputValue.trim()]);
+      setInputValue("");
+    }
+  };
+
+  const handleRemoveItem = (indexToRemove: number) => {
+    setItems(items.filter((_, index) => index !== indexToRemove));
+  };
+
+  return (
+    <div className="border rounded-lg p-1 bg-zinc-50">
+      <Label className="">{label}</Label>
+      <div className="flex flex-col items-end space-y-2 mt-1">
+        <Textarea
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAddItem();
+            }
+          }}
+          className="mt-1 max-h-72"
+        />
+        <Button type="button" variant="outline" onClick={handleAddItem}>
+          <PlusCircle className="h-4 w-4 mr-2" />
+          Add
+        </Button>
+      </div>
+      {typeof error === "string" && (
+        <p className="text-red-500 text-sm mt-1">{error}</p>
+      )}
+      <div className="mt-2 space-y-2">
+        {items.map((item, index) => (
+          <div
+            key={index}
+            className="flex items-center justify-between bg-gray-100 p-2 rounded-md"
+          >
+            <span className="text-sm flex-grow">{item}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleRemoveItem(index)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function FLDPage() {
@@ -293,6 +420,8 @@ export default function FLDPage() {
         },
         target: item.target,
         achieved: item.achieved,
+        targetSentence: item.targetSentence || [],
+        achievedSentence: item.achievedSentence || [],
         district: item.district,
         village: item.village,
         block: item.block,
@@ -497,12 +626,11 @@ export default function FLDPage() {
 
     console.log("DATA : ", formData);
     if (operation === "update" && !fldId) {
-      toast.error("Training ID is required for update operation");
+      toast.error("FLD ID is required for update operation");
       return false;
     }
 
     // Validate required fields
-
     if (!formData.projectId?.trim()) {
       toast.error("Project is required");
       return false;
@@ -513,14 +641,9 @@ export default function FLDPage() {
       return false;
     }
 
-    if (!formData.target || Number.parseInt(formData.target) <= 0) {
-      toast.error("Valid target number is required");
-      return false;
-    }
-
     // Show loading toast
     const loadingToast = toast.loading(
-      `${operation === "create" ? "Creating" : "Updating"} training...`
+      `${operation === "create" ? "Creating" : "Updating"} FLD...`
     );
 
     try {
@@ -537,8 +660,12 @@ export default function FLDPage() {
       const requestData = {
         projectId: formData.projectId,
         quarterId: formData.quarterId,
-        target: Number.parseInt(formData.target),
-        achieved: Number.parseInt(formData.achieved) || 0,
+        target: formData.target ? Number.parseInt(formData.target) : undefined,
+        achieved: formData.achieved
+          ? Number.parseInt(formData.achieved)
+          : undefined,
+        targetSentence: formData.targetSentence || [],
+        achievedSentence: formData.achievedSentence || [],
         district: formData.district,
         village: formData.village,
         block: formData.block,
@@ -585,7 +712,9 @@ export default function FLDPage() {
               year: Number(data.data.quarter.year)
             },
             target: data.data.target,
-            achieved: data.data.achieved || 0,
+            achieved: data.data.achieved,
+            targetSentence: data.data.targetSentence || [],
+            achievedSentence: data.data.achievedSentence || [],
             district: data.data.district,
             village: data.data.village,
             block: data.data.block,
@@ -618,7 +747,9 @@ export default function FLDPage() {
                       year: Number(data.data.quarter.year)
                     },
                     target: data.data.target,
-                    achieved: data.data.achieved || 0,
+                    achieved: data.data.achieved,
+                    targetSentence: data.data.targetSentence || [],
+                    achievedSentence: data.data.achievedSentence || [],
                     district: data.data.district,
                     village: data.data.village,
                     block: data.data.block,
@@ -651,7 +782,7 @@ export default function FLDPage() {
       toast.error(`Unexpected response status: ${response?.status}`);
       return false;
     } catch (error) {
-      console.error(`Error ${operation}ing training:`, error);
+      console.error(`Error ${operation}ing FLD:`, error);
 
       // Comprehensive error handling for production
       if (axios.isAxiosError(error)) {
@@ -713,10 +844,10 @@ export default function FLDPage() {
                     description: "The selected quarter doesn't exist",
                     duration: 5000
                   });
-                } else if (data.message?.toLowerCase().includes("training")) {
-                  toast.error("Training Not Found", {
+                } else if (data.message?.toLowerCase().includes("fld")) {
+                  toast.error("FLD Not Found", {
                     description:
-                      "The training you're trying to update doesn't exist",
+                      "The FLD you're trying to update doesn't exist",
                     duration: 5000
                   });
                 } else {
@@ -735,9 +866,9 @@ export default function FLDPage() {
               break;
 
             case 409:
-              toast.error("Duplicate Training", {
+              toast.error("Duplicate FLD", {
                 description:
-                  data?.message || "A training with this title already exists",
+                  data?.message || "A FLD with this data already exists",
                 duration: 5000
               });
               break;
@@ -1007,13 +1138,24 @@ export default function FLDPage() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          <span className="text-green-600 font-medium">
-                            {fld.achieved}
-                          </span>
-                          <span className="text-gray-700">
-                            {" "}
-                            / {fld.target} {fld.units}
-                          </span>
+                          {fld.achieved !== undefined &&
+                          fld.target !== undefined ? (
+                            <>
+                              <span className="text-green-600 font-medium">
+                                {fld.achieved}
+                              </span>
+                              <span className="text-gray-400">
+                                {" "}
+                                /
+                                <span className="text-gray-700">
+                                  {" "}
+                                  {fld.target} {fld.units}
+                                </span>
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-gray-500">N/A</span>
+                          )}
                         </div>
                       </TableCell>
                       {userRole?.role === "admin" && (
@@ -1212,20 +1354,76 @@ function FLDView({ fld }: FLDViewProps) {
         </div>
       </div>
       <hr />
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Target</Label>
-          <p className="text-lg font-semibold text-gray-600">{fld.target}</p>
+      {(fld.target !== undefined || fld.achieved !== undefined) && (
+        <>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label className="text-sm font-medium text-gray-500">
+                Target
+              </Label>
+              <p className="text-lg font-semibold text-gray-600">
+                {fld.target ?? "N/A"}
+              </p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-gray-500">
+                Achieved
+              </Label>
+              <p className="text-lg font-semibold text-green-600">
+                {fld.achieved ?? "N/A"}
+              </p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium text-gray-500">Units</Label>
+              <p>{fld.units}</p>
+            </div>
+          </div>
+          <hr />
+        </>
+      )}
+
+      {/* Target Sentences */}
+      {fld.targetSentence && fld.targetSentence.length > 0 && (
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Target Points
+          </h3>
+          <ul className="space-y-3">
+            {fld.targetSentence.map((target, index) => (
+              <li key={index} className="flex items-start">
+                <span className="text-blue-600 font-semibold mr-2.5 text-sm pt-0.5">
+                  {index + 1}.
+                </span>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {target}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Achieved</Label>
-          <p className="text-lg font-semibold text-green-600">{fld.achieved}</p>
+      )}
+
+      {/* Achieved Sentences */}
+      {fld.achievedSentence && fld.achievedSentence.length > 0 && (
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Achievements
+          </h3>
+          <ul className="space-y-3">
+            {fld.achievedSentence.map((achievement, index) => (
+              <li key={index} className="flex items-start">
+                <span className="text-green-600 font-semibold mr-2.5 text-sm pt-0.5">
+                  {index + 1}.
+                </span>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {achievement}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div>
-          <Label className="text-sm font-medium text-gray-500">Units</Label>
-          <p>{fld.units}</p>
-        </div>
-      </div>
+      )}
+
       <hr />
       {fld.remarks && (
         <div>
@@ -1272,6 +1470,8 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
     quarterId: fld?.quarter.id || "",
     target: fld?.target?.toString() || "",
     achieved: fld?.achieved?.toString() || "",
+    targetSentence: fld?.targetSentence || [],
+    achievedSentence: fld?.achievedSentence || [],
     district: fld?.district || "",
     village: fld?.village || "",
     block: fld?.block || "",
@@ -1322,8 +1522,12 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
       const validationData = {
         projectId: formData.projectId,
         quarterId: formData.quarterId,
-        target: Number.parseInt(formData.target) || 0,
-        achieved: Number.parseInt(formData.achieved) || 0,
+        target: formData.target ? Number.parseInt(formData.target) : undefined,
+        achieved: formData.achieved
+          ? Number.parseInt(formData.achieved)
+          : undefined,
+        targetSentence: formData.targetSentence,
+        achievedSentence: formData.achievedSentence,
         district: formData.district,
         village: formData.village,
         block: formData.block,
@@ -1332,9 +1536,9 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
       };
 
       if (isEdit) {
-        updateFLDValidation.parse(validationData);
+        updateFldValidation.parse(validationData);
       } else {
-        createFLDValidation.parse(validationData);
+        createFldValidation.parse(validationData);
       }
 
       setFormErrors({});
@@ -1421,7 +1625,9 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
             </SelectContent>
           </Select>
           {formErrors.projectId && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.projectId}</p>
+            <p className="text-red-500 text-sm mt-1">
+              {formErrors.projectId as string}
+            </p>
           )}
         </div>
       </div>
@@ -1467,48 +1673,12 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
             </SelectContent>
           </Select>
           {formErrors.quarterId && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.quarterId}</p>
+            <p className="text-red-500 text-sm mt-1">
+              {formErrors.quarterId as string}
+            </p>
           )}
         </div>
 
-        <div>
-          <Label htmlFor="target">
-            Target <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="target"
-            name="target"
-            type="number"
-            placeholder="Enter target number"
-            value={formData.target}
-            onChange={handleInputChange}
-            className={formErrors.target ? "border-red-500" : ""}
-            min="1"
-            required
-          />
-          {formErrors.target && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.target}</p>
-          )}
-        </div>
-        <div>
-          <Label htmlFor="achieved">
-            Achieved <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="achieved"
-            name="achieved"
-            type="number"
-            placeholder="Enter achieved number"
-            value={formData.achieved}
-            onChange={handleInputChange}
-            className={formErrors.achieved ? "border-red-500" : ""}
-            min="0"
-            required
-          />
-          {formErrors.achieved && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.achieved}</p>
-          )}
-        </div>
         <div>
           <Label htmlFor="units">Units</Label>
           <Input
@@ -1520,9 +1690,74 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
             className={formErrors.units ? "border-red-500" : ""}
           />
           {formErrors.units && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.units}</p>
+            <p className="text-red-500 text-sm mt-1">
+              {formErrors.units as string}
+            </p>
           )}
         </div>
+
+        <div>
+          <Label htmlFor="target">Target</Label>
+          <Input
+            id="target"
+            name="target"
+            type="number"
+            placeholder="Enter target number (optional)"
+            value={formData.target}
+            onChange={handleInputChange}
+            className={formErrors.target ? "border-red-500" : ""}
+            min="0"
+          />
+          {formErrors.target && (
+            <p className="text-red-500 text-sm mt-1">
+              {formErrors.target as string}
+            </p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="achieved">Achieved</Label>
+          <Input
+            id="achieved"
+            name="achieved"
+            type="number"
+            placeholder="Enter achieved number (optional)"
+            value={formData.achieved}
+            onChange={handleInputChange}
+            className={formErrors.achieved ? "border-red-500" : ""}
+            min="0"
+          />
+          {formErrors.achieved && (
+            <p className="text-red-500 text-sm mt-1">
+              {formErrors.achieved as string}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Target Sentence and Achieved Sentence Array Inputs */}
+      <div className="grid grid-cols-1 gap-4">
+        <ArrayInputManager
+          label="Target Points"
+          items={formData.targetSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, targetSentence: items }))
+          }
+          placeholder="Add a target point"
+          error={formErrors.targetSentence as string}
+        />
+
+        <ArrayInputManager
+          label="Achievement Points"
+          items={formData.achievedSentence}
+          setItems={(items) =>
+            setFormData((p) => ({ ...p, achievedSentence: items }))
+          }
+          placeholder="Add an achievement point"
+          error={formErrors.achievedSentence as string}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <Label htmlFor="district">
             District <span className="text-red-500">*</span>
@@ -1538,7 +1773,9 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
             required
           />
           {formErrors.district && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.district}</p>
+            <p className="text-red-500 text-sm mt-1">
+              {formErrors.district as string}
+            </p>
           )}
         </div>
         <div>
@@ -1556,7 +1793,9 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
             required
           />
           {formErrors.village && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.village}</p>
+            <p className="text-red-500 text-sm mt-1">
+              {formErrors.village as string}
+            </p>
           )}
         </div>
         <div>
@@ -1574,7 +1813,9 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
             required
           />
           {formErrors.block && (
-            <p className="text-red-500 text-sm mt-1">{formErrors.block}</p>
+            <p className="text-red-500 text-sm mt-1">
+              {formErrors.block as string}
+            </p>
           )}
         </div>
       </div>
@@ -1591,7 +1832,9 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
           className={formErrors.remarks ? "border-red-500 mt-2" : "mt-2"}
         />
         {formErrors.remarks && (
-          <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>
+          <p className="text-red-500 text-sm mt-1">
+            {formErrors.remarks as string}
+          </p>
         )}
       </div>
 
