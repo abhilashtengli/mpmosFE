@@ -850,7 +850,7 @@ export default function InputDistributionPage() {
                   <TableHead>Project</TableHead>
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
-                  <TableHead>Target/Achieved</TableHead>
+                  <TableHead>Achieved/Target</TableHead>
                   {user?.role === "admin" && <TableHead>Created By</TableHead>}
                   <TableHead>Actions</TableHead>
                 </TableRow>

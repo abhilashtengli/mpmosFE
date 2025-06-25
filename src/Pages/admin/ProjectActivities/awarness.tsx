@@ -52,8 +52,12 @@ import {
   UploadCloud,
   Loader2
 } from "lucide-react";
-import axios, { AxiosError } from "axios";
-import { Base_Url, quarterlyData, SignedUrlResponse } from "@/lib/constants";
+import axios, { type AxiosError } from "axios";
+import {
+  Base_Url,
+  quarterlyData,
+  type SignedUrlResponse
+} from "@/lib/constants";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import EnhancedShimmerTableRows from "@/components/shimmer-rows";
@@ -295,17 +299,18 @@ interface AwarenessFormProps {
   isEdit?: boolean;
 }
 
+// Changed: Modified form data interface to handle numbers as strings like training page
 interface AwarenessFormData {
   title: string;
   projectId: string;
   quarterId: string;
-  target: number;
-  achieved: number;
+  target: string; // Changed from number to string
+  achieved: string; // Changed from number to string
   district: string;
   village: string;
   block: string;
-  beneficiaryMale: number;
-  beneficiaryFemale: number;
+  beneficiaryMale: string; // Changed from number to string
+  beneficiaryFemale: string; // Changed from number to string
   imageUrl?: string | null;
   imageKey?: string | null;
   units: string;
@@ -463,7 +468,7 @@ export default function AwarenessPage() {
           .includes(searchTerm.toLowerCase());
 
       // Get quarter IDs based on year and quarter selection
-      let matchesYearQuarter: boolean = true;
+      let matchesYearQuarter = true;
 
       if (
         (selectedYear && selectedYear !== "all") ||
@@ -475,11 +480,11 @@ export default function AwarenessPage() {
             const yearMatch =
               !selectedYear ||
               selectedYear === "all" ||
-              q.year === parseInt(selectedYear);
+              q.year === Number.parseInt(selectedYear);
             const quarterMatch =
               !selectedQuarter ||
               selectedQuarter === "all" ||
-              q.number === parseInt(selectedQuarter);
+              q.number === Number.parseInt(selectedQuarter);
             return yearMatch && quarterMatch;
           })
           .map((q) => q.id);
@@ -559,7 +564,8 @@ export default function AwarenessPage() {
       return false;
     }
 
-    if (!formData.target || formData.target <= 0) {
+    // Changed: Parse string to number like training page
+    if (!formData.target || Number.parseInt(formData.target) <= 0) {
       toast.error("Valid target number is required");
       return false;
     }
@@ -579,18 +585,18 @@ export default function AwarenessPage() {
         }
       };
 
-      // Prepare request data
+      // Changed: Prepare request data with proper number conversion like training page
       const requestData = {
         projectId: formData.projectId,
         quarterId: formData.quarterId,
         title: formData.title,
-        target: formData.target || 0,
-        achieved: formData.achieved || 0,
+        target: Number.parseInt(formData.target) || 0,
+        achieved: Number.parseInt(formData.achieved) || 0,
         district: formData.district,
         village: formData.village,
         block: formData.block,
-        beneficiaryMale: formData.beneficiaryMale || 0,
-        beneficiaryFemale: formData.beneficiaryFemale || 0,
+        beneficiaryMale: Number.parseInt(formData.beneficiaryMale) || 0,
+        beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
         units: formData.units,
         remarks: formData.remarks,
         imageKey: formData.imageKey || null,
@@ -1129,7 +1135,7 @@ export default function AwarenessPage() {
                   <TableHead>Project</TableHead>
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
-                  <TableHead>Target/Achieved</TableHead>
+                  <TableHead>Achieved/Target</TableHead>
                   {userRole?.role === "admin" && (
                     <TableHead>Creadted By</TableHead>
                   )}
@@ -1510,17 +1516,18 @@ function AwarenessForm({
   onClose,
   isEdit = false
 }: AwarenessFormProps) {
+  // Changed: Initialize form data with string values like training page
   const [formData, setFormData] = useState<AwarenessFormData>({
     title: awareness?.title || "",
     projectId: awareness?.project.id || "",
     quarterId: awareness?.quarter.id || "",
-    target: awareness?.target || 0,
-    achieved: awareness?.achieved || 0,
+    target: awareness?.target?.toString() || "",
+    achieved: awareness?.achieved?.toString() || "",
     district: awareness?.district || "",
     village: awareness?.village || "",
     block: awareness?.block || "",
-    beneficiaryMale: awareness?.beneficiaryMale || 0,
-    beneficiaryFemale: awareness?.beneficiaryFemale || 0,
+    beneficiaryMale: awareness?.beneficiaryMale?.toString() || "0",
+    beneficiaryFemale: awareness?.beneficiaryFemale?.toString() || "0",
     units: awareness?.units || "",
     remarks: awareness?.remarks || "",
     // Initialize image fields from awareness prop if editing
@@ -1673,23 +1680,18 @@ function AwarenessForm({
 
   const validateForm = (): boolean => {
     try {
-      // Prepare data for validation, including potentially null image fields
-      const validationData: Partial<AwarenessFormData> & {
-        target: number;
-        achieved: number;
-        beneficiaryMale: number;
-        beneficiaryFemale: number;
-      } = {
+      // Changed: Create a proper validation data object without type conflicts
+      const validationData = {
         title: formData.title,
         projectId: formData.projectId,
         quarterId: formData.quarterId,
-        target: formData.target,
-        achieved: formData.achieved,
+        target: Number.parseInt(formData.target) || 0,
+        achieved: Number.parseInt(formData.achieved) || 0,
         district: formData.district,
         village: formData.village,
         block: formData.block,
-        beneficiaryMale: formData.beneficiaryMale || 0,
-        beneficiaryFemale: formData.beneficiaryFemale || 0,
+        beneficiaryMale: Number.parseInt(formData.beneficiaryMale) || 0,
+        beneficiaryFemale: Number.parseInt(formData.beneficiaryFemale) || 0,
         units: formData.units,
         remarks: formData.remarks,
         // Pass current state of imageUrl and imageKey for validation
@@ -1700,10 +1702,6 @@ function AwarenessForm({
       if (isEdit) {
         updateAwarenessProgramValidation.parse(validationData);
       } else {
-        // For create, if image is mandatory, add imageFile to validationData
-        // if (!formData.imageFile && MANDATORY_IMAGE_ON_CREATE) {
-        //   throw new z.ZodError([{ path: ["imageFile"], message: "Image is required", code: z.ZodIssueCode.custom }]);
-        // }
         createAwarenessValidation.parse(validationData);
       }
       setFormErrors({});
@@ -2069,7 +2067,7 @@ function AwarenessForm({
           value={formData.remarks}
           onChange={handleInputChange}
           maxLength={300}
-          className={formErrors.remarks ? "border-red-500" : ""}
+          className={formErrors.remarks ? "border-red-500 mt-2" : "mt-2"}
         />
         {formErrors.remarks && (
           <p className="text-red-500 text-sm mt-1">{formErrors.remarks}</p>

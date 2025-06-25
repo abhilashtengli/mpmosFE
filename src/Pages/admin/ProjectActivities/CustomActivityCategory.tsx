@@ -475,7 +475,7 @@ export default function ActivityPage() {
             ? { id: item.User.id, name: item.User.name }
             : undefined
         })
-        );
+      );
       setActivities(mappedActivities || []);
     } catch (error: unknown) {
       const defaultMessage =
@@ -1131,7 +1131,7 @@ export default function ActivityPage() {
                   <TableHead>Project</TableHead>
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
-                  <TableHead>Target/Achieved</TableHead>
+                  <TableHead>Achieved/Target</TableHead>
                   {userRole?.role === "admin" && (
                     <TableHead>Created By</TableHead>
                   )}
@@ -1187,6 +1187,7 @@ export default function ActivityPage() {
                             {" "}
                             /
                             <span className="text-gray-700">
+                              {" "}
                               {activity.target} {activity.units}
                             </span>
                           </span>

@@ -1020,7 +1020,7 @@ export default function TrainingPage() {
                   <TableHead>Project</TableHead>
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
-                  <TableHead>Target/Achieved</TableHead>
+                  <TableHead>Achieved/Target</TableHead>
                   {userRole?.role === "admin" && (
                     <TableHead>Creadted By</TableHead>
                   )}
@@ -1076,7 +1076,7 @@ export default function TrainingPage() {
                             {" "}
                             /
                             <span className="text-gray-700">
-                              {training.target} {training.units}
+                            {" "}  {training.target} {training.units}
                             </span>
                           </span>
                         </div>

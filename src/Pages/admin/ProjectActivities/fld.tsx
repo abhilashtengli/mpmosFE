@@ -963,7 +963,7 @@ export default function FLDPage() {
                   <TableHead>Project</TableHead>
                   <TableHead>Quarter</TableHead>
                   <TableHead>Location</TableHead>
-                  <TableHead>Target/Achieved</TableHead>
+                  <TableHead>Achieved/Target</TableHead>
                   {userRole?.role === "admin" && (
                     <TableHead>Created By</TableHead>
                   )}

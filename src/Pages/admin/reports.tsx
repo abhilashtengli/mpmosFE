@@ -128,7 +128,6 @@ export default function ReportsAdPage() {
         withCredentials: true
       });
 
-      console.log("GR : ", response.data.data);
       if (response.data.success) {
         setGeneratedReports(response.data.data || []);
       } else {
@@ -198,26 +197,28 @@ export default function ReportsAdPage() {
 
     try {
       setIsGenerating(true);
-      const projectData = {
+      const requestData = {
         projectId: formData.projectId,
         quarterId: quarterId
       };
-      // const response = await fetch("/generate-report", {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json"
-      //   },
-      //   body: JSON.stringify({
-      //     projectId: formData.projectId,
-      //     quarterId: quarterId
-      //   })
-      // });
-      const response = await axios.post(`${Base_Url}/generate-report`, {
-        withCredentials: true,
-        projectData
-      });
+      console.log("PI : ", requestData);
+      const response = await axios.post(
+        `${Base_Url}/generate-report`,
+        requestData, // Send data directly
+        {
+          withCredentials: true, // This should be in config, not body
+          validateStatus: (status: number) => status < 500
+        }
+      );
+
+      console.log("data : ", response.data);
 
       const data = await response.data;
+      if (response.status === 401) {
+        toast.error("Failed", {
+          description: response.data.message || "Error"
+        });
+      }
 
       if (data.success) {
         toast.success("Report generated successfully!");
@@ -227,7 +228,8 @@ export default function ReportsAdPage() {
           quarter: 0,
           year: 0
         });
-        // Refresh the reports list
+        // Add the new report to the existing array
+        setGeneratedReports((prevReports) => [data.data, ...prevReports]);
         await fetchGeneratedReports();
       } else {
         toast.error(data.error || "Failed to generate report");
