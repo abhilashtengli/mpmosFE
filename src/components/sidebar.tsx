@@ -196,7 +196,7 @@ export function Sidebar() {
             <div className="flex items-center space-x-2">
               <Sprout className="h-8 w-8 text-green-600" />
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-gray-900 tracking-wide">
                   Millet-PMoS
                 </h2>
                 <p className="text-xs text-gray-500">Management System</p>
@@ -227,7 +227,7 @@ export function Sidebar() {
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full justify-start  text-left font-normal cursor-pointer",
+                    "w-full justify-start tracking-wide  text-left font-normal cursor-pointer",
                     collapsed && "justify-center"
                   )}
                   onClick={() => !collapsed && toggleExpanded(item.name)}
@@ -253,7 +253,7 @@ export function Sidebar() {
                           variant="ghost"
                           size="sm"
                           className={cn(
-                            "justify-start text-left  w-full font-normal cursor-pointer",
+                            "justify-start text-left tracking-wide   w-full font-normal cursor-pointer",
                             pathname === child.href &&
                               "bg-green-50 text-green-700"
                           )}
@@ -271,7 +271,7 @@ export function Sidebar() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="w-full justify-start text-left font-normal cursor-pointer text-green-600 hover:bg-green-50"
+                            className="w-full tracking-wide justify-start text-left font-normal cursor-pointer text-green-600 hover:bg-green-50"
                             onClick={() => setShowAddForm(true)}
                           >
                             <Plus className="h-4 w-4 mr-2" />
@@ -322,7 +322,7 @@ export function Sidebar() {
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full justify-start text-left font-normal",
+                    "w-full justify-start tracking-wide text-left font-normal",
                     pathname === item.href &&
                       "bg-green-50 text-green-700 cursor-pointer",
                     collapsed && "justify-center"
@@ -338,7 +338,7 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      {!collapsed && (
+      {/* {!collapsed && (
         <div className="p-4 border-t border-gray-200">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-green-600 rounded-full flex items-center pb-0.5 justify-center">
@@ -356,7 +356,7 @@ export function Sidebar() {
             </div>
           </div>
         </div>
-      )}
+      )} */}
     </div>
   );
 }

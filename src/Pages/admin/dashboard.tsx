@@ -38,14 +38,17 @@ import {
   Download,
   Loader2
 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { toast } from "sonner";
 import axios from "axios";
 import { Base_Url } from "@/lib/constants";
 import ChartShimmerLoader from "@/components/chart-shimmer";
 import ShimmerPieChart from "@/components/pie-char-shimmer";
-
+import { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { UserPlus, LogOut, ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useProjectStore } from "@/stores/useProjectStore";
 // Types
 interface DashboardStats {
   projectCount: number;
@@ -192,7 +195,6 @@ const formatDate = (dateString: string) => {
 
 export default function DashboardAdPage() {
   const user = useAuthStore((state) => state.user);
-
   // States
   const [stats, setStats] = useState<DashboardStats>(fallbackStats);
   const [isStatsLoading, setIsStatsLoading] = useState(false);
@@ -204,6 +206,41 @@ export default function DashboardAdPage() {
   const [generatedReports, setGeneratedReports] = useState<GeneratedReport[]>(
     []
   );
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const { logout } = useAuthStore();
+  const { fetchProjects } = useProjectStore();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const handleAddAdmin = () => {
+    setIsOpen(false);
+    navigate("/admin/signup");
+  };
+
+  const handleLogout = async () => {
+    setIsOpen(false);
+    logout();
+  };
 
   // Fetch dashboard stats
   const fetchStats = async () => {
@@ -408,23 +445,143 @@ export default function DashboardAdPage() {
               </h1>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <Badge
-              variant="outline"
-              className="text-green-700 border-green-300"
-            >
-              Q2 2024
-            </Badge>
+          {/* <div className="flex items-center space-x-4 border">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-green-600 rounded-full pb-0.5 flex items-center justify-center">
                 <span className="text-white text-sm font-medium">
                   {user?.name.slice(0, 2).toUpperCase()}
                 </span>
               </div>
-              <span className="text-sm font-medium text-gray-700">
-                {user?.name}
-              </span>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium tracking-wider text-gray-700">
+                  {user?.name}
+                </span>
+                <span className="text-[10px] tracking-widest text-green-900">
+                  {user?.role}
+                </span>
+              </div>
             </div>
+          </div> */}
+          <div className="relative" ref={dropdownRef}>
+            {/* User Profile Trigger */}
+            <motion.div
+              className="flex items-center space-x-4 cursor-pointer select-none"
+              onClick={() => setIsOpen(!isOpen)}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 400, damping: 17 }}
+            >
+              <div className="flex items-center space-x-2">
+                <motion.div
+                  className="w-8 h-8 bg-green-600 rounded-full pb-0.5 flex items-center justify-center shadow-md"
+                  whileHover={{
+                    boxShadow: "0 4px 12px rgba(34, 197, 94, 0.3)",
+                    scale: 1.05
+                  }}
+                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                >
+                  <span className="text-white text-sm font-medium">
+                    {user?.name.slice(0, 2).toUpperCase()}
+                  </span>
+                </motion.div>
+
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium tracking-wider text-gray-700">
+                    {user?.name}
+                  </span>
+                  <span className="text-[10px] tracking-widest text-green-900">
+                    {user?.role}
+                  </span>
+                </div>
+
+                <motion.div
+                  animate={{ rotate: isOpen ? 180 : 0 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                >
+                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                </motion.div>
+              </div>
+            </motion.div>
+
+            {/* Dropdown Menu */}
+            <AnimatePresence>
+              {isOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 500,
+                    damping: 30,
+                    mass: 0.8
+                  }}
+                  className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50"
+                  style={{
+                    boxShadow:
+                      "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
+                  }}
+                >
+                  {/* Add Admin Button */}
+                  <motion.button
+                    onClick={handleAddAdmin}
+                    className="w-full flex cursor-pointer items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                    whileHover={{ x: 4 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  >
+                    <motion.div
+                      whileHover={{ rotate: 5, scale: 1.1 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 17
+                      }}
+                    >
+                      <UserPlus className="w-4 h-4 text-blue-600" />
+                    </motion.div>
+                    <span className="text-sm font-medium">Add Admin</span>
+                  </motion.button>
+
+                  {/* Divider */}
+                  <div className="my-1 border-t border-gray-100" />
+
+                  {/* Logout Button */}
+                  <motion.button
+                    onClick={handleLogout}
+                    className="w-full flex cursor-pointer items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors duration-150"
+                    whileHover={{ x: 4 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  >
+                    <motion.div
+                      whileHover={{ rotate: -5, scale: 1.1 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 17
+                      }}
+                    >
+                      <LogOut className="w-4 h-4 text-red-500" />
+                    </motion.div>
+                    <span className="text-sm font-medium">Logout</span>
+                  </motion.button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Backdrop for mobile */}
+            <AnimatePresence>
+              {isOpen && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black bg-opacity-20 z-40 md:hidden"
+                  onClick={() => setIsOpen(false)}
+                />
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </header>
@@ -439,72 +596,75 @@ export default function DashboardAdPage() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <Card className="border-l-4 border-l-green-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Projects
-              </CardTitle>
-              <Target className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              {isStatsLoading ? (
-                <div className="flex items-center space-x-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">Loading...</span>
-                </div>
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">{stats.projectCount}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {targetData.project.activeCount} active,{" "}
-                    {targetData.project.completedCount} completed
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-blue-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Beneficiaries
-              </CardTitle>
-              <Users className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              {isStatsLoading ? (
-                <div className="flex items-center space-x-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">Loading...</span>
-                </div>
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">
-                    {stats.totalBeneficiaries.toLocaleString()}
+          <div className="border-l-4 border-l-green-500 bg-white shadow-md rounded-xl h-fit min-h-[70px] p-2">
+            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="flex items-center gap-x-2">
+                <Target className="h-4 w-4 text-green-600" />
+                <p className="text-sm font-medium">Total Projects</p>
+              </div>
+              <div>
+                {isStatsLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Loading...</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {stats.maletotalBeneficiaries.toLocaleString()} male,{" "}
-                    {stats.femaletotalBeneficiaries.toLocaleString()} female
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">
+                      {stats.projectCount}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      {targetData.project.activeCount} active,{" "}
+                      {targetData.project.completedCount} completed
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
 
-          <Card className="border-l-4 border-l-purple-500">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Geographic Coverage
-              </CardTitle>
-              <MapPin className="h-4 w-4 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">8</div>
-              <p className="text-xs text-muted-foreground">
-                States covered across NEH region
-              </p>
-            </CardContent>
-          </Card>
+          <div className="border-l-4 border-l-blue-500 bg-white shadow-md border rounded-xl h-fit min-h-[70px] p-2">
+            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="flex items-center gap-x-2">
+                <Users className="h-4 w-4 text-blue-600" />
+                <p className="text-sm font-medium">Total Beneficiaries</p>
+              </div>
+              <div>
+                {" "}
+                {isStatsLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Loading...</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-xl font-bold">
+                      {stats.totalBeneficiaries.toLocaleString()}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      {stats.maletotalBeneficiaries.toLocaleString()} male,{" "}
+                      {stats.femaletotalBeneficiaries.toLocaleString()} female
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-l-4 border-l-purple-500 bg-white shadow-md border h-fit min-h-[70px] p-2 rounded-xl">
+            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="flex gap-x-2 items-center">
+                <MapPin className="h-4 w-4 text-purple-600" />
+                <p className="text-sm font-medium">Geographic Coverage</p>
+              </div>
+              <div>
+                <div className="text-2xl font-bold">8</div>
+                <p className="text-[10px] text-muted-foreground">
+                  States covered across NEH region
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Main Content Tabs */}
@@ -538,7 +698,7 @@ export default function DashboardAdPage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   {isTargetLoading ? (
-                   <ChartShimmerLoader/>
+                    <ChartShimmerLoader />
                   ) : (
                     <div className="bg-white rounded-lg pt-4  shadow-sm border-red-400">
                       <ResponsiveContainer width="100%" height={350}>
@@ -656,7 +816,7 @@ export default function DashboardAdPage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   {isTargetLoading ? (
-                    <ShimmerPieChart/>
+                    <ShimmerPieChart />
                   ) : (
                     <div className="bg-white rounded-lg p-4 shadow-sm">
                       <ResponsiveContainer width="100%" height={245}>

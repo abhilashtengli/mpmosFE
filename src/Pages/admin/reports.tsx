@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart3,
   Download,
@@ -25,12 +26,14 @@ import {
   Search,
   Loader2,
   Calendar,
-  Building
+  Building,
+  AlertCircle,
+  FolderOpen
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { Base_Url, quarterlyData } from "@/lib/constants";
-import axios from "axios";
+import axios, { type AxiosError, type AxiosResponse } from "axios";
 
 // TypeScript interfaces
 interface QuickStat {
@@ -68,8 +71,28 @@ interface GeneratedReport {
   };
 }
 
-interface FormData {
+interface CompiledReport {
+  id: string;
+  quarter: string;
+  year: number;
+  fileUrl: string;
+  fileKey: string;
+  fileName: string;
+  createdAt: string;
+  updatedAt: string;
+  User: {
+    id: string;
+    name: string;
+  };
+}
+
+interface ProjectFormData {
   projectId: string;
+  quarter: number;
+  year: number;
+}
+
+interface CompiledFormData {
   quarter: number;
   year: number;
 }
@@ -80,6 +103,16 @@ interface FormErrors {
   year?: string;
 }
 
+interface ApiErrorData {
+  success?: boolean;
+  error?: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+  message?: string;
+}
+
 const quickStats: QuickStat[] = [
   { label: "Total Reports Generated", value: "1,247", change: "+12%" },
   { label: "Last Report Generated", value: "2 hours ago", change: "Recent" },
@@ -88,18 +121,36 @@ const quickStats: QuickStat[] = [
 ];
 
 export default function ReportsAdPage() {
+  const [activeTab, setActiveTab] = useState<string>("project");
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [isLoadingReports, setIsLoadingReports] = useState<boolean>(true);
+  const [compiledSearchTerm, setCompiledSearchTerm] = useState<string>("");
+
+  // Project Reports State
+  const [isGeneratingProject, setIsGeneratingProject] =
+    useState<boolean>(false);
+  const [isLoadingProjectReports, setIsLoadingProjectReports] =
+    useState<boolean>(true);
   const [generatedReports, setGeneratedReports] = useState<GeneratedReport[]>(
     []
   );
-  const [formData, setFormData] = useState<FormData>({
+  const [projectFormData, setProjectFormData] = useState<ProjectFormData>({
     projectId: "",
     quarter: 0,
     year: 0
   });
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [projectFormErrors, setProjectFormErrors] = useState<FormErrors>({});
+
+  // Compiled Reports State
+  const [isGeneratingCompiled, setIsGeneratingCompiled] =
+    useState<boolean>(false);
+  const [isLoadingCompiledReports, setIsLoadingCompiledReports] =
+    useState<boolean>(true);
+  const [compiledReports, setCompiledReports] = useState<CompiledReport[]>([]);
+  const [compiledFormData, setCompiledFormData] = useState<CompiledFormData>({
+    quarter: 0,
+    year: 0
+  });
+  const [compiledFormErrors, setCompiledFormErrors] = useState<FormErrors>({});
 
   // Get projects from store
   const projects = useProjectStore((state) => state.projects);
@@ -118,12 +169,155 @@ export default function ReportsAdPage() {
 
   useEffect(() => {
     fetchGeneratedReports();
+    fetchCompiledReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Error handling helper for actual errors
+  const handleApiError = (
+    error: AxiosError<ApiErrorData>,
+    defaultMessage: string
+  ) => {
+    console.error("API Error:", error);
+
+    if (error.response?.data?.error) {
+      const { code, message } = error.response.data.error;
+
+      switch (code) {
+        case "UNAUTHORIZED":
+          toast.error("Authentication Error", {
+            description: "Please log in again to continue."
+          });
+          break;
+        case "VALIDATION_ERROR":
+          toast.error("Validation Error", {
+            description: message || "Please check your input and try again."
+          });
+          break;
+        case "PROJECT_NOT_FOUND":
+        case "QUARTER_NOT_FOUND":
+          toast.error("Not Found", {
+            description: message || "The requested resource was not found."
+          });
+          break;
+        case "ACCESS_DENIED":
+          toast.error("Access Denied", {
+            description: "You don't have permission to access this resource."
+          });
+          break;
+        case "NO_ACTIVITIES_FOUND":
+          toast.error("No Data Available", {
+            description: "No activities found for the selected criteria."
+          });
+          break;
+        case "DATABASE_ERROR":
+          toast.error("Database Error", {
+            description:
+              message || "Database operation failed. Please try again."
+          });
+          break;
+        case "FILE_UPLOAD_ERROR":
+          toast.error("Upload Error", {
+            description: "Failed to upload the report file. Please try again."
+          });
+          break;
+        case "REPORT_GENERATION_ERROR":
+          toast.error("Report Generation Error", {
+            description: "Failed to generate the report document."
+          });
+          break;
+        default:
+          toast.error("Error", {
+            description: message || defaultMessage
+          });
+      }
+    } else if (error.response?.status === 401) {
+      toast.error("Authentication Required", {
+        description: "Please log in to continue."
+      });
+    } else if (error.response?.status === 403) {
+      toast.error("Access Denied", {
+        description: "You don't have permission to perform this action."
+      });
+    } else if (error.response?.status && error.response.status >= 500) {
+      toast.error("Server Error", {
+        description: "Something went wrong on our end. Please try again later."
+      });
+    } else {
+      toast.error("Error", {
+        description: defaultMessage
+      });
+    }
+  };
+
+  // Error handling helper for failed responses
+  const handleFailedResponse = (
+    response: AxiosResponse<ApiErrorData>,
+    defaultMessage: string
+  ) => {
+    console.error("Failed Response:", response);
+
+    if (response.data?.error) {
+      const { code, message } = response.data.error;
+
+      switch (code) {
+        case "UNAUTHORIZED":
+          toast.error("Authentication Error", {
+            description: "Please log in again to continue."
+          });
+          break;
+        case "VALIDATION_ERROR":
+          toast.error("Validation Error", {
+            description: message || "Please check your input and try again."
+          });
+          break;
+        case "PROJECT_NOT_FOUND":
+        case "QUARTER_NOT_FOUND":
+          toast.error("Not Found", {
+            description: message || "The requested resource was not found."
+          });
+          break;
+        case "ACCESS_DENIED":
+          toast.error("Access Denied", {
+            description: "You don't have permission to access this resource."
+          });
+          break;
+        case "NO_ACTIVITIES_FOUND":
+          toast.error("No Data Available", {
+            description: "No activities found for the selected criteria."
+          });
+          break;
+        case "DATABASE_ERROR":
+          toast.error("Database Error", {
+            description:
+              message || "Database operation failed. Please try again."
+          });
+          break;
+        case "FILE_UPLOAD_ERROR":
+          toast.error("Upload Error", {
+            description: "Failed to upload the report file. Please try again."
+          });
+          break;
+        case "REPORT_GENERATION_ERROR":
+          toast.error("Report Generation Error", {
+            description: "Failed to generate the report document."
+          });
+          break;
+        default:
+          toast.error("Error", {
+            description: message || defaultMessage
+          });
+      }
+    } else {
+      toast.error("Error", {
+        description: response.data?.message || defaultMessage
+      });
+    }
+  };
 
   const fetchGeneratedReports = async () => {
     try {
-      setIsLoadingReports(true);
-
+      setIsLoadingProjectReports(true);
       const response = await axios.get(`${Base_Url}/get-project-reports`, {
         withCredentials: true
       });
@@ -131,48 +325,102 @@ export default function ReportsAdPage() {
       if (response.data.success) {
         setGeneratedReports(response.data.data || []);
       } else {
-        toast.error(response.data.data.message || "Failed to fetch reports");
+        handleFailedResponse(response, "Failed to fetch project reports");
       }
     } catch (error) {
-      console.error("Error fetching reports:", error);
-      toast.error("Failed to fetch reports");
+      handleApiError(
+        error as AxiosError<ApiErrorData>,
+        "Failed to fetch project reports"
+      );
     } finally {
-      setIsLoadingReports(false);
+      setIsLoadingProjectReports(false);
     }
   };
 
-  const handleSelectChange = (
-    field: keyof FormData,
+  const fetchCompiledReports = async () => {
+    try {
+      setIsLoadingCompiledReports(true);
+      const response = await axios.get(`${Base_Url}/get-compiled-reports`, {
+        withCredentials: true
+      });
+
+      if (response.data.success) {
+        setCompiledReports(response.data.data || []);
+      } else {
+        handleFailedResponse(response, "Failed to fetch compiled reports");
+      }
+    } catch (error) {
+      handleApiError(
+        error as AxiosError<ApiErrorData>,
+        "Failed to fetch compiled reports"
+      );
+    } finally {
+      setIsLoadingCompiledReports(false);
+    }
+  };
+
+  const handleProjectSelectChange = (
+    field: keyof ProjectFormData,
     value: string | number
   ) => {
-    setFormData((prev) => ({
+    setProjectFormData((prev) => ({
       ...prev,
       [field]: value
     }));
 
-    // Clear error when user makes a selection
-    if (formErrors[field]) {
-      setFormErrors((prev) => ({
+    if (projectFormErrors[field]) {
+      setProjectFormErrors((prev) => ({
         ...prev,
         [field]: undefined
       }));
     }
   };
 
-  const validateForm = (): boolean => {
+  const handleCompiledSelectChange = (
+    field: keyof CompiledFormData,
+    value: string | number
+  ) => {
+    setCompiledFormData((prev) => ({
+      ...prev,
+      [field]: value
+    }));
+
+    if (compiledFormErrors[field]) {
+      setCompiledFormErrors((prev) => ({
+        ...prev,
+        [field]: undefined
+      }));
+    }
+  };
+
+  const validateProjectForm = (): boolean => {
     const errors: FormErrors = {};
 
-    if (!formData.projectId) {
+    if (!projectFormData.projectId) {
       errors.projectId = "Please select a project";
     }
-    if (!formData.quarter) {
+    if (!projectFormData.quarter) {
       errors.quarter = "Please select a quarter";
     }
-    if (!formData.year) {
+    if (!projectFormData.year) {
       errors.year = "Please select a year";
     }
 
-    setFormErrors(errors);
+    setProjectFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateCompiledForm = (): boolean => {
+    const errors: FormErrors = {};
+
+    if (!compiledFormData.quarter) {
+      errors.quarter = "Please select a quarter";
+    }
+    if (!compiledFormData.year) {
+      errors.year = "Please select a year";
+    }
+
+    setCompiledFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
@@ -183,68 +431,119 @@ export default function ReportsAdPage() {
     return quarterData ? quarterData.id : null;
   };
 
-  const handleGenerateReport = async () => {
-    if (!validateForm()) {
+  const handleGenerateProjectReport = async () => {
+    if (!validateProjectForm()) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    const quarterId = getQuarterId(formData.quarter, formData.year);
+    const quarterId = getQuarterId(
+      projectFormData.quarter,
+      projectFormData.year
+    );
     if (!quarterId) {
       toast.error("Invalid quarter and year combination");
       return;
     }
 
     try {
-      setIsGenerating(true);
+      setIsGeneratingProject(true);
       const requestData = {
-        projectId: formData.projectId,
+        projectId: projectFormData.projectId,
         quarterId: quarterId
       };
-      console.log("PI : ", requestData);
+
       const response = await axios.post(
-        `${Base_Url}/generate-report`,
-        requestData, // Send data directly
+        `${Base_Url}/generate-project-report`,
+        requestData,
         {
-          withCredentials: true, // This should be in config, not body
+          withCredentials: true,
           validateStatus: (status: number) => status < 500
         }
       );
 
-      console.log("data : ", response.data);
-
-      const data = await response.data;
-      if (response.status === 401) {
-        toast.error("Failed", {
-          description: response.data.message || "Error"
-        });
-      }
-
-      if (data.success) {
-        toast.success("Report generated successfully!");
-        // Reset form
-        setFormData({
+      if (response.data.success) {
+        toast.success("Project report generated successfully!");
+        setProjectFormData({
           projectId: "",
           quarter: 0,
           year: 0
         });
-        // Add the new report to the existing array
-        setGeneratedReports((prevReports) => [data.data, ...prevReports]);
-        await fetchGeneratedReports();
+        setGeneratedReports((prevReports) => [
+          response.data.data,
+          ...prevReports
+        ]);
+        // await fetchGeneratedReports();
       } else {
-        toast.error(data.error || "Failed to generate report");
+        handleFailedResponse(response, "Failed to generate project report");
       }
     } catch (error) {
-      console.error("Error generating report:", error);
-      toast.error("Failed to generate report. Please try again.");
+      handleApiError(
+        error as AxiosError<ApiErrorData>,
+        "Failed to generate project report"
+      );
     } finally {
-      setIsGenerating(false);
+      setIsGeneratingProject(false);
+    }
+  };
+
+  const handleGenerateCompiledReport = async () => {
+    if (!validateCompiledForm()) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    const quarterId = getQuarterId(
+      compiledFormData.quarter,
+      compiledFormData.year
+    );
+    if (!quarterId) {
+      toast.error("Invalid quarter and year combination");
+      return;
+    }
+
+    try {
+      setIsGeneratingCompiled(true);
+      const requestData = {
+        quarterId: quarterId
+      };
+
+      const response = await axios.post(
+        `${Base_Url}/generate-compiled-report`,
+        requestData,
+        {
+          withCredentials: true,
+          validateStatus: (status: number) => status < 500
+        }
+      );
+
+      if (response.data.success) {
+        toast.success("Compiled report generated successfully!");
+        setCompiledFormData({
+          quarter: 0,
+          year: 0
+        });
+        setCompiledReports((prevReports) => [
+          response.data.data,
+          ...prevReports
+        ]);
+        // await fetchCompiledReports();
+      } else {
+        handleFailedResponse(response, "Failed to generate compiled report");
+      }
+    } catch (error) {
+      handleApiError(
+        error as AxiosError<ApiErrorData>,
+        "Failed to generate compiled report"
+      );
+    } finally {
+      setIsGeneratingCompiled(false);
     }
   };
 
   const handleDownloadReport = async (fileUrl: string, fileName: string) => {
     try {
-      toast.loading("Downloading report...");
+      const loadingToast = toast.loading("Downloading report...");
 
       const response = await fetch(fileUrl);
       if (!response.ok) {
@@ -261,16 +560,15 @@ export default function ReportsAdPage() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      toast.dismiss();
+      toast.dismiss(loadingToast);
       toast.success("Report downloaded successfully!");
     } catch (error) {
       console.error("Error downloading report:", error);
-      toast.dismiss();
       toast.error("Failed to download report");
     }
   };
 
-  const filteredReports = generatedReports.filter(
+  const filteredProjectReports = generatedReports.filter(
     (report) =>
       report.project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       report.project.implementingAgency
@@ -278,6 +576,13 @@ export default function ReportsAdPage() {
         .includes(searchTerm.toLowerCase()) ||
       report.quarter.toLowerCase().includes(searchTerm.toLowerCase()) ||
       report.year.toString().includes(searchTerm)
+  );
+
+  const filteredCompiledReports = compiledReports.filter(
+    (report) =>
+      report.quarter.toLowerCase().includes(compiledSearchTerm.toLowerCase()) ||
+      report.year.toString().includes(compiledSearchTerm) ||
+      report.User.name.toLowerCase().includes(compiledSearchTerm.toLowerCase())
   );
 
   const formatDate = (dateString: string) => {
@@ -312,7 +617,10 @@ export default function ReportsAdPage() {
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           {quickStats.map((stat: QuickStat, index: number) => (
-            <Card key={index}>
+            <Card
+              key={index}
+              className="hover:shadow-md transition-shadow duration-200"
+            >
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -332,238 +640,525 @@ export default function ReportsAdPage() {
           ))}
         </div>
 
-        {/* Generate Report Section */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Generate New Report
-            </CardTitle>
-            <CardDescription>
-              Select a project, quarter, and year to generate a comprehensive
-              report
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div>
-                <Label>
-                  Project <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={
-                    projects.find((p) => p.id === formData.projectId)?.title ||
-                    ""
-                  }
-                  onValueChange={(value) => {
-                    const selectedProject = projects.find(
-                      (p) => p.title === value
-                    );
-                    if (selectedProject)
-                      handleSelectChange("projectId", selectedProject.id);
-                  }}
-                >
-                  <SelectTrigger
-                    className={formErrors.projectId ? "border-red-500" : ""}
-                  >
-                    <SelectValue placeholder="Select project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {uniqueProjectTitle.map((title) => (
-                      <SelectItem key={title} value={title}>
-                        {title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {formErrors.projectId && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors.projectId}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label>
-                  Quarter <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={formData.quarter ? formData.quarter.toString() : ""}
-                  onValueChange={(value) =>
-                    handleSelectChange("quarter", Number.parseInt(value))
-                  }
-                >
-                  <SelectTrigger
-                    className={formErrors.quarter ? "border-red-500" : ""}
-                  >
-                    <SelectValue placeholder="Select quarter" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {quarters.map((quarter) => (
-                      <SelectItem key={quarter} value={quarter.toString()}>
-                        Q{quarter}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {formErrors.quarter && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors.quarter}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label>
-                  Year <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={formData.year ? formData.year.toString() : ""}
-                  onValueChange={(value) =>
-                    handleSelectChange("year", Number.parseInt(value))
-                  }
-                >
-                  <SelectTrigger
-                    className={formErrors.year ? "border-red-500" : ""}
-                  >
-                    <SelectValue placeholder="Select year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableYears.map((year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {formErrors.year && (
-                  <p className="text-red-500 text-sm mt-1">{formErrors.year}</p>
-                )}
-              </div>
-            </div>
-
-            <Button
-              onClick={handleGenerateReport}
-              disabled={isGenerating}
-              className="bg-green-600 hover:bg-green-700"
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger
+              value="project"
+              className="flex cursor-pointer items-center gap-2"
             >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating Report...
-                </>
-              ) : (
-                <>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Generate Report
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
+              <FileText className="h-4 w-4" />
+              Project Reports
+            </TabsTrigger>
+            <TabsTrigger
+              value="compiled"
+              className="flex cursor-pointer items-center gap-2"
+            >
+              <FolderOpen className="h-4 w-4" />
+              Compiled Reports
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Search Section */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-lg">Search Reports</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search by project name, agency, quarter, or year..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Latest Generated Reports */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Latest Generated Reports</CardTitle>
-            <CardDescription>
-              Recently generated reports and downloads
-              {filteredReports.length !== generatedReports.length && (
-                <span className="text-green-600">
-                  {" "}
-                  ({filteredReports.length} of {generatedReports.length} shown)
-                </span>
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoadingReports ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                <span className="ml-2 text-gray-600">Loading reports...</span>
-              </div>
-            ) : filteredReports.length === 0 ? (
-              <div className="text-center py-12">
-                <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                <p className="text-gray-500">
-                  {searchTerm
-                    ? "No reports found matching your search"
-                    : "No reports generated yet"}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredReports.map((report: GeneratedReport) => (
-                  <div
-                    key={report.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <FileText className="h-6 w-6 text-green-600" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900 flex gap-x-2">
-                          {report.project.title}
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {report.quarter} {report.year}
-                          </span>
-                        </h4>
-                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                          <span className="flex items-center gap-1">
-                            <Building className="h-3 w-3" />
-                            {report.project.implementingAgency}
-                          </span>
-
-                          <span>Generated by {report.User.name}</span>
-                          <span>{formatDate(report.createdAt)}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-2">
-                          <Badge variant="outline" className="text-xs">
-                            {report.project.locationState}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {report.project.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        handleDownloadReport(report.fileUrl, report.fileName)
+          {/* Project Reports Tab */}
+          <TabsContent value="project" className="space-y-6">
+            {/* Generate Project Report Section */}
+            <Card className="hover:shadow-md transition-shadow duration-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Generate New Project Report
+                </CardTitle>
+                <CardDescription>
+                  Select a project, quarter, and year to generate a
+                  comprehensive project report
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <Label>
+                      Project <span className="text-red-500">*</span>
+                    </Label>
+                    <Select
+                      value={
+                        projects.find((p) => p.id === projectFormData.projectId)
+                          ?.title || ""
                       }
-                      className="shrink-0"
+                      onValueChange={(value) => {
+                        const selectedProject = projects.find(
+                          (p) => p.title === value
+                        );
+                        if (selectedProject)
+                          handleProjectSelectChange(
+                            "projectId",
+                            selectedProject.id
+                          );
+                      }}
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
+                      <SelectTrigger
+                        className={
+                          projectFormErrors.projectId ? "border-red-500" : ""
+                        }
+                      >
+                        <SelectValue placeholder="Select project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {uniqueProjectTitle.map((title) => (
+                          <SelectItem key={title} value={title}>
+                            {title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {projectFormErrors.projectId && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {projectFormErrors.projectId}
+                      </p>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+
+                  <div>
+                    <Label>
+                      Quarter <span className="text-red-500">*</span>
+                    </Label>
+                    <Select
+                      value={
+                        projectFormData.quarter
+                          ? projectFormData.quarter.toString()
+                          : ""
+                      }
+                      onValueChange={(value) =>
+                        handleProjectSelectChange(
+                          "quarter",
+                          Number.parseInt(value)
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        className={
+                          projectFormErrors.quarter ? "border-red-500" : ""
+                        }
+                      >
+                        <SelectValue placeholder="Select quarter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {quarters.map((quarter) => (
+                          <SelectItem key={quarter} value={quarter.toString()}>
+                            Q{quarter}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {projectFormErrors.quarter && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {projectFormErrors.quarter}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label>
+                      Year <span className="text-red-500">*</span>
+                    </Label>
+                    <Select
+                      value={
+                        projectFormData.year
+                          ? projectFormData.year.toString()
+                          : ""
+                      }
+                      onValueChange={(value) =>
+                        handleProjectSelectChange(
+                          "year",
+                          Number.parseInt(value)
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        className={
+                          projectFormErrors.year ? "border-red-500" : ""
+                        }
+                      >
+                        <SelectValue placeholder="Select year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableYears.map((year) => (
+                          <SelectItem key={year} value={year.toString()}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {projectFormErrors.year && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {projectFormErrors.year}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleGenerateProjectReport}
+                  disabled={isGeneratingProject}
+                  className="bg-green-600 hover:bg-green-700 transition-colors duration-200"
+                >
+                  {isGeneratingProject ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating Report...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Generate Project Report
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Search Project Reports */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  Search Project Reports
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search by project name, agency, quarter, or year..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Latest Project Reports */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Latest Project Reports</CardTitle>
+                <CardDescription>
+                  Recently generated project reports and downloads
+                  {filteredProjectReports.length !==
+                    generatedReports.length && (
+                    <span className="text-green-600">
+                      {" "}
+                      ({filteredProjectReports.length} of{" "}
+                      {generatedReports.length} shown)
+                    </span>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingProjectReports ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                    <span className="ml-2 text-gray-600">
+                      Loading reports...
+                    </span>
+                  </div>
+                ) : filteredProjectReports.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-gray-500">
+                      {searchTerm
+                        ? "No project reports found matching your search"
+                        : "No project reports generated yet"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredProjectReports.map((report: GeneratedReport) => (
+                      <div
+                        key={report.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors duration-200 hover:shadow-sm"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="p-2 bg-green-100 rounded-lg">
+                            <FileText className="h-6 w-6 text-green-600" />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900 flex gap-x-2">
+                              {report.project.title}
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {report.quarter} {report.year}
+                              </span>
+                            </h4>
+                            <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                              <span className="flex items-center gap-1">
+                                <Building className="h-3 w-3" />
+                                {report.project.implementingAgency}
+                              </span>
+                              <span>Generated by {report.User.name}</span>
+                              <span>{formatDate(report.createdAt)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="outline" className="text-xs">
+                                {report.project.locationState}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {report.project.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            handleDownloadReport(
+                              report.fileUrl,
+                              report.fileName
+                            )
+                          }
+                          className="shrink-0 hover:bg-green-50 hover:border-green-200 transition-colors duration-200"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Compiled Reports Tab */}
+          <TabsContent value="compiled" className="space-y-6">
+            {/* Generate Compiled Report Section */}
+            <Card className="hover:shadow-md transition-shadow duration-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FolderOpen className="h-5 w-5" />
+                  Generate New Compiled Report
+                </CardTitle>
+                <CardDescription>
+                  Select quarter and year to generate a comprehensive compiled
+                  report across all projects
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <Label>
+                      Quarter <span className="text-red-500">*</span>
+                    </Label>
+                    <Select
+                      value={
+                        compiledFormData.quarter
+                          ? compiledFormData.quarter.toString()
+                          : ""
+                      }
+                      onValueChange={(value) =>
+                        handleCompiledSelectChange(
+                          "quarter",
+                          Number.parseInt(value)
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        className={
+                          compiledFormErrors.quarter ? "border-red-500" : ""
+                        }
+                      >
+                        <SelectValue placeholder="Select quarter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {quarters.map((quarter) => (
+                          <SelectItem key={quarter} value={quarter.toString()}>
+                            Q{quarter}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {compiledFormErrors.quarter && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {compiledFormErrors.quarter}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label>
+                      Year <span className="text-red-500">*</span>
+                    </Label>
+                    <Select
+                      value={
+                        compiledFormData.year
+                          ? compiledFormData.year.toString()
+                          : ""
+                      }
+                      onValueChange={(value) =>
+                        handleCompiledSelectChange(
+                          "year",
+                          Number.parseInt(value)
+                        )
+                      }
+                    >
+                      <SelectTrigger
+                        className={
+                          compiledFormErrors.year ? "border-red-500" : ""
+                        }
+                      >
+                        <SelectValue placeholder="Select year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableYears.map((year) => (
+                          <SelectItem key={year} value={year.toString()}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {compiledFormErrors.year && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {compiledFormErrors.year}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleGenerateCompiledReport}
+                  disabled={isGeneratingCompiled}
+                  className="bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+                >
+                  {isGeneratingCompiled ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating Compiled Report...
+                    </>
+                  ) : (
+                    <>
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                      Generate Compiled Report
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Search Compiled Reports */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  Search Compiled Reports
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search by quarter, year, or generated by..."
+                    value={compiledSearchTerm}
+                    onChange={(e) => setCompiledSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Latest Compiled Reports */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Latest Compiled Reports</CardTitle>
+                <CardDescription>
+                  Recently generated compiled reports and downloads
+                  {filteredCompiledReports.length !==
+                    compiledReports.length && (
+                    <span className="text-blue-600">
+                      {" "}
+                      ({filteredCompiledReports.length} of{" "}
+                      {compiledReports.length} shown)
+                    </span>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingCompiledReports ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                    <span className="ml-2 text-gray-600">
+                      Loading compiled reports...
+                    </span>
+                  </div>
+                ) : filteredCompiledReports.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FolderOpen className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-gray-500">
+                      {compiledSearchTerm
+                        ? "No compiled reports found matching your search"
+                        : "No compiled reports generated yet"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredCompiledReports.map((report: CompiledReport) => (
+                      <div
+                        key={report.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors duration-200 hover:shadow-sm"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="p-2 bg-blue-100 rounded-lg">
+                            <FolderOpen className="h-6 w-6 text-blue-600" />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900 flex gap-x-2">
+                              Compiled Report
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {report.quarter} {report.year}
+                              </span>
+                            </h4>
+                            <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                              <span>Generated by {report.User.name}</span>
+                              <span>{formatDate(report.createdAt)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-blue-50 text-blue-700"
+                              >
+                                All Projects
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                Compiled
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            handleDownloadReport(
+                              report.fileUrl,
+                              report.fileName
+                            )
+                          }
+                          className="shrink-0 hover:bg-blue-50 hover:border-blue-200 transition-colors duration-200"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

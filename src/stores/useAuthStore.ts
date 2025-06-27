@@ -1,7 +1,9 @@
 // src/stores/useAuthStore.ts
+import { Base_Url } from "@/lib/constants";
 import { fetchloggedInUser } from "@/services/storeServices";
+import axios from "axios";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 export type User = {
   id: string;
@@ -65,20 +67,40 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: () => {
+      logout: async () => {
+        console.log("Looooggginnnggg out...");
+        try {
+          await axios.post(`${Base_Url}/logout`, {}, { withCredentials: true }); // ✅ Correctly placed
+        } catch (err) {
+          console.warn("Logout API failed:", err);
+        }
+        // Clear cookie first
+        document.cookie =
+          "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+
+        // Update state
         set({
           user: null,
           isAuthenticated: false,
           error: null,
         });
-        // Only clear auth-related localStorage
-        localStorage.removeItem("auth-storage");
 
-        document.cookie =
-          "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        // Clear additional localStorage items
+        localStorage.removeItem("project-storage");
+        localStorage.removeItem("project-storage");
+
+        // Redirect
         window.location.href = `${window.location.origin}/admin/signin`;
       },
-      handleAuthError: (errorMessage?: string) => {
+      handleAuthError: async (errorMessage?: string) => {
+        try {
+          await axios.post(`${Base_Url}/logout`, {}, { withCredentials: true }); // ✅ Correctly placed
+        } catch (err) {
+          console.warn("Logout API failed:", err);
+        }
+        // Clear cookie
+        document.cookie =
+          "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         set({
           user: null,
           isAuthenticated: false,
@@ -87,10 +109,7 @@ export const useAuthStore = create<AuthState>()(
 
         // Clear auth-related localStorage
         localStorage.removeItem("auth-storage");
-
-        // Clear cookie
-        document.cookie =
-          "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        localStorage.removeItem("project-storage");
 
         // Redirect to login page
         window.location.href = `${window.location.origin}/admin/signin`;
@@ -100,6 +119,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "auth-storage", // key in localStorage
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,

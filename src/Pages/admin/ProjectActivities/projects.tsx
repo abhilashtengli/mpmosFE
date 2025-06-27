@@ -643,6 +643,8 @@ export default function ProjectsPage() {
       `${operation === "create" ? "Creating" : "Updating"} project...`
     );
 
+    console.log("FD : ", formData);
+
     try {
       let response;
       const config = {

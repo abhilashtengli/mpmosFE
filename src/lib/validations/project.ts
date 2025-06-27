@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+//Frontend validations
 export const createProjectValidation = z
   .object({
     title: z
