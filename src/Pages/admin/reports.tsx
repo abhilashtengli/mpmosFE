@@ -34,13 +34,7 @@ import { toast } from "sonner";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { Base_Url, quarterlyData } from "@/lib/constants";
 import axios, { type AxiosError, type AxiosResponse } from "axios";
-
-// TypeScript interfaces
-interface QuickStat {
-  label: string;
-  value: string;
-  change: string;
-}
+import QuickStatsSection from "@/components/quick-stats";
 
 interface GeneratedReport {
   id: string;
@@ -112,13 +106,6 @@ interface ApiErrorData {
   };
   message?: string;
 }
-
-const quickStats: QuickStat[] = [
-  { label: "Total Reports Generated", value: "1,247", change: "+12%" },
-  { label: "Last Report Generated", value: "2 hours ago", change: "Recent" },
-  { label: "Most Downloaded", value: "Achievement Report", change: "Popular" },
-  { label: "Export Formats", value: "Word", change: "Available" }
-];
 
 export default function ReportsAdPage() {
   const [activeTab, setActiveTab] = useState<string>("project");
@@ -615,29 +602,8 @@ export default function ReportsAdPage() {
 
       <div className="p-6">
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          {quickStats.map((stat: QuickStat, index: number) => (
-            <Card
-              key={index}
-              className="hover:shadow-md transition-shadow duration-200"
-            >
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      {stat.label}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {stat.value}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="text-green-600">
-                    {stat.change}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div>
+          <QuickStatsSection />
         </div>
 
         {/* Tabs */}
@@ -1127,12 +1093,15 @@ export default function ReportsAdPage() {
                             <div className="flex items-center gap-2 mt-2">
                               <Badge
                                 variant="outline"
-                                className="text-xs bg-blue-50 text-blue-700"
+                                className="text-xs bg-blue-50 text-blue-700 border-blue-200"
                               >
-                                All Projects
+                                {report.quarter} {report.year}
                               </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                Compiled
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-purple-50 text-purple-700 border-purple-200"
+                              >
+                                Compiled Report
                               </Badge>
                             </div>
                           </div>

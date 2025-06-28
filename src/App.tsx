@@ -26,6 +26,7 @@ import { Toaster } from "sonner";
 import ProjectDetailsAdPage from "./Pages/admin/Content/project_details";
 import PublicationsPage from "./Pages/admin/Content/publications";
 import ActivityPage from "./Pages/admin/ProjectActivities/CustomActivityCategory";
+import SignupPage from "./Pages/admin/auth/signup";
 
 function App() {
   const { isAuthenticated, fetchUser } = useAuthStore();
@@ -64,13 +65,21 @@ function App() {
             }
           >
             <Route path="dashboard" element={<DashboardAdPage />} />
-            <Route path="reports" element={<ReportsAdPage />} />
+            <Route
+              path="reports"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <ReportsAdPage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="gallery" element={<GalleryAdPage />} />
             <Route path="project_details" element={<ProjectDetailsAdPage />} />
             <Route path="publications" element={<PublicationsPage />} />
             <Route path="upcoming_events" element={<EventsAdPage />} />
             <Route path="awarness_programs" element={<AwarenessAdPage />} />
             <Route path="fld" element={<FLDAdPage />} />
+            <Route path="signup" element={<SignupPage />} />
             <Route
               path="/admin/activity/:activityCategoryId"
               element={<ActivityPage />}

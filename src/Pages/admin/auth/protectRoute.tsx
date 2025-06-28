@@ -5,9 +5,10 @@ import { useAuthStore } from "@/stores/useAuthStore";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  allowedRoles?: string[];
 }
 
-const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
+const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   const { user, fetchUser, isLoading, isAuthenticated } = useAuthStore();
   const location = useLocation();
   const [isInitialized, setIsInitialized] = useState(false);
@@ -40,6 +41,15 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
   // If user is not authenticated, redirect to signin with return URL
   if (!isAuthenticated || !user) {
+    return (
+      <Navigate
+        to="/admin/signin"
+        state={{ from: location.pathname }}
+        replace
+      />
+    );
+  }
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
     return (
       <Navigate
         to="/admin/signin"

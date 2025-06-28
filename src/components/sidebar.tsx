@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import {
   LayoutDashboard,
   GraduationCap,
@@ -17,14 +24,16 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ImageIcon,
   Plus,
   Check,
-  X
+  X,
+  UserPlus,
+  LogOut
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/useAuthStore";
-
 import { useActivityCategoriesStore } from "@/stores/useActivityCategoryStore";
 
 // Default activity categories
@@ -79,64 +88,31 @@ const navigation = [
 
 export function Sidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const pathname = location.pathname;
   const [collapsed, setCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([
     "Activities",
     "Content"
   ]);
-
   const [showAddForm, setShowAddForm] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  // const [isLoading, setIsLoading] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const user = useAuthStore((state) => state.user);
+  const { logout } = useAuthStore();
 
   // Zustand store
   const { navItems, isLoading, fetchCategories, createCategory, clearError } =
     useActivityCategoriesStore();
 
-  // const fetchActCat = async () => {
-  //   try {
-  //     setIsLoading(true);
-  //     const endpoint =
-  //       user?.role === "admin"
-  //         ? "get-admin-activity-category"
-  //         : "get-user-activity-category";
-
-  //     const response = await axios.get(`${Base_Url}/${endpoint}`, {
-  //       withCredentials: true
-  //     });
-
-  //     // Transform the fetched data to match the expected format
-  //     const fetchedCategories = response.data.data.map(
-  //       (category: ActivityCategories) => ({
-  //         name: category.name,
-  //         href: `/admin/activity/${category.id}`,
-  //         icon: BarChart3 // Default icon for fetched categories
-  //       })
-  //     );
-
-  //     // Combine default categories with fetched ones
-  //     setActivityCategories([
-  //       ...defaultActivityCategories,
-  //       ...fetchedCategories
-  //     ]);
-  //   } catch (error) {
-  //     console.error("Error fetching activity categories:", error);
-  //     toast.error("Failed", {
-  //       description:
-  //         "An unexpected error occurred while fetching Activity categories"
-  //     });
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
   useEffect(() => {
     if (user?.role) {
       fetchCategories(user.role);
     }
   }, [user?.role, fetchCategories]);
+
   // Combine default categories with fetched ones
   const allActivityCategories = [...defaultActivityCategories, ...navItems];
 
@@ -163,6 +139,7 @@ export function Sidebar() {
     if (!newCategoryName.trim()) {
       return;
     }
+
     const capitalizedName = newCategoryName
       .trim()
       .split(" ")
@@ -170,6 +147,7 @@ export function Sidebar() {
       .join(" ");
 
     const success = await createCategory(capitalizedName);
+
     if (success) {
       setNewCategoryName("");
       setShowAddForm(false);
@@ -182,10 +160,37 @@ export function Sidebar() {
     clearError();
   };
 
+  const handleAddAdmin = () => {
+    setIsDropdownOpen(false);
+    navigate("/admin/signup");
+  };
+
+  const handleLogout = async () => {
+    setIsDropdownOpen(false);
+    logout();
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   return (
     <div
       className={cn(
-        "bg-white border-r border-gray-200 flex flex-col transition-all duration-300",
+        "bg-white border-r border-gray-200 h-screen overflow-y-scroll flex flex-col transition-all duration-300 custom-scrollbar",
         collapsed ? "w-16" : "w-64"
       )}
     >
@@ -263,7 +268,6 @@ export function Sidebar() {
                         </Button>
                       </Link>
                     ))}
-
                     {/* Add New Category Section - Only for Activities */}
                     {item.name === "Activities" && (
                       <div className="mt-2">
@@ -305,7 +309,7 @@ export function Sidebar() {
                                 size="sm"
                                 variant="outline"
                                 onClick={handleCancelAdd}
-                                className="h-6 px-2 text-xs"
+                                className="h-6 px-2 text-xs bg-transparent"
                               >
                                 <X className="h-3 w-3" />
                               </Button>
@@ -337,26 +341,58 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Footer */}
-      {/* {!collapsed && (
+      {/* Footer with Dropdown */}
+      {!collapsed && (
         <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-green-600 rounded-full flex items-center pb-0.5 justify-center">
-              <span className="text-white text-sm font-medium">
-                {user?.name.slice(0, 2).toUpperCase()}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {user?.name}
-              </p>
-              <div className="text-[12px] border w-fit px-1 rounded-sm pb-0.5">
-                {user?.role}
-              </div>
-            </div>
+          <div ref={dropdownRef} className="relative">
+            <DropdownMenu
+              open={isDropdownOpen}
+              onOpenChange={setIsDropdownOpen}
+            >
+              <DropdownMenuTrigger asChild>
+                <div className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors">
+                  <div className="w-8 h-8 bg-green-600 rounded-full flex items-center pb-0.5 justify-center">
+                    <span className="text-white text-sm font-medium">
+                      {user?.name.slice(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {user?.name}
+                    </p>
+                    <div className="text-[12px] border w-fit px-1 rounded-sm pb-0.5">
+                      {user?.role}
+                    </div>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-gray-500 transition-transform" />
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                className="w-48 mb-2"
+                sideOffset={8}
+              >
+                <DropdownMenuItem
+                  onClick={handleAddAdmin}
+                  className="cursor-pointer flex items-center space-x-3 px-4 py-3"
+                >
+                  <UserPlus className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium">Add Admin</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="cursor-pointer flex items-center space-x-3 px-4 py-3 text-red-600 focus:text-red-600"
+                >
+                  <LogOut className="w-4 h-4 text-red-500" />
+                  <span className="text-sm font-medium">Logout</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
-      )} */}
+      )}
     </div>
   );
 }

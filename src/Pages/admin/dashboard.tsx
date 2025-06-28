@@ -49,6 +49,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { UserPlus, LogOut, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useProjectStore } from "@/stores/useProjectStore";
+import { Skeleton } from "@/components/ui/skeleton";
+
 // Types
 interface DashboardStats {
   projectCount: number;
@@ -85,6 +87,21 @@ interface GeneratedReport {
     status: string;
   };
   User: {
+    name: string;
+  };
+}
+
+interface CompiledReport {
+  id: string;
+  quarter: string;
+  year: number;
+  fileUrl: string;
+  fileKey: string;
+  fileName: string;
+  createdAt: string;
+  updatedAt: string;
+  User: {
+    id: string;
     name: string;
   };
 }
@@ -195,17 +212,29 @@ const formatDate = (dateString: string) => {
 
 export default function DashboardAdPage() {
   const user = useAuthStore((state) => state.user);
+
   // States
   const [stats, setStats] = useState<DashboardStats>(fallbackStats);
   const [isStatsLoading, setIsStatsLoading] = useState(false);
   const [targetData, setTargetData] =
     useState<TargetAchievedData>(fallbackTargetData);
   const [isTargetLoading, setIsTargetLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isLoadingReports, setIsLoadingReports] = useState<boolean>(true);
+
+  // Project Reports States
+  const [projectSearchTerm, setProjectSearchTerm] = useState("");
+  const [isLoadingProjectReports, setIsLoadingProjectReports] =
+    useState<boolean>(true);
   const [generatedReports, setGeneratedReports] = useState<GeneratedReport[]>(
     []
   );
+
+  // Compiled Reports States
+  const [compiledSearchTerm, setCompiledSearchTerm] = useState("");
+  const [isLoadingCompiledReports, setIsLoadingCompiledReports] =
+    useState<boolean>(true);
+  const [compiledReports, setCompiledReports] = useState<CompiledReport[]>([]);
+
+  // UI States
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { logout } = useAuthStore();
@@ -216,6 +245,7 @@ export default function DashboardAdPage() {
     fetchProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -249,7 +279,6 @@ export default function DashboardAdPage() {
       const response = await axios.get(`${Base_Url}/get-dashboard-stats`, {
         withCredentials: true
       });
-
       if (response.data.success) {
         setStats(response.data.data);
       } else {
@@ -275,7 +304,6 @@ export default function DashboardAdPage() {
           withCredentials: true
         }
       );
-
       if (response.data.success) {
         setTargetData(response.data.data);
       } else {
@@ -291,35 +319,69 @@ export default function DashboardAdPage() {
     }
   };
 
-  // Fetch generated reports
+  // Fetch project reports
   const fetchGeneratedReports = async () => {
     try {
-      setIsLoadingReports(true);
+      setIsLoadingProjectReports(true);
       const response = await axios.get(`${Base_Url}/get-project-reports`, {
         withCredentials: true
       });
-
       if (response.data.success) {
         setGeneratedReports(response.data.data || []);
       } else {
-        toast.error(response.data.data.message || "Failed to fetch reports");
+        toast.error(response.data.message || "Failed to fetch project reports");
       }
     } catch (error) {
-      console.error("Error fetching reports:", error);
-      toast.error("Failed to fetch reports");
+      console.error("Error fetching project reports:", error);
+      toast.error("Failed to fetch project reports");
     } finally {
-      setIsLoadingReports(false);
+      setIsLoadingProjectReports(false);
     }
   };
 
-  const filteredReports = generatedReports.filter(
+  // Fetch compiled reports
+  const fetchCompiledReports = async () => {
+    try {
+      setIsLoadingCompiledReports(true);
+      const response = await axios.get(`${Base_Url}/get-compiled-reports`, {
+        withCredentials: true
+      });
+      if (response.data.success) {
+        setCompiledReports(response.data.data || []);
+      } else {
+        toast.error(
+          response.data.message || "Failed to fetch compiled reports"
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching compiled reports:", error);
+      toast.error("Failed to fetch compiled reports");
+    } finally {
+      setIsLoadingCompiledReports(false);
+    }
+  };
+
+  // Filter reports
+  const filteredProjectReports = generatedReports.filter(
     (report) =>
-      report.project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.project.title
+        .toLowerCase()
+        .includes(projectSearchTerm.toLowerCase()) ||
       report.project.implementingAgency
         .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      report.quarter.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.year.toString().includes(searchTerm)
+        .includes(projectSearchTerm.toLowerCase()) ||
+      report.quarter.toLowerCase().includes(projectSearchTerm.toLowerCase()) ||
+      report.year.toString().includes(projectSearchTerm)
+  );
+
+  const filteredCompiledReports = compiledReports.filter(
+    (report) =>
+      report.quarter.toLowerCase().includes(compiledSearchTerm.toLowerCase()) ||
+      report.year.toString().includes(compiledSearchTerm) ||
+      report.User.name
+        .toLowerCase()
+        .includes(compiledSearchTerm.toLowerCase()) ||
+      report.fileName.toLowerCase().includes(compiledSearchTerm.toLowerCase())
   );
 
   const handleDownloadReport = (fileUrl: string, fileName: string) => {
@@ -335,6 +397,7 @@ export default function DashboardAdPage() {
     fetchStats();
     fetchTargetData();
     fetchGeneratedReports();
+    fetchCompiledReports();
   }, []);
 
   // Prepare chart data
@@ -433,7 +496,7 @@ export default function DashboardAdPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 ">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
@@ -445,23 +508,7 @@ export default function DashboardAdPage() {
               </h1>
             </div>
           </div>
-          {/* <div className="flex items-center space-x-4 border">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-green-600 rounded-full pb-0.5 flex items-center justify-center">
-                <span className="text-white text-sm font-medium">
-                  {user?.name.slice(0, 2).toUpperCase()}
-                </span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium tracking-wider text-gray-700">
-                  {user?.name}
-                </span>
-                <span className="text-[10px] tracking-widest text-green-900">
-                  {user?.role}
-                </span>
-              </div>
-            </div>
-          </div> */}
+
           <div className="relative" ref={dropdownRef}>
             {/* User Profile Trigger */}
             <motion.div
@@ -471,7 +518,7 @@ export default function DashboardAdPage() {
               whileTap={{ scale: 0.98 }}
               transition={{ type: "spring", stiffness: 400, damping: 17 }}
             >
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 ">
                 <motion.div
                   className="w-8 h-8 bg-green-600 rounded-full pb-0.5 flex items-center justify-center shadow-md"
                   whileHover={{
@@ -484,7 +531,6 @@ export default function DashboardAdPage() {
                     {user?.name.slice(0, 2).toUpperCase()}
                   </span>
                 </motion.div>
-
                 <div className="flex flex-col">
                   <span className="text-sm font-medium tracking-wider text-gray-700">
                     {user?.name}
@@ -493,7 +539,6 @@ export default function DashboardAdPage() {
                     {user?.role}
                   </span>
                 </div>
-
                 <motion.div
                   animate={{ rotate: isOpen ? 180 : 0 }}
                   transition={{ type: "spring", stiffness: 300, damping: 20 }}
@@ -598,18 +643,28 @@ export default function DashboardAdPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <div className="border-l-4 border-l-green-500 bg-white shadow-md rounded-xl h-fit min-h-[70px] p-2">
             <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <div className="flex items-center gap-x-2">
-                <Target className="h-4 w-4 text-green-600" />
-                <p className="text-sm font-medium">Total Projects</p>
-              </div>
-              <div>
-                {isStatsLoading ? (
-                  <div className="flex items-center space-x-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">Loading...</span>
+              {isStatsLoading ? (
+                <div className="flex items-center justify-between w-full  border-red-600 space-x-2">
+                  <div className="flex items-center gap-x-2">
+                    <Target className="h-4 w-4 text-green-600" />
+                    <p className="text-sm font-medium">Total Projects</p>
                   </div>
-                ) : (
-                  <>
+                  <div className="space-y-2">
+                    <div className="text-2xl font-bold ">
+                      <Skeleton className="h-6 w-12 bg-gray-200" />
+                    </div>
+                    <p className="text-[10px] ">
+                      <Skeleton className="h-4 w-20 bg-gray-200" />
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-x-2">
+                    <Target className="h-4 w-4 text-green-600" />
+                    <p className="text-sm font-medium">Total Projects</p>
+                  </div>
+                  <div>
                     <div className="text-2xl font-bold">
                       {stats.projectCount}
                     </div>
@@ -617,27 +672,37 @@ export default function DashboardAdPage() {
                       {targetData.project.activeCount} active,{" "}
                       {targetData.project.completedCount} completed
                     </p>
-                  </>
-                )}
-              </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
           <div className="border-l-4 border-l-blue-500 bg-white shadow-md border rounded-xl h-fit min-h-[70px] p-2">
-            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <div className="flex items-center gap-x-2">
-                <Users className="h-4 w-4 text-blue-600" />
-                <p className="text-sm font-medium">Total Beneficiaries</p>
-              </div>
-              <div>
-                {" "}
-                {isStatsLoading ? (
-                  <div className="flex items-center space-x-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">Loading...</span>
+            <div className="flex flex-row items-center justify-between w-full  space-y-0 pb-2">
+              {" "}
+              {isStatsLoading ? (
+                <div className="flex items-center justify-between w-full space-x-2">
+                  <div className="flex items-center gap-x-2">
+                    <Users className="h-4 w-4 text-blue-600" />
+                    <p className="text-sm font-medium">Total Beneficiaries</p>
                   </div>
-                ) : (
-                  <>
+                  <div className="space-y-2">
+                    <div className="text-2xl font-bold ">
+                      <Skeleton className="h-6 w-12 bg-gray-200" />
+                    </div>
+                    <p className="text-[10px] ">
+                      <Skeleton className="h-4 w-20 bg-gray-200" />
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-x-2">
+                    <Users className="h-4 w-4 text-blue-600" />
+                    <p className="text-sm font-medium">Total Beneficiaries</p>
+                  </div>
+                  <div>
                     <div className="text-xl font-bold">
                       {stats.totalBeneficiaries.toLocaleString()}
                     </div>
@@ -645,9 +710,9 @@ export default function DashboardAdPage() {
                       {stats.maletotalBeneficiaries.toLocaleString()} male,{" "}
                       {stats.femaletotalBeneficiaries.toLocaleString()} female
                     </p>
-                  </>
-                )}
-              </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -892,7 +957,6 @@ export default function DashboardAdPage() {
                           />
                         </PieChart>
                       </ResponsiveContainer>
-
                       {/* Project Stats Summary */}
                       <div className="grid grid-cols-2 gap-4 mt-4">
                         <div className="text-center p-3 bg-gradient-to-r from-green-100 to-green-50 rounded-lg border border-green-200">
@@ -1043,7 +1107,6 @@ export default function DashboardAdPage() {
                           </div>
                         </div>
                       </div>
-
                       {/* Progress Section */}
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
@@ -1054,7 +1117,6 @@ export default function DashboardAdPage() {
                             {activity.percentage.toFixed(1)}%
                           </span>
                         </div>
-
                         {/* Progress Bar Container */}
                         <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                           <div
@@ -1071,7 +1133,6 @@ export default function DashboardAdPage() {
                             }}
                           />
                         </div>
-
                         {/* Status Badge */}
                         <div className="flex justify-center mt-3">
                           <Badge
@@ -1112,126 +1173,275 @@ export default function DashboardAdPage() {
           </TabsContent>
 
           <TabsContent value="reports" className="space-y-6">
-            {/* Search Section */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="text-lg">Search Reports</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Search by project name, agency, quarter, or year..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            {/* Nested Reports Tabs */}
+            <Tabs defaultValue="project-reports" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger className="cursor-pointer" value="project-reports">
+                  Project Reports
+                </TabsTrigger>
+                <TabsTrigger
+                  className="cursor-pointer"
+                  value="compiled-reports"
+                >
+                  Compiled Reports
+                </TabsTrigger>
+              </TabsList>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Latest Generated Reports</CardTitle>
-                <CardDescription>
-                  Recently generated reports and downloads
-                  {filteredReports.length !== generatedReports.length && (
-                    <span className="text-green-600">
-                      {" "}
-                      ({filteredReports.length} of {generatedReports.length}{" "}
-                      shown)
-                    </span>
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoadingReports ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                    <span className="ml-2 text-gray-600">
-                      Loading reports...
-                    </span>
-                  </div>
-                ) : filteredReports.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                    <p className="text-gray-500">
-                      {searchTerm
-                        ? "No reports found matching your search"
-                        : "No reports generated yet"}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {filteredReports.map((report: GeneratedReport) => (
-                      <div
-                        key={report.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center space-x-4">
-                          <div className="p-2 bg-green-100 rounded-lg">
-                            <FileText className="h-6 w-6 text-green-600" />
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-medium text-gray-900 flex gap-x-2">
-                              {report.project.title}
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {report.quarter} {report.year}
-                              </span>
-                            </h4>
-                            <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                              <span className="flex items-center gap-1">
-                                <Building className="h-3 w-3" />
-                                {report.project.implementingAgency}
-                              </span>
-                              <span>Generated by {report.User.name}</span>
-                              <span>{formatDate(report.createdAt)}</span>
-                            </div>
-                            <div className="flex items-center gap-2 mt-2">
-                              <Badge variant="outline" className="text-xs">
-                                {report.project.locationState}
-                              </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                {report.project.status}
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            handleDownloadReport(
-                              report.fileUrl,
-                              report.fileName
-                            )
-                          }
-                          className="shrink-0"
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Download
-                        </Button>
+              {/* Project Reports Tab */}
+              <TabsContent value="project-reports" className="space-y-6">
+                {/* Search Section */}
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="text-lg">
+                      Search Project Reports
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        placeholder="Search by project name, agency, quarter, or year..."
+                        value={projectSearchTerm}
+                        onChange={(e) => setProjectSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Project Reports</CardTitle>
+                    <CardDescription>
+                      Generated reports for individual projects
+                      {filteredProjectReports.length !==
+                        generatedReports.length && (
+                        <span className="text-green-600">
+                          {" "}
+                          ({filteredProjectReports.length} of{" "}
+                          {generatedReports.length} shown)
+                        </span>
+                      )}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingProjectReports ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                        <span className="ml-2 text-gray-600">
+                          Loading project reports...
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                    ) : filteredProjectReports.length === 0 ? (
+                      <div className="text-center py-12">
+                        <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                        <p className="text-gray-500">
+                          {projectSearchTerm
+                            ? "No project reports found matching your search"
+                            : "No project reports generated yet"}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {filteredProjectReports.map(
+                          (report: GeneratedReport) => (
+                            <div
+                              key={report.id}
+                              className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex items-center space-x-4">
+                                <div className="p-2 bg-green-100 rounded-lg">
+                                  <FileText className="h-6 w-6 text-green-600" />
+                                </div>
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-gray-900 flex gap-x-2">
+                                    {report.project.title}
+                                    <span className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      {report.quarter} {report.year}
+                                    </span>
+                                  </h4>
+                                  <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                                    <span className="flex items-center gap-1">
+                                      <Building className="h-3 w-3" />
+                                      {report.project.implementingAgency}
+                                    </span>
+                                    <span>Generated by {report.User.name}</span>
+                                    <span>{formatDate(report.createdAt)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      {report.project.locationState}
+                                    </Badge>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      {report.project.status}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleDownloadReport(
+                                    report.fileUrl,
+                                    report.fileName
+                                  )
+                                }
+                                className="shrink-0"
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download
+                              </Button>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Compiled Reports Tab */}
+              <TabsContent value="compiled-reports" className="space-y-6">
+                {/* Search Section */}
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="text-lg">
+                      Search Compiled Reports
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        placeholder="Search by quarter, year, filename, or generated by..."
+                        value={compiledSearchTerm}
+                        onChange={(e) => setCompiledSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Compiled Reports</CardTitle>
+                    <CardDescription>
+                      Comprehensive reports compiled across multiple projects
+                      {filteredCompiledReports.length !==
+                        compiledReports.length && (
+                        <span className="text-green-600">
+                          {" "}
+                          ({filteredCompiledReports.length} of{" "}
+                          {compiledReports.length} shown)
+                        </span>
+                      )}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingCompiledReports ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                        <span className="ml-2 text-gray-600">
+                          Loading compiled reports...
+                        </span>
+                      </div>
+                    ) : filteredCompiledReports.length === 0 ? (
+                      <div className="text-center py-12">
+                        <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                        <p className="text-gray-500">
+                          {compiledSearchTerm
+                            ? "No compiled reports found matching your search"
+                            : "No compiled reports generated yet"}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {filteredCompiledReports.map(
+                          (report: CompiledReport) => (
+                            <div
+                              key={report.id}
+                              className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex items-center space-x-4">
+                                <div className="p-2 bg-blue-100 rounded-lg">
+                                  <FileText className="h-6 w-6 text-blue-600" />
+                                </div>
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-gray-900 flex gap-x-2 items-center">
+                                    <span>Compiled Report</span>
+                                    <span className="flex items-center gap-1 text-sm">
+                                      <Calendar className="h-3 w-3" />
+                                      {report.quarter} {report.year}
+                                    </span>
+                                  </h4>
+                                  <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                                    <span>Generated by {report.User.name}</span>
+                                    <span>{formatDate(report.createdAt)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                                    >
+                                      {report.quarter} {report.year}
+                                    </Badge>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs bg-purple-50 text-purple-700 border-purple-200"
+                                    >
+                                      Compiled Report
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    File: {report.fileName}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleDownloadReport(
+                                    report.fileUrl,
+                                    report.fileName
+                                  )
+                                }
+                                className="shrink-0"
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download
+                              </Button>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         </Tabs>
       </div>
 
       <style>{`
-  @keyframes progressSlide {
-    0% {
-      transform: scaleX(0);
-    }
-    100% {
-      transform: scaleX(1);
-    }
-  }
-`}</style>
+        @keyframes progressSlide {
+          0% {
+            transform: scaleX(0);
+          }
+          100% {
+            transform: scaleX(1);
+          }
+        }
+      `}</style>
     </div>
   );
 }
