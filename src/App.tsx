@@ -27,6 +27,7 @@ import ProjectDetailsAdPage from "./Pages/admin/Content/project_details";
 import PublicationsPage from "./Pages/admin/Content/publications";
 import ActivityPage from "./Pages/admin/ProjectActivities/CustomActivityCategory";
 import SignupPage from "./Pages/admin/auth/signup";
+import Publications from "./Pages/Publication";
 
 function App() {
   const { isAuthenticated, fetchUser } = useAuthStore();
@@ -50,7 +51,7 @@ function App() {
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/gallery" element={<GalleryPage />} />
             <Route path="/aicrp" element={<AICRPProjectsPage />} />
-            {/* <Route path="/publications" element={<Publication />} /> */}
+            <Route path="/publications" element={<Publications />} />
             <Route path="/about" element={<AboutPage />} />
             {/* <Route path="/progressreportsubmission" element={<About />} /> */}
           </Route>
