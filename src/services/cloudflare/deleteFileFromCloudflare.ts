@@ -29,7 +29,7 @@ const deleteFileFromCloudflare = async (key: string): Promise<boolean> => {
         const status = error.response?.status;
         // Don't retry on 404 (already deleted) or 403 (forbidden)
         if (status === 404) {
-          console.log(`File ${key} not found (already deleted)`);
+          // console.log(`File ${key} not found (already deleted)`);
           return true; // Consider 404 as success
         }
         if (status === 403) {

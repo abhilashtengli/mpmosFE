@@ -3,6 +3,7 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { motion, useInView } from "framer-motion";
 import { Award, Users, MapPin, Sprout } from "lucide-react";
+import { Base_Url } from "@/lib/constants";
 
 interface CounterProps {
   value: number;
@@ -10,11 +11,36 @@ interface CounterProps {
   icon: React.ReactNode;
   duration?: number;
 }
-
+interface PromoMeterData {
+  trainings: { target: number; achieved: number };
+  awarenessProgram: { target: number; achieved: number };
+  inputDistribution: { target: number; achieved: number };
+  fld: { target: number; achieved: number };
+  infrastructure: { target: number; achieved: number };
+  otherActivities: { target: number; achieved: number };
+  totalFarmers: number;
+  projectCount: number;
+}
 export function StatsCounter() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.3 });
-
+  const [promoMeterData, setPromoMeterData] = useState<PromoMeterData | null>(
+    null
+  );
+  const fetchPromoMeterData = async () => {
+    try {
+      const response = await fetch(`${Base_Url}/get-stats-promo-meter`);
+      const result = await response.json();
+      if (result.success) {
+        setPromoMeterData(result.data);
+      }
+    } catch (error) {
+      console.error("Error fetching promo meter data:", error);
+    }
+  };
+  useEffect(() => {
+    fetchPromoMeterData();
+  }, []);
   return (
     <motion.div
       ref={ref}
@@ -24,12 +50,12 @@ export function StatsCounter() {
       transition={{ duration: 0.5, staggerChildren: 0.1 }}
     >
       <Counter
-        value={11}
+        value={promoMeterData?.projectCount || 0}
         label="Active Projects"
         icon={<Award className="h-6 w-6 text-amber-500" />}
       />
       <Counter
-        value={1969}
+        value={promoMeterData?.totalFarmers || 0}
         label="Farmers Trained"
         icon={<Users className="h-6 w-6 text-amber-500" />}
       />

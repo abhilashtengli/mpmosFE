@@ -42,7 +42,6 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import {
-  Sprout,
   Plus,
   Search,
   Eye,
@@ -58,7 +57,9 @@ import { useNavigate } from "react-router-dom";
 import { Base_Url, quarterlyData } from "@/lib/constants";
 import axios, { type AxiosError } from "axios";
 import EnhancedShimmerTableRows from "@/components/shimmer-rows";
-
+import iimr from "@/assets/IIMR_logo.jpg";
+import aicrp from "@/assets/AICRP_logo.png";
+import cpgs from "@/assets/CPGS_logo.jpg";
 // Updated validation schemas based on backend requirements
 const createFldValidation = z
   .object({
@@ -435,7 +436,7 @@ export default function FLDPage() {
 
         User: item.User ? { id: item.User.id, name: item.User.name } : undefined
       }));
-      console.log("MP : ", mappedFld);
+      // console.log("MP : ", mappedFld);
       setFlds(mappedFld || []);
     } catch (error: unknown) {
       // console.error("Error fetching trainings:", error);
@@ -509,7 +510,7 @@ export default function FLDPage() {
     );
   });
 
-  console.log("FL : ", filteredFLDs);
+  // console.log("FL : ", filteredFLDs);
   const uniqueProjectTitle = useMemo(() => {
     if (!projects || projects.length === 0) return [];
     return Array.from(new Set(projects.map((project) => project.title)));
@@ -627,7 +628,7 @@ export default function FLDPage() {
   ): Promise<boolean> => {
     // Input validation
 
-    console.log("DATA : ", formData);
+    // console.log("DATA : ", formData);
     if (operation === "update" && !fldId) {
       toast.error("FLD ID is required for update operation");
       return false;
@@ -956,7 +957,29 @@ export default function FLDPage() {
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Sprout className="h-8 w-8 text-green-600" />
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={aicrp}
+                  alt="AICRP on Sorghum and Millets"
+                  className="rounded-full w-12 h-12 object-contain"
+                />
+              </div>
+              <div className=" w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={cpgs}
+                  alt="CPGS Logo"
+                  className=" rounded-full w-20 h-20 object-contain"
+                />
+              </div>
+              <div className="w-24 h-14 rounded- flex items-center justify-center shadow-md">
+                <img
+                  src={iimr}
+                  alt="IIMR Logo"
+                  className="rounded-lg h-16 object-contain"
+                />
+              </div>
+            </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
                 Front Line Demonstrations

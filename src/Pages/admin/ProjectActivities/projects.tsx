@@ -34,15 +34,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import {
-  FileText,
-  Plus,
-  Search,
-  Calendar,
-  Eye,
-  Edit,
-  Trash2
-} from "lucide-react";
+import { Plus, Search, Calendar, Eye, Edit, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import {
@@ -55,7 +47,9 @@ import { useProjectStore } from "@/stores/useProjectStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router-dom";
 import EnhancedShimmerTableRows from "@/components/shimmer-rows";
-
+import iimr from "@/assets/IIMR_logo.jpg";
+import aicrp from "@/assets/AICRP_logo.png";
+import cpgs from "@/assets/CPGS_logo.jpg";
 // TypeScript interfaces
 interface Project {
   id: string;
@@ -643,7 +637,7 @@ export default function ProjectsPage() {
       `${operation === "create" ? "Creating" : "Updating"} project...`
     );
 
-    console.log("FD : ", formData);
+    // console.log("FD : ", formData);
 
     try {
       let response;
@@ -678,7 +672,7 @@ export default function ProjectsPage() {
           duration: 6000
         });
 
-        console.log(`Project ${operation}d successfully:`, data.data);
+        // console.log(`Project ${operation}d successfully:`, data.data);
 
         // Update local state
         if (operation === "create") {
@@ -972,7 +966,29 @@ export default function ProjectsPage() {
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <FileText className="h-8 w-8 text-green-600" />
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={aicrp}
+                  alt="AICRP on Sorghum and Millets"
+                  className="rounded-full w-12 h-12 object-contain"
+                />
+              </div>
+              <div className=" w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={cpgs}
+                  alt="CPGS Logo"
+                  className=" rounded-full w-20 h-20 object-contain"
+                />
+              </div>
+              <div className="w-24 h-14 rounded- flex items-center justify-center shadow-md">
+                <img
+                  src={iimr}
+                  alt="IIMR Logo"
+                  className="rounded-lg h-16 object-contain"
+                />
+              </div>
+            </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
                 Project Management

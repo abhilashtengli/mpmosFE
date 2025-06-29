@@ -21,7 +21,9 @@ import cpgs from "@/assets/CPGS_logo.jpg";
 import { motion } from "framer-motion";
 import { useEffect } from "react";
 
+
 export default function AboutPage() {
+
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);

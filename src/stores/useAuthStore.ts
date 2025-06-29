@@ -68,7 +68,6 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        console.log("Looooggginnnggg out...");
         try {
           await axios.post(`${Base_Url}/logout`, {}, { withCredentials: true }); // ✅ Correctly placed
         } catch (err) {

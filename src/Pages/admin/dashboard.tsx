@@ -50,7 +50,9 @@ import { UserPlus, LogOut, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { Skeleton } from "@/components/ui/skeleton";
-
+import iimr from "@/assets/IIMR_logo.jpg";
+import aicrp from "@/assets/AICRP_logo.png";
+import cpgs from "@/assets/CPGS_logo.jpg";
 // Types
 interface DashboardStats {
   projectCount: number;
@@ -502,8 +504,30 @@ export default function DashboardAdPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
-              <Sprout className="h-8 w-8 text-green-600" />
-              <h1 className="text-2xl font-bold text-gray-900">
+              <div className="flex flex-wrap items-center gap-6">
+                <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                  <img
+                    src={aicrp}
+                    alt="AICRP on Sorghum and Millets"
+                    className="rounded-full w-12 h-12 object-contain"
+                  />
+                </div>
+                <div className=" w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                  <img
+                    src={cpgs}
+                    alt="CPGS Logo"
+                    className=" rounded-full w-20 h-20 object-contain"
+                  />
+                </div>
+                <div className="w-24 h-14 rounded- flex items-center justify-center shadow-md">
+                  <img
+                    src={iimr}
+                    alt="IIMR Logo"
+                    className="rounded-lg h-16 object-contain"
+                  />
+                </div>
+              </div>
+              <h1 className="text-2xl font-bold text-zinc-700">
                 Millet Project Monitoring System Dashboard
               </h1>
             </div>

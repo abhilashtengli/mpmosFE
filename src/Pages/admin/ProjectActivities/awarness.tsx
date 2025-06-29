@@ -38,7 +38,6 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import {
-  Users,
   Plus,
   Search,
   Eye,
@@ -64,7 +63,9 @@ import { useNavigate } from "react-router-dom";
 import { getSignedUrl } from "@/services/cloudflare/getSignedUrl";
 import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
 import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudflare";
-
+import iimr from "@/assets/IIMR_logo.jpg";
+import aicrp from "@/assets/AICRP_logo.png";
+import cpgs from "@/assets/CPGS_logo.jpg";
 // Frontend validation
 const baseAwarenessSchema = z.object({
   title: z
@@ -495,7 +496,7 @@ export default function AwarenessPage() {
       });
 
       const data = response.data;
-      console.log("Data : ", data);
+      // console.log("Data : ", data);
 
       if (response.data.code === "NO_PROGRAMS_FOUND") {
         toast.info("No Programs Found", {
@@ -660,7 +661,7 @@ export default function AwarenessPage() {
     operation: "create" | "update" = "create",
     awarnessId?: string
   ): Promise<boolean> => {
-    console.log("DATA : ", formData);
+    // console.log("DATA : ", formData);
 
     if (operation === "update" && !awarnessId) {
       toast.error("Awarness program ID is required for update operation");
@@ -719,7 +720,7 @@ export default function AwarenessPage() {
         imageKey: formData.imageKey || null,
         imageUrl: formData.imageUrl || null
       };
-      console.log("Request-Data : ", requestData);
+      // console.log("Request-Data : ", requestData);
       if (operation === "create") {
         response = await axios.post(
           `${Base_Url}/create-awareness-program`,
@@ -1113,7 +1114,29 @@ export default function AwarenessPage() {
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Users className="h-8 w-8 text-green-600" />
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={aicrp}
+                  alt="AICRP on Sorghum and Millets"
+                  className="rounded-full w-12 h-12 object-contain"
+                />
+              </div>
+              <div className=" w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={cpgs}
+                  alt="CPGS Logo"
+                  className=" rounded-full w-20 h-20 object-contain"
+                />
+              </div>
+              <div className="w-24 h-14 rounded- flex items-center justify-center shadow-md">
+                <img
+                  src={iimr}
+                  alt="IIMR Logo"
+                  className="rounded-lg h-16 object-contain"
+                />
+              </div>
+            </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
                 Awareness Programs

@@ -45,7 +45,9 @@ import { getSignedUrl } from "@/services/cloudflare/getSignedUrl";
 import deleteFileFromCloudflare from "@/services/cloudflare/deleteFileFromCloudflare";
 import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare";
 import { Base_Url } from "@/lib/constants";
-
+import iimr from "@/assets/IIMR_logo.jpg";
+import aicrp from "@/assets/AICRP_logo.png";
+import cpgs from "@/assets/CPGS_logo.jpg";
 // Base publication schema - matching backend exactly
 const basePublicationSchema = z.object({
   title: z
@@ -552,7 +554,7 @@ export default function PublicationsPage() {
           timeout: 30000
         }
       );
-      console.log("Resoposne : ", response.data);
+      // console.log("Resoposne : ", response.data);
 
       if (response.status === 200 && response.data.success) {
         if (response.data.warning) {
@@ -648,7 +650,29 @@ export default function PublicationsPage() {
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <BookOpen className="h-8 w-8 text-green-600" />
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={aicrp}
+                  alt="AICRP on Sorghum and Millets"
+                  className="rounded-full w-12 h-12 object-contain"
+                />
+              </div>
+              <div className=" w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={cpgs}
+                  alt="CPGS Logo"
+                  className=" rounded-full w-20 h-20 object-contain"
+                />
+              </div>
+              <div className="w-24 h-14 rounded- flex items-center justify-center shadow-md">
+                <img
+                  src={iimr}
+                  alt="IIMR Logo"
+                  className="rounded-lg h-16 object-contain"
+                />
+              </div>
+            </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Publications</h1>
               <p className="text-sm text-gray-600">

@@ -40,7 +40,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import EnhancedShimmerTableRows from "@/components/shimmer-rows";
 import {
-  FileText,
   Plus,
   Search,
   Edit,
@@ -54,7 +53,9 @@ import {
 import { z } from "zod";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-
+import iimr from "@/assets/IIMR_logo.jpg";
+import aicrp from "@/assets/AICRP_logo.png";
+import cpgs from "@/assets/CPGS_logo.jpg";
 // Create Project Details Validation
 const createProjectDetailsValidation = z.object({
   title: z
@@ -401,7 +402,29 @@ export default function ProjectDetailsAdPage() {
       <header className="mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <FileText className="h-8 w-8 text-green-600" />
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={aicrp}
+                  alt="AICRP on Sorghum and Millets"
+                  className="rounded-full w-12 h-12 object-contain"
+                />
+              </div>
+              <div className=" w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={cpgs}
+                  alt="CPGS Logo"
+                  className=" rounded-full w-20 h-20 object-contain"
+                />
+              </div>
+              <div className="w-24 h-14 rounded- flex items-center justify-center shadow-md">
+                <img
+                  src={iimr}
+                  alt="IIMR Logo"
+                  className="rounded-lg h-16 object-contain"
+                />
+              </div>
+            </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
                 Project Details
