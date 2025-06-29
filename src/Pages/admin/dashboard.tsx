@@ -560,7 +560,7 @@ export default function DashboardAdPage() {
                     {user?.name}
                   </span>
                   <span className="text-[10px] tracking-widest text-green-900">
-                    {user?.role}
+                    {user?.role === "admin" ? "Admin" : "Project diretor"}
                   </span>
                 </div>
                 <motion.div

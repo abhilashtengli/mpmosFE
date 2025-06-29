@@ -29,7 +29,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Base_Url } from "@/lib/constants";
 import { useAuthStore } from "@/stores/useAuthStore";
-// Configuration
+import iimr from "@/assets/IIMR_logo.jpg";
+import aicrp from "@/assets/AICRP_logo.png";
+import cpgs from "@/assets/CPGS_logo.jpg";
 
 // Form validation schema
 const signinSchema = z.object({
@@ -75,7 +77,6 @@ export default function SigninPage() {
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const { setUser, isAuthenticated, clearError } = useAuthStore();
-
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -223,11 +224,31 @@ export default function SigninPage() {
       <header className="bg-white shadow-sm border-b border-gray-200 py-4">
         <div className="container mx-auto px-4 flex items-center">
           <div className="flex items-center">
-            <div className="h-10 w-10 rounded-full bg-green-600 flex items-center justify-center text-white font-bold mr-3">
-              AG
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={aicrp}
+                  alt="AICRP on Sorghum and Millets"
+                  className="rounded-full w-12 h-12 object-contain"
+                />
+              </div>
+              <div className=" w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+                <img
+                  src={cpgs}
+                  alt="CPGS Logo"
+                  className=" rounded-full w-20 h-20 object-contain"
+                />
+              </div>
+              <div className="w-24 h-14 rounded- flex items-center justify-center shadow-md">
+                <img
+                  src={iimr}
+                  alt="IIMR Logo"
+                  className="rounded-lg h-16 object-contain"
+                />
+              </div>
             </div>
-            <span className="font-semibold text-lg">
-              Agricultural Dashboard
+            <span className="pl-5 text-xl tracking-wider text-green-900 font-">
+              Millet Project Monitoring System Dashboard
             </span>
           </div>
         </div>
@@ -246,7 +267,7 @@ export default function SigninPage() {
           </CardHeader>
 
           <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 mb-5">
               {formError && (
                 <Alert variant="destructive" className="border-red-500">
                   <AlertDescription>{formError}</AlertDescription>
@@ -280,7 +301,7 @@ export default function SigninPage() {
                     Password <span className="text-red-500">*</span>
                   </Label>
                   <Link
-                    to="/forgot-password"
+                    to="/admin/signin"
                     className="text-xs text-green-600 hover:text-green-700"
                     tabIndex={isLoading ? -1 : 0}
                   >
@@ -325,7 +346,7 @@ export default function SigninPage() {
               </div>
             </CardContent>
 
-            <CardFooter className="flex flex-col space-y-4">
+            <CardFooter className="flex flex-col space-y-4 mb-4">
               <Button
                 type="submit"
                 className="w-full bg-green-600 mt-5 hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
@@ -335,7 +356,7 @@ export default function SigninPage() {
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
 
-              <p className="text-center text-sm text-gray-600">
+              {/* <p className="text-center text-sm text-gray-600">
                 Don&apos;t have an account?{" "}
                 <Link
                   to="/signup"
@@ -344,7 +365,7 @@ export default function SigninPage() {
                 >
                   Request access
                 </Link>
-              </p>
+              </p> */}
             </CardFooter>
           </form>
         </Card>
@@ -352,7 +373,9 @@ export default function SigninPage() {
 
       {/* Footer */}
       <footer className="py-4 text-center text-sm text-gray-500">
-        <p>© 2024 Agricultural Dashboard. All rights reserved.</p>
+        <p>
+          © 2025 College of Post Graduate Studies in Agricultural Sciences, Umiam. All rights reserved.
+        </p>
       </footer>
     </div>
   );

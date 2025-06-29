@@ -366,8 +366,8 @@ export function Sidebar() {
                     <p className="text-sm font-medium text-gray-900 truncate">
                       {user?.name}
                     </p>
-                    <div className="text-[12px] border w-fit px-1 rounded-sm pb-0.5">
-                      {user?.role}
+                    <div className="text-[12px] border w-fit px-1 rounded-sm pb-0.5 mt-1">
+                      {user?.role === "admin" ? "Admin" : "Project director"}
                     </div>
                   </div>
                   <ChevronDown className="h-4 w-4 text-gray-500 transition-transform" />
