@@ -295,17 +295,6 @@ export default function AICRPProjectsPage() {
           )}
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="bg-gradient-to-b from-zinc-800 to-zinc-900 py-12 text-zinc-100 mt-auto">
-        <div className="container mx-auto px-4 text-center">
-          <p>© 2025 Millets-Project Monitoring System. All rights reserved.</p>
-          <p className="mt-2">
-            Funded by the Ministry of Agriculture and Farmers' Welfare,
-            Government of India.
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }

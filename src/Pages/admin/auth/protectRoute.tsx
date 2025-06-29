@@ -52,7 +52,7 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return (
       <Navigate
-        to="/admin/signin"
+        to="/admin/dashboard"
         state={{ from: location.pathname }}
         replace
       />

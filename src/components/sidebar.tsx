@@ -126,6 +126,12 @@ export function Sidebar() {
     }
     return item;
   });
+  const filteredNavigation = updatedNavigation.filter((item) => {
+    if (item.name === "Reports" && user?.role === "director") {
+      return false;
+    }
+    return true;
+  });
 
   const toggleExpanded = (name: string) => {
     setExpandedItems((prev) =>
@@ -225,7 +231,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-2">
-        {updatedNavigation.map((item) => (
+        {filteredNavigation.map((item) => (
           <div key={item.name}>
             {item.children ? (
               <div>

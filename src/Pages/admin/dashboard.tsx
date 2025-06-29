@@ -677,9 +677,9 @@ export default function DashboardAdPage() {
                     <div className="text-2xl font-bold ">
                       <Skeleton className="h-6 w-12 bg-gray-200" />
                     </div>
-                    <p className="text-[10px] ">
+                    <div className="text-[10px] ">
                       <Skeleton className="h-4 w-20 bg-gray-200" />
-                    </p>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -715,9 +715,9 @@ export default function DashboardAdPage() {
                     <div className="text-2xl font-bold ">
                       <Skeleton className="h-6 w-12 bg-gray-200" />
                     </div>
-                    <p className="text-[10px] ">
+                    <div className="text-[10px] ">
                       <Skeleton className="h-4 w-20 bg-gray-200" />
-                    </p>
+                    </div>
                   </div>
                 </div>
               ) : (

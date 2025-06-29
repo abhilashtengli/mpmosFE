@@ -47,7 +47,7 @@ export default function Navbar() {
           }`}
         >
           <motion.div
-            className="flex items-center space-x-4 transition-all duration-500"
+            className="flex items-center  space-x-4 transition-all duration-500"
             initial={{ y: -100 }}
             animate={{ y: 0 }}
             transition={{ duration: 0.5 }}
@@ -71,7 +71,7 @@ export default function Navbar() {
               <Link
                 key={link.name}
                 to={link.href}
-                className={`px-3 py-2 font-medium transition-all duration-300 ${
+                className={`px-3 py-2 text-green-800 tracking-wider font-medium transition-all duration-300 ${
                   scrolled
                     ? "text-white hover:text-green-200 hover:bg-black/50 rounded-md"
                     : "text-gray-900 hover:bg-green-200 rounded-md"
@@ -88,7 +88,7 @@ export default function Navbar() {
               onMouseLeave={() => setActiveDropdown(null)}
             >
               <button
-                className={`px-3 py-2 cursor-pointer font-medium flex items-center transition-all duration-300 ${
+                className={`px-3 py-2 cursor-pointer text-green-800 tracking-wider font-medium flex items-center transition-all duration-300 ${
                   scrolled
                     ? "text-white hover:text-green-200 hover:bg-black/50 rounded-md"
                     : "text-gray-900 hover:bg-green-200 hover:text-green-700 rounded-md"

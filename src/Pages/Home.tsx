@@ -103,12 +103,12 @@ export default function Home() {
         <div className="container relative z-10 mx-auto px-4 md:px-20">
           <div className="grid gap-8 md:grid-cols-2">
             <div className="flex flex-col justify-center space-y-6">
-              <div className="inline-block tracking-wider rounded-md bg-green-600/90 px-4 py-1 text-sm font-medium backdrop-blur-sm w-fit">
+              <div className="inline-block tracking-wider rounded-md bg-green-600/90 px-4 py-1 text-xl font-medium backdrop-blur-sm w-fit">
                 Millets-Project Monitoring System
               </div>
 
-              <h1 className="text-4xl tracking-wider font-bold leading-tight md:text-5xl lg:text-6xl">
-                Empowering Millets, Transforming the Northeast
+              <h1 className="text-xl   tracking-wider font-bold leading-tight md:text-3xl lg:text-5xl">
+                Empowering Millet Farmers, Transforming the Northeast India
               </h1>
 
               <p className="max-w-md text-lg text-gray-100 tracking-wide">
@@ -117,11 +117,11 @@ export default function Home() {
               </p>
 
               <div className="flex flex-wrap items-center gap-6">
-                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-md">
+                <div className="w-32 h-20 rounded- flex items-center justify-center shadow-md">
                   <img
-                    src={aicrp}
-                    alt="AICRP on Sorghum and Millets"
-                    className="rounded-full w-20 h-20 object-contain"
+                    src={iimr}
+                    alt="IIMR Logo"
+                    className="rounded-lg h-16 object-contain"
                   />
                 </div>
                 <div className=" w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-md">
@@ -131,11 +131,12 @@ export default function Home() {
                     className=" rounded-full w-20 h-20 object-contain"
                   />
                 </div>
-                <div className="w-32 h-20 rounded- flex items-center justify-center shadow-md">
+
+                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-md">
                   <img
-                    src={iimr}
-                    alt="IIMR Logo"
-                    className="rounded-lg h-16 object-contain"
+                    src={aicrp}
+                    alt="AICRP on Sorghum and Millets"
+                    className="rounded-full w-20 h-20 object-contain"
                   />
                 </div>
               </div>
