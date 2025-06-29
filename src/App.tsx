@@ -55,6 +55,7 @@ function App() {
             <Route path="/about" element={<AboutPage />} />
             {/* <Route path="/progressreportsubmission" element={<About />} /> */}
           </Route>
+          <Route path="/admin/signin" element={<SigninPage />} />
 
           {/* Admin Pages  */}
           <Route
@@ -95,10 +96,6 @@ function App() {
             />
             <Route path="projects" element={<ProjectsAdPage />} />
             <Route path="trainings" element={<TrainingAdPage />} />
-          </Route>
-
-          <Route path="/admin">
-            <Route path="signin" element={<SigninPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
