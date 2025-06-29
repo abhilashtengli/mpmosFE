@@ -1,140 +1,166 @@
+"use client";
+
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ChevronDown,
   MapPin,
   Calendar,
-  Coins,
   Users,
   Target,
-  Award
+  Award,
+  AlertCircle
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ProjectSkeleton } from "@/components/public-components/project-skeleton";
+import axios from "axios";
+import { Base_Url } from "@/lib/constants";
 
-// This is a placeholder for AICRP NEH projects
-// You would replace this with actual project data
-const projects = [
-  {
-    id: 1,
-    title: "AICRP on Small Millets - Arunachal Pradesh Centre",
-    year: "2023",
-    budget: "12 Lakhs",
-    centre: "College of Agriculture, Pasighat",
-    location: "Arunachal Pradesh",
-    objectives: [
-      "Evaluation of small millets germplasm for yield and quality traits",
-      "Development of high yielding varieties of small millets",
-      "Standardization of production technologies for small millets",
-      "Demonstration of improved technologies through frontline demonstrations"
-    ],
-    director: "Dr. Rajesh Kumar",
-    coDirectors: ["Dr. Anita Singh", "Dr. Manoj Patel"],
-    achievements: [
-      "Released 2 high-yielding varieties of finger millet",
-      "Conducted 15 frontline demonstrations covering 50 hectares",
-      "Trained 200 farmers on improved cultivation practices"
-    ],
-    image: "/placeholder.svg?height=300&width=500&text=AICRP+Arunachal+Pradesh"
-  },
-  {
-    id: 2,
-    title: "AICRP on Sorghum - Manipur Centre",
-    year: "2022",
-    budget: "15 Lakhs",
-    centre: "College of Agriculture, Imphal",
-    location: "Manipur",
-    objectives: [
-      "Evaluation of sorghum germplasm for fodder and grain yield",
-      "Development of dual-purpose sorghum varieties",
-      "Management of major pests and diseases of sorghum",
-      "Promotion of sorghum cultivation in tribal areas"
-    ],
-    director: "Dr. Sanjay Sharma",
-    coDirectors: ["Dr. Priya Gupta", "Dr. Rahul Verma"],
-    achievements: [
-      "Identified 3 promising lines for dual-purpose use",
-      "Developed integrated pest management package",
-      "Established seed production chain involving 50 farmers"
-    ],
-    image: "/placeholder.svg?height=300&width=500&text=AICRP+Manipur"
-  },
-  {
-    id: 3,
-    title: "AICRP on Pearl Millet - Meghalaya Centre",
-    year: "2021",
-    budget: "14 Lakhs",
-    centre: "ICAR Research Complex for NEH Region, Umiam",
-    location: "Meghalaya",
-    objectives: [
-      "Evaluation of pearl millet germplasm for high altitude adaptation",
-      "Development of biofortified pearl millet varieties",
-      "Standardization of organic production technologies",
-      "Promotion of pearl millet as a climate-resilient crop"
-    ],
-    director: "Dr. Neelam Patel",
-    coDirectors: ["Dr. Vikram Singh", "Dr. Meena Kumari"],
-    achievements: [
-      "Identified 5 high-iron and zinc lines suitable for the region",
-      "Developed organic package of practices",
-      "Established 10 demonstration units in farmers' fields"
-    ],
-    image: "/placeholder.svg?height=300&width=500&text=AICRP+Meghalaya"
-  },
-  {
-    id: 4,
-    title: "AICRP on Small Millets - Tripura Centre",
-    year: "2023",
-    budget: "13 Lakhs",
-    centre: "College of Agriculture, Tripura",
-    location: "Tripura",
-    objectives: [
-      "Evaluation of small millets for drought tolerance",
-      "Development of early maturing varieties",
-      "Standardization of intercropping systems with small millets",
-      "Value addition and product development from small millets"
-    ],
-    director: "Dr. Amit Kumar",
-    coDirectors: ["Dr. Sunita Devi", "Dr. Rajesh Yadav"],
-    achievements: [
-      "Identified 3 drought-tolerant finger millet lines",
-      "Standardized millet-legume intercropping system",
-      "Developed 5 value-added products from finger millet"
-    ],
-    image: "/placeholder.svg?height=300&width=500&text=AICRP+Tripura"
-  }
-];
+// Types based on API response
+interface Project {
+  id: string;
+  title: string;
+  region: string;
+  year: number;
+  center: string;
+  location: string;
+  objectives: string[];
+  director: string;
+  coDirectors: string[];
+  achievements: string[];
+  createdAt: string;
+  updatedAt: string;
+}
 
-// Get unique locations
-const locations = [
+interface ApiResponse {
+  success: boolean;
+  data: Project[];
+  code: string;
+}
+
+// Fixed locations for AICRP NEH region
+const FIXED_LOCATIONS = [
   "All",
-  ...Array.from(new Set(projects.map(project => project.location)))
+  "Arunachal Pradesh",
+  "Meghalaya",
+  "Tripura",
+  "Manipur"
 ];
+
+// Extract location from center name or location field for filtering
+const extractLocationFromProject = (project: Project): string => {
+  const locationText = `${project.center} ${project.location}`.toLowerCase();
+
+  const locationMap: { [key: string]: string } = {
+    arunachal: "Arunachal Pradesh",
+    pasighat: "Arunachal Pradesh",
+    manipur: "Manipur",
+    imphal: "Manipur",
+    tripura: "Tripura",
+    lembucherra: "Tripura",
+    meghalaya: "Meghalaya",
+    umiam: "Meghalaya"
+  };
+
+  for (const [key, value] of Object.entries(locationMap)) {
+    if (locationText.includes(key)) {
+      return value;
+    }
+  }
+  return "Other";
+};
 
 export default function AICRPProjectsPage() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedLocation, setSelectedLocation] = useState("All");
-  const [filteredProjects, setFilteredProjects] = useState(projects);
-  const [expandedProject, setExpandedProject] = useState<number | null>(null);
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
+  const [expandedProject, setExpandedProject] = useState<string | null>(null);
 
-  useEffect(
-    () => {
+  // Fetch projects from API
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    const fetchProjects = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await axios.get(
+          `${Base_Url}/get-all-aicrp-project-details`
+        );
+
+        if (!response.data.success) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result: ApiResponse = await response.data;
+
+        if (result.success && result.data) {
+          setProjects(result.data);
+        } else {
+          throw new Error("Failed to fetch AICRP projects data");
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "An error occurred while fetching AICRP projects"
+        );
+        console.error("Error fetching AICRP projects:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, []);
+
+  // Filter projects based on selected location
+  useEffect(() => {
+    if (projects.length > 0) {
+      const projectsWithLocations = projects.map((project) => ({
+        ...project,
+        derivedLocation: extractLocationFromProject(project)
+      }));
+
       if (selectedLocation === "All") {
-        setFilteredProjects(projects);
+        setFilteredProjects(projectsWithLocations);
       } else {
         setFilteredProjects(
-          projects.filter(project => project.location === selectedLocation)
+          projectsWithLocations.filter(
+            (project) => project.derivedLocation === selectedLocation
+          )
         );
       }
+
       // Reset expanded project when changing location
       setExpandedProject(null);
-    },
-    [selectedLocation]
-  );
+    }
+  }, [selectedLocation, projects]);
 
-  const toggleProject = (id: number) => {
+  // Use fixed locations
+  const locations = FIXED_LOCATIONS;
+
+  const toggleProject = (id: string) => {
     setExpandedProject(expandedProject === id ? null : id);
   };
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Alert className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Error loading AICRP projects:</strong> {error}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -144,51 +170,69 @@ export default function AICRPProjectsPage() {
           <div className="absolute inset-0 bg-gradient-to-b from-green-900 to-green-50" />
           <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_bottom_left,#ffffff,transparent_70%)]" />
         </div>
-
         <div className="container relative z-10 mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center"
-          >
-            <h1 className="mb-2 text-3xl font-bold text-white md:text-4xl drop-shadow-md">
-              AICRP NEH Projects
-            </h1>
-            <p className="mx-auto mb-4 max-w-2xl text-base text-white font-medium drop-shadow-sm">
-              All India Coordinated Research Projects on Millets in the North
-              Eastern Hilly Region
-            </p>
-          </motion.div>
+          {loading ? (
+            <div className="text-center">
+              <div className="h-10 w-80 bg-white/20 rounded-md mx-auto mb-4 shimmer"></div>
+              <div className="h-6 w-96 bg-white/20 rounded-md mx-auto shimmer"></div>
+            </div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-center"
+            >
+              <h1 className="mb-2 text-3xl font-bold text-white md:text-4xl drop-shadow-md">
+                AICRP NEH Projects
+              </h1>
+              <p className="mx-auto mb-4 max-w-2xl text-base text-white font-medium drop-shadow-sm">
+                All India Coordinated Research Projects on Millets in the North
+                Eastern Hilly Region
+              </p>
+            </motion.div>
+          )}
 
           {/* Location Tabs */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            <Tabs
-              defaultValue="All"
-              value={selectedLocation}
-              onValueChange={setSelectedLocation}
-              className="mx-auto max-w-3xl  grid place-content-center"
+          {loading ? (
+            <div className="mx-auto max-w-4xl grid place-content-center mt-6">
+              <div className="flex gap-2">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-10 w-20 bg-white/20 rounded-md shimmer"
+                  ></div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
             >
-              <TabsList
-                className={`grid w-fit grid-cols-2  md:grid-cols-${locations.length} bg-green-800/80 backdrop-blur-sm`}
+              <Tabs
+                defaultValue="All"
+                value={selectedLocation}
+                onValueChange={setSelectedLocation}
+                className="mx-auto max-w-4xl grid place-content-center"
               >
-                {locations.map(location =>
-                  <TabsTrigger
-                    key={location}
-                    value={location}
-                    className="data-[state=active]:bg-green-100 cursor-pointer data-[state=active]:text-green-900 text-white font-medium"
-                  >
-                    {location}
-                  </TabsTrigger>
-                )}
-              </TabsList>
-            </Tabs>
-          </motion.div>
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-5 bg-green-800/80 backdrop-blur-sm">
+                  {locations.map((location) => (
+                    <TabsTrigger
+                      key={location}
+                      value={location}
+                      className="data-[state=active]:bg-green-100 cursor-pointer data-[state=active]:text-green-900 text-white font-medium text-xs md:text-sm"
+                    >
+                      {location}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </motion.div>
+          )}
         </div>
+
         <div className="absolute bottom-0 left-0 right-0">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -205,45 +249,50 @@ export default function AICRPProjectsPage() {
       </section>
 
       {/* Projects Section */}
-      <section className="py-16 px-20">
+      <section className="py-16 px-4 md:px-8 lg:px-20">
         <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6 }}
-            className="grid gap-8"
-          >
-            <AnimatePresence>
-              {filteredProjects.map((project, index) =>
+          {loading ? (
+            <ProjectSkeleton count={4} />
+          ) : (
+            <div className="grid gap-6">
+              {filteredProjects.length > 0 ? (
+                filteredProjects.map((project, index) => (
+                  <motion.div
+                    key={project.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.03 }}
+                  >
+                    <ProjectCard
+                      project={project}
+                      isExpanded={expandedProject === project.id}
+                      onToggle={() => toggleProject(project.id)}
+                    />
+                  </motion.div>
+                ))
+              ) : (
                 <motion.div
-                  key={project.id}
-                  initial={{ opacity: 0, y: 50 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -50 }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  layout
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="mx-auto my-16 text-center"
                 >
-                  <ProjectCard
-                    project={project}
-                    isExpanded={expandedProject === project.id}
-                    onToggle={() => toggleProject(project.id)}
-                    index={index}
-                  />
+                  <div className="bg-white rounded-lg shadow-md p-8 max-w-md mx-auto">
+                    <div className="text-gray-400 mb-4">
+                      <MapPin className="h-12 w-12 mx-auto" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                      No Projects Found
+                    </h3>
+                    <p className="text-gray-500">
+                      {selectedLocation === "All"
+                        ? "No AICRP projects are currently available."
+                        : `There are no AICRP projects in ${selectedLocation} as of now.`}
+                    </p>
+                  </div>
                 </motion.div>
               )}
-            </AnimatePresence>
-
-            {filteredProjects.length === 0 &&
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="mx-auto my-16 text-center"
-              >
-                <p className="text-xl text-zinc-500">
-                  No projects found for this location.
-                </p>
-              </motion.div>}
-          </motion.div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -262,161 +311,123 @@ export default function AICRPProjectsPage() {
 }
 
 interface ProjectCardProps {
-  project: (typeof projects)[0];
+  project: Project & { derivedLocation?: string };
   isExpanded: boolean;
   onToggle: () => void;
-  index: number;
 }
 
-function ProjectCard({
-  project,
-  isExpanded,
-  onToggle,
-  index
-}: ProjectCardProps) {
+function ProjectCard({ project, isExpanded, onToggle }: ProjectCardProps) {
   return (
-    <motion.div
-      className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-md"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: index * 0.1 }}
-    >
-      <div className="flex w-full items-start justify-between p-6 text-left hover:bg-gray-50 transition-colors">
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xl font-bold text-green-800">
-              {project.title}
-            </h2>
-            <Badge className="bg-green-600 hover:bg-green-700 text-white ml-2">
-              {project.location}
-            </Badge>
-          </div>
+    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-md hover:shadow-lg transition-all duration-200">
+      <div className="p-6">
+        <div className="flex items-start justify-between mb-4">
+          <h2 className="text-xl font-bold text-green-800 flex-1 pr-4">
+            {project.title}
+          </h2>
+          <Badge className="bg-green-600 hover:bg-green-700 text-white flex-shrink-0">
+            {project.derivedLocation || "AICRP"}
+          </Badge>
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-            <div className="flex items-center">
-              <Calendar className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
-              <span className="text-sm text-gray-600">
-                Year: {project.year}
-              </span>
-            </div>
-            <div className="flex items-center">
-              <Coins className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
-              <span className="text-sm text-gray-600">
-                Budget: {project.budget}
-              </span>
-            </div>
-            <div className="flex items-center">
-              <MapPin className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
-              <span className="text-sm text-gray-600 truncate">
-                Centre: {project.centre}
-              </span>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="flex items-center">
+            <Calendar className="h-5 w-5 text-green-600 mr-2 flex-shrink-0" />
+            <span className="text-sm text-gray-600">Year: {project.year}</span>
           </div>
-
-          <div className="mt-4">
-            <Button
-              onClick={onToggle}
-              variant="ghost"
-              className="w-full justify-between text-green-800 border cursor-pointer hover:bg-green-50 hover:text-green-900 group"
-            >
-              <span>
-                View {isExpanded ? "Less" : "Details"}
-              </span>
-              <ChevronDown
-                className={`h-5 w-5 transition-transform duration-300 ${isExpanded
-                  ? "rotate-180"
-                  : ""}`}
-              />
-            </Button>
+          <div className="flex items-start">
+            <MapPin className="h-5 w-5 text-green-600 mr-2 flex-shrink-0 mt-0.5" />
+            <span className="text-sm text-gray-600 leading-tight">
+              {project.center}
+              {project.location &&
+                project.location !== "NA" &&
+                `, ${project.location}`}
+            </span>
           </div>
         </div>
+
+        <Button
+          onClick={onToggle}
+          variant="ghost"
+          className="w-full justify-between text-green-800 border hover:bg-green-50 hover:text-green-900 transition-colors duration-150"
+        >
+          <span>View {isExpanded ? "Less" : "Details"}</span>
+          <ChevronDown
+            className={`h-5 w-5 transition-transform duration-150 ${
+              isExpanded ? "rotate-180" : ""
+            }`}
+          />
+        </Button>
       </div>
 
-      <AnimatePresence>
-        {isExpanded &&
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <div className=" border-gray-200 bg-gray-50 p-6">
-              <div className="grid gap-8 md:grid-cols-2">
-                <div>
-                  <h3 className="flex items-center text-lg font-semibold text-green-800 mb-4">
-                    <Target className="h-5 w-5 mr-2" />
-                    Objectives
-                  </h3>
-                  <ul className="list-disc pl-5 space-y-2 text-zinc-700">
-                    {project.objectives.map((objective, index) =>
-                      <motion.li
-                        key={index}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.3, delay: index * 0.1 }}
-                      >
-                        {objective}
-                      </motion.li>
-                    )}
-                  </ul>
+      {/* Improved Animation for Expansion */}
+      <div
+        className={`transition-all duration-300 ease-in-out ${
+          isExpanded ? "max-h-screen opacity-100" : "max-h-0 opacity-0"
+        } overflow-hidden`}
+      >
+        {isExpanded && (
+          <div className="border-t border-gray-200 bg-gray-50 p-6">
+            <div className="grid gap-8 lg:grid-cols-2">
+              <div>
+                <h3 className="flex items-center text-lg font-semibold text-green-800 mb-4">
+                  <Target className="h-5 w-5 mr-2" />
+                  Objectives
+                </h3>
+                <ul className="list-disc pl-5 space-y-2 text-zinc-700">
+                  {project.objectives.map((objective, index) => (
+                    <li key={index} className="leading-relaxed">
+                      {objective}
+                    </li>
+                  ))}
+                </ul>
 
-                  <h3 className="flex items-center text-lg font-semibold text-green-800 mt-6 mb-4">
-                    <Users className="h-5 w-5 mr-2" />
-                    Project Team
-                  </h3>
+                <h3 className="flex items-center text-lg font-semibold text-green-800 mt-6 mb-4">
+                  <Users className="h-5 w-5 mr-2" />
+                  Project Team
+                </h3>
+                <div className="space-y-2">
                   <p className="font-medium text-zinc-800">
-                    Project Director: {project.director}
+                    <span className="text-green-700">Project Director:</span>{" "}
+                    {project.director}
                   </p>
-                  <p className="mt-2 font-medium text-zinc-800">
-                    Co-Project Directors:
-                  </p>
-                  <ul className="list-disc pl-5 space-y-1 text-zinc-700">
-                    {project.coDirectors.map((director, index) =>
-                      <motion.li
-                        key={index}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{
-                          duration: 0.3,
-                          delay: 0.3 + index * 0.1
-                        }}
-                      >
-                        {director}
-                      </motion.li>
-                    )}
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 className="flex items-center text-lg font-semibold text-green-800 mb-4">
-                    <Award className="h-5 w-5 mr-2" />
-                    Salient Achievements
-                  </h3>
-                  {project.achievements.length > 0
-                    ? <ul className="list-disc pl-5 space-y-2 text-zinc-700">
-                        {project.achievements.map((achievement, index) =>
-                          <motion.li
-                            key={index}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{
-                              duration: 0.3,
-                              delay: 0.6 + index * 0.1
-                            }}
-                          >
-                            {achievement}
-                          </motion.li>
-                        )}
-                      </ul>
-                    : <p className="text-zinc-500 italic">
-                        Project is in progress. Achievements will be updated
-                        soon.
-                      </p>}
+                  <div>
+                    <p className="font-medium text-zinc-800 mb-2">
+                      <span className="text-green-700">
+                        Co-Project Directors:
+                      </span>
+                    </p>
+                    <ul className="list-disc pl-5 space-y-1 text-zinc-700">
+                      {project.coDirectors.map((director, index) => (
+                        <li key={index}>{director}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
+
+              <div>
+                <h3 className="flex items-center text-lg font-semibold text-green-800 mb-4">
+                  <Award className="h-5 w-5 mr-2" />
+                  Salient Achievements
+                </h3>
+                {project.achievements.length > 0 ? (
+                  <ul className="list-disc pl-5 space-y-2 text-zinc-700">
+                    {project.achievements.map((achievement, index) => (
+                      <li key={index} className="leading-relaxed">
+                        {achievement}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-zinc-500 italic">
+                    Project is in progress. Achievements will be updated soon.
+                  </p>
+                )}
+              </div>
             </div>
-          </motion.div>}
-      </AnimatePresence>
-    </motion.div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

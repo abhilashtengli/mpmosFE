@@ -11,6 +11,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { Base_Url } from "@/lib/constants";
+import axios from "axios";
 
 interface Publication {
   id: string;
@@ -160,8 +161,8 @@ export default function Publications() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${Base_Url}/get-all-publications`);
-      const result = await response.json();
+      const response = await axios.get(`${Base_Url}/get-all-publications`);
+      const result = await response.data;
 
       if (result.success) {
         setPublications(result.data);

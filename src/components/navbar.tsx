@@ -27,22 +27,24 @@ export default function Navbar() {
 
   return (
     <motion.nav
-      className={`sticky w-full lg:px-20 top-0 z-50 transition-all duration-500 ease-in-out ${scrolled
-        ? "py-3"
-        : "bg-white py-4"}`}
+      className={`sticky w-full lg:px-20 top-0 z-50 transition-all duration-500 ease-in-out ${
+        scrolled ? "py-3" : "bg-white py-4"
+      }`}
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5 }}
     >
       <div
-        className={`transition-all duration-500 ease-in-out ${scrolled
-          ? "mx-auto w-fit px-24 rounded-full py-2 bg-black/70 backdrop-blur-md border-[0.5px] border-gray-900"
-          : "container mx-auto px-4"}`}
+        className={`transition-all duration-500 ease-in-out ${
+          scrolled
+            ? "mx-auto w-fit px-24 rounded-full py-2 bg-black/70 backdrop-blur-md border-[0.5px] border-gray-900"
+            : "container mx-auto px-4"
+        }`}
       >
         <div
-          className={`flex items-center transition-all duration-500 ease-in-out ${scrolled
-            ? "justify-center gap-x-24"
-            : "justify-between"}`}
+          className={`flex items-center transition-all duration-500 ease-in-out ${
+            scrolled ? "justify-center gap-x-24" : "justify-between"
+          }`}
         >
           <motion.div
             className="flex items-center space-x-4 transition-all duration-500"
@@ -53,9 +55,9 @@ export default function Navbar() {
             {/* Brand Name */}
             <Link to="/">
               <span
-                className={`font-bold text-2xl ${scrolled
-                  ? "text-white"
-                  : "text-green-800"} transition-colors duration-500`}
+                className={`font-bold text-2xl ${
+                  scrolled ? "text-white" : "text-green-800"
+                } transition-colors duration-500`}
               >
                 MPMoS
               </span>
@@ -65,17 +67,19 @@ export default function Navbar() {
           <motion.div
             className={`hidden lg:flex items-center space-x-6 transition-all duration-500`}
           >
-            {navLinks.map(link =>
+            {navLinks.map((link) => (
               <Link
                 key={link.name}
                 to={link.href}
-                className={`px-3 py-2 font-medium transition-all duration-300 ${scrolled
-                  ? "text-white hover:text-green-200 hover:bg-black/50 rounded-md"
-                  : "text-gray-900 hover:bg-green-200 rounded-md"}`}
+                className={`px-3 py-2 font-medium transition-all duration-300 ${
+                  scrolled
+                    ? "text-white hover:text-green-200 hover:bg-black/50 rounded-md"
+                    : "text-gray-900 hover:bg-green-200 rounded-md"
+                }`}
               >
                 {link.name}
               </Link>
-            )}
+            ))}
 
             {/* Projects Dropdown */}
             <div
@@ -84,19 +88,23 @@ export default function Navbar() {
               onMouseLeave={() => setActiveDropdown(null)}
             >
               <button
-                className={`px-3 py-2 cursor-pointer font-medium flex items-center transition-all duration-300 ${scrolled
-                  ? "text-white hover:text-green-200 hover:bg-black/50 rounded-md"
-                  : "text-gray-900 hover:bg-green-200 hover:text-green-700 rounded-md"}`}
+                className={`px-3 py-2 cursor-pointer font-medium flex items-center transition-all duration-300 ${
+                  scrolled
+                    ? "text-white hover:text-green-200 hover:bg-black/50 rounded-md"
+                    : "text-gray-900 hover:bg-green-200 hover:text-green-700 rounded-md"
+                }`}
               >
                 Projects
-                {activeDropdown === "projects"
-                  ? <ChevronUp className="ml-1 mt-0.5 h-5 w-5 transition-transform duration-500 ease-out" />
-                  : <ChevronDown className="ml-1 mt-0.5 h-5 w-5 transition-transform duration-500 ease-out" />}
+                {activeDropdown === "projects" ? (
+                  <ChevronUp className="ml-1 mt-0.5 h-5 w-5 transition-transform duration-500 ease-out" />
+                ) : (
+                  <ChevronDown className="ml-1 mt-0.5 h-5 w-5 transition-transform duration-500 ease-out" />
+                )}
               </button>
 
               {/* Dropdown Menu */}
               <AnimatePresence>
-                {activeDropdown === "projects" &&
+                {activeDropdown === "projects" && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -117,34 +125,26 @@ export default function Navbar() {
                     >
                       AICRP NEH
                     </Link>
-                  </motion.div>}
+                  </motion.div>
+                )}
               </AnimatePresence>
-            </div>
-
-            {/* Search and Login */}
-            <div className="flex items-center space-x-3 transition-all duration-500">
-              <div
-                className={`px-5 py-1 rounded-full font-medium transition-all duration-300
-                  ${scrolled
-                    ? "bg-green-700 text-white hover:bg-green-800"
-                    : "bg-white text-green-800 hover:bg-green-100"}
-                `}
-              >
-                Login
-              </div>
             </div>
           </motion.div>
           {/* Mobile Menu Button */}
           <div className="lg:hidden">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className={`p-2 rounded-md transition-colors duration-300 ${scrolled
-                ? "text-white bg-green-700 hover:bg-green-800"
-                : "text-white bg-green-700 hover:bg-green-800"}`}
+              className={`p-2 rounded-md transition-colors duration-300 ${
+                scrolled
+                  ? "text-white bg-green-700 hover:bg-green-800"
+                  : "text-white bg-green-700 hover:bg-green-800"
+              }`}
             >
-              {isOpen
-                ? <X className="h-6 w-6" />
-                : <Menu className="h-6 w-6" />}
+              {isOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
             </button>
           </div>
         </div>
@@ -152,7 +152,7 @@ export default function Navbar() {
 
       {/* Mobile Navigation */}
       <AnimatePresence>
-        {isOpen &&
+        {isOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -160,7 +160,7 @@ export default function Navbar() {
             className="lg:hidden bg-white shadow-md"
           >
             <div className="container mx-auto px-4 py-4 space-y-2">
-              {navLinks.map(link =>
+              {navLinks.map((link) => (
                 <Link
                   key={link.name}
                   to={link.href}
@@ -169,7 +169,7 @@ export default function Navbar() {
                 >
                   {link.name}
                 </Link>
-              )}
+              ))}
 
               {/* Projects Dropdown for Mobile */}
               <button
@@ -178,17 +178,20 @@ export default function Navbar() {
                     activeDropdown === "mobileProjects"
                       ? null
                       : "mobileProjects"
-                  )}
+                  )
+                }
                 className="flex justify-between items-center w-full px-4 py-3 rounded-md text-gray-700 font-medium hover:bg-green-100"
               >
                 <span>Projects</span>
-                {activeDropdown === "mobileProjects"
-                  ? <ChevronUp className="h-5 w-5" />
-                  : <ChevronDown className="h-5 w-5" />}
+                {activeDropdown === "mobileProjects" ? (
+                  <ChevronUp className="h-5 w-5" />
+                ) : (
+                  <ChevronDown className="h-5 w-5" />
+                )}
               </button>
 
               <AnimatePresence>
-                {activeDropdown === "mobileProjects" &&
+                {activeDropdown === "mobileProjects" && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -208,10 +211,12 @@ export default function Navbar() {
                     >
                       AICRP NEH
                     </Link>
-                  </motion.div>}
+                  </motion.div>
+                )}
               </AnimatePresence>
             </div>
-          </motion.div>}
+          </motion.div>
+        )}
       </AnimatePresence>
     </motion.nav>
   );
