@@ -269,8 +269,8 @@ function ProjectForm({
         <Input
           id="title"
           name="title"
-          placeholder="Enter project title (max 40 characters)"
-          maxLength={40}
+          placeholder="Enter project title (max 255 characters)"
+          maxLength={255}
           value={formData.title}
           onChange={handleInputChange}
           className={formErrors.title ? "border-red-500" : ""}

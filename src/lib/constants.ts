@@ -65,7 +65,7 @@ export const quarterlyData = [
   { id: "61cd6a88-5315-45f2-93ad-45ba726fb5b2", number: 1, year: 2035 },
   { id: "e25f20be-f4d2-4aab-801a-a43b826a7843", number: 2, year: 2035 },
   { id: "5e597c5b-064d-470e-aa37-d89f90d773f4", number: 3, year: 2035 },
-  { id: "09a5d19a-148b-4c1b-9f58-6b4c03143e90", number: 4, year: 2035 }
+  { id: "09a5d19a-148b-4c1b-9f58-6b4c03143e90", number: 4, year: 2035 },
 ];
 
 export interface SignedUrlResponse {

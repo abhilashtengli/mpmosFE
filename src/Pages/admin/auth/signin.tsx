@@ -374,7 +374,8 @@ export default function SigninPage() {
       {/* Footer */}
       <footer className="py-4 text-center text-sm text-gray-500">
         <p>
-          © 2025 College of Post Graduate Studies in Agricultural Sciences, Umiam. All rights reserved.
+          © 2025 College of Post Graduate Studies in Agricultural Sciences,
+          Umiam. All rights reserved.
         </p>
       </footer>
     </div>

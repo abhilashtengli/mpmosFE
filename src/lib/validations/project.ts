@@ -7,7 +7,7 @@ export const createProjectValidation = z
       .string()
       .trim()
       .min(2, { message: "Title must be atleast of 2 characters" })
-      .max(40, { message: "Title cannot exceed 40 characters" }),
+      .max(255, { message: "Title cannot exceed 255 characters" }),
     implementingAgency: z
       .string()
       .trim()
@@ -86,7 +86,7 @@ export const updateProjectValidation = z
       .string()
       .trim()
       .min(2, { message: "Title must be atleast of 2 characters" })
-      .max(40, { message: "Title cannot exceed 40 characters" })
+      .max(255, { message: "Title cannot exceed 255 characters" })
       .optional(),
 
     implementingAgency: z
