@@ -8,14 +8,14 @@ export const fetchProjectsAPI = async () => {
     let response;
     if (user?.role === "admin") {
       response = await axios.get(`${Base_Url}/get-admin-projects`, {
-        withCredentials: true
+        withCredentials: true,
       });
     } else {
       response = await axios.get(`${Base_Url}/get-user-projects`, {
-        withCredentials: true
+        withCredentials: true,
       });
     }
-    console.log("Re : ", response?.data);
+    // console.log("Re : ", response?.data);
     return response?.data;
   } catch (error) {
     console.error("Failed to fetch projects:", error);
@@ -26,7 +26,7 @@ export const fetchProjectsAPI = async () => {
 export const fetchloggedInUser = async () => {
   try {
     const response = await axios.get(`${Base_Url}/get-me`, {
-      withCredentials: true
+      withCredentials: true,
     });
     // console.log("ME : ", response.data);
     return response.data.data;
