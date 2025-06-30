@@ -70,6 +70,12 @@ import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare
 import iimr from "@/assets/IIMR_logo.jpg";
 import aicrp from "@/assets/AICRP_logo.png";
 import cpgs from "@/assets/CPGS_logo.jpg";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "@/components/ui/tooltip";
 // Updated Zod validation schemas based on backend requirements
 const createInputDistributionValidation = z
   .object({
@@ -477,10 +483,17 @@ export default function InputDistributionPage() {
   const [pageError, setPageError] = useState<string | null>(null);
 
   const projects = useProjectStore((state) => state.projects);
+  const fetchProjects = useProjectStore((state) => state.fetchProjects);
+
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
+  const handleAuthError = useAuthStore((state) => state.handleAuthError);
 
+  useEffect(() => {
+    fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const fetchInputDistributions = async () => {
     setIsLoading(true);
     setPageError(null);
@@ -490,9 +503,9 @@ export default function InputDistributionPage() {
       const response = await axios.get<
         ApiSuccessResponse<RawInputDistribution[]>
       >(`${Base_Url}/${endpoint}`, {
-        withCredentials: true
+        withCredentials: true,
+        validateStatus: (status) => status < 500
       });
-
       if (
         response.data.success &&
         response.status === 200 &&
@@ -510,6 +523,23 @@ export default function InputDistributionPage() {
           })
         );
         setDistributions(mappedData);
+      }
+
+      if (
+        [
+          "UNAUTHORIZED",
+          "USER_NOT_FOUND",
+          "SESSION_NOT_FOUND",
+          "SESSION_EXPIRED"
+        ].includes(response.data.code)
+      ) {
+        toast.info("You're logged out", {
+          description:
+            response.data?.message ||
+            "Your session has expired or your account was signed in from another device. Please sign in again."
+        });
+        handleAuthError(response.data.message);
+        return;
       } else if (response.data.code === "NO_INPUT_DIST_FOUND") {
         setDistributions([]);
         toast.info("No Input Distribution Found", {
@@ -1763,9 +1793,21 @@ function InputDistributionForm({
             </SelectTrigger>
             <SelectContent className="max-h-60">
               {uniqueProjectItems.map((proj) => (
-                <SelectItem key={proj.id} value={proj.id}>
-                  {proj.title}
-                </SelectItem>
+                <TooltipProvider key={proj.id}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SelectItem
+                        value={proj.id}
+                        className="truncate w-[400px] whitespace-nowrap overflow-hidden"
+                      >
+                        {proj.title}
+                      </SelectItem>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs break-words tracking-wide">
+                      <p>{proj.title}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ))}
             </SelectContent>
           </Select>

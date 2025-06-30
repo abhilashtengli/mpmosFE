@@ -60,6 +60,12 @@ import EnhancedShimmerTableRows from "@/components/shimmer-rows";
 import iimr from "@/assets/IIMR_logo.jpg";
 import aicrp from "@/assets/AICRP_logo.png";
 import cpgs from "@/assets/CPGS_logo.jpg";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "@/components/ui/tooltip";
 // Updated validation schemas based on backend requirements
 const createFldValidation = z
   .object({
@@ -378,9 +384,12 @@ export default function FLDPage() {
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const projects = useProjectStore((state) => state.projects);
+  const fetchProjects = useProjectStore((state) => state.fetchProjects);
+
   const logOut = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
   const userRole = useAuthStore((state) => state.user);
+  const handleAuthError = useAuthStore((state) => state.handleAuthError);
 
   //Fetch training Data
   const fetchFlds = async () => {
@@ -392,20 +401,31 @@ export default function FLDPage() {
           ? "get-admin-fld"
           : "get-user-fld";
       const response = await axios.get(`${Base_Url}/${endpoint}`, {
-        withCredentials: true
+        withCredentials: true,
+        validateStatus: (status) => status < 500
       });
 
       const data = response.data;
-      if (response.data.code === "NO_FLD_FOUND") {
+      if (
+        [
+          "UNAUTHORIZED",
+          "USER_NOT_FOUND",
+          "SESSION_NOT_FOUND",
+          "SESSION_EXPIRED"
+        ].includes(response.data.code)
+      ) {
+        toast.info("You're logged out", {
+          description:
+            response.data?.message ||
+            "Your session has expired or your account was signed in from another device. Please sign in again."
+        });
+        handleAuthError(response.data.message);
+        return;
+      } else if (response.data.code === "NO_FLD_FOUND") {
         toast.info("No FLD Found", {
           description: "No FLD data available. Please add new data."
         });
         return;
-      } else if (response.data.code === "UNAUTHORIZED") {
-        toast.success("UNAUTHORIZED", {
-          description: `${response.data.message}`
-        });
-        logOut();
       } else if (!data.success || response.status !== 200) {
         throw new Error(data.message || "Failed to fetch FLD's");
       }
@@ -457,6 +477,10 @@ export default function FLDPage() {
       setIsLoading(false);
     }
   };
+  useEffect(() => {
+    fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetchFlds();
@@ -1644,9 +1668,21 @@ function FLDForm({ fld, onSave, onClose, isEdit = false }: FLDFormProps) {
             </SelectTrigger>
             <SelectContent>
               {uniqueProjectTitle.map((title) => (
-                <SelectItem key={title} value={title}>
-                  {title}
-                </SelectItem>
+                <TooltipProvider key={title}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SelectItem
+                        value={title}
+                        className="truncate w-[400px] whitespace-nowrap overflow-hidden"
+                      >
+                        {title}
+                      </SelectItem>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs break-words tracking-wide">
+                      <p>{title}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ))}
             </SelectContent>
           </Select>

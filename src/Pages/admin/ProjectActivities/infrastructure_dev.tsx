@@ -70,6 +70,12 @@ import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare
 import iimr from "@/assets/IIMR_logo.jpg";
 import aicrp from "@/assets/AICRP_logo.png";
 import cpgs from "@/assets/CPGS_logo.jpg";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "@/components/ui/tooltip";
 // Updated validation schemas with new fields
 const createInfrastructureValidation = z
   .object({
@@ -443,9 +449,12 @@ export default function InfrastructurePage() {
   const [pageError, setPageError] = useState<string | null>(null);
 
   const projects = useProjectStore((state) => state.projects);
+  const fetchProjects = useProjectStore((state) => state.fetchProjects);
+
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
+  const handleAuthError = useAuthStore((state) => state.handleAuthError);
 
   const fetchInfraData = async () => {
     setIsLoading(true);
@@ -456,7 +465,8 @@ export default function InfrastructurePage() {
       const response = await axios.get<ApiSuccessResponse<RawInfrastructure[]>>(
         `${Base_Url}/${endpoint}`,
         {
-          withCredentials: true
+          withCredentials: true,
+          validateStatus: (status) => status < 500
         }
       );
 
@@ -479,11 +489,22 @@ export default function InfrastructurePage() {
         }));
 
         setInfrastructures(mappedInfrastructures);
-      } else if (response.data.code === "UNAUTHORIZED") {
-        toast.success("UNAUTHORIZED", {
-          description: `${response.data.message}`
+      }
+      if (
+        [
+          "UNAUTHORIZED",
+          "USER_NOT_FOUND",
+          "SESSION_NOT_FOUND",
+          "SESSION_EXPIRED"
+        ].includes(response.data.code)
+      ) {
+        toast.info("You're logged out", {
+          description:
+            response.data?.message ||
+            "Your session has expired or your account was signed in from another device. Please sign in again."
         });
-        logout();
+        handleAuthError(response.data.message);
+        return;
       } else if (response.data.code === "NO_INFRA_DEV_FOUND") {
         toast.info("No Infrastructure Found", {
           description: "No Infrastructure data available. Please add new data."
@@ -515,6 +536,10 @@ export default function InfrastructurePage() {
       setIsLoading(false);
     }
   };
+  useEffect(() => {
+    fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetchInfraData();
@@ -1650,9 +1675,21 @@ function InfrastructureForm({
             </SelectTrigger>
             <SelectContent className="max-h-60">
               {uniqueProjectItems.map((proj) => (
-                <SelectItem key={proj.id} value={proj.id}>
-                  {proj.title}
-                </SelectItem>
+                <TooltipProvider key={proj.id}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SelectItem
+                        value={proj.id}
+                        className="truncate w-[400px] whitespace-nowrap overflow-hidden"
+                      >
+                        {proj.title}
+                      </SelectItem>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs break-words tracking-wide">
+                      <p>{proj.title}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ))}
             </SelectContent>
           </Select>

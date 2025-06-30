@@ -70,6 +70,12 @@ import uploadFileToCloudflare from "@/services/cloudflare/uploadFileToCloudFlare
 import iimr from "@/assets/IIMR_logo.jpg";
 import aicrp from "@/assets/AICRP_logo.png";
 import cpgs from "@/assets/CPGS_logo.jpg";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "@/components/ui/tooltip";
 // Base validation schema
 const baseTrainingSchema = z.object({
   title: z
@@ -512,12 +518,19 @@ export default function TrainingPage() {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const fetchProjects = useProjectStore((state) => state.fetchProjects);
+
   const projects = useProjectStore((state) => state.projects);
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
+  const handleAuthError = useAuthStore((state) => state.handleAuthError);
 
   const userRole = useAuthStore((state) => state.user);
 
+  useEffect(() => {
+    fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   //Fetch training Data
   const fetchTrainings = async () => {
     try {
@@ -528,21 +541,33 @@ export default function TrainingPage() {
           ? "get-admin-trainings"
           : "get-user-trainings";
       const response = await axios.get(`${Base_Url}/${endpoint}`, {
-        withCredentials: true
+        withCredentials: true,
+        validateStatus: (status) => status < 500
       });
 
       const data = response.data;
-      if (response.data.code === "UNAUTHORIZED") {
-        toast.success("UNAUTHORIZED", {
-          description: `${response.data.message}`
+      if (
+        [
+          "UNAUTHORIZED",
+          "USER_NOT_FOUND",
+          "SESSION_NOT_FOUND",
+          "SESSION_EXPIRED"
+        ].includes(response.data.code)
+      ) {
+        toast.info("You're logged out", {
+          description:
+            response.data?.message ||
+            "Your session has expired or your account was signed in from another device. Please sign in again."
         });
-        logout();
+        handleAuthError(response.data.message);
+        return;
       } else if (response.data.code === "RESOURCE_NOT_FOUND") {
         toast.info("No Training Found", {
           description: "No Training data available. Please add new data."
         });
         return;
-      } else if (!data.success || response.status !== 200) {
+      }
+      if (!data.success || response.status !== 200) {
         throw new Error(data.message || "Failed to fetch trainings");
       }
 
@@ -1047,7 +1072,7 @@ export default function TrainingPage() {
                 New Training
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="  max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add New Training Program</DialogTitle>
                 <DialogDescription>
@@ -2121,7 +2146,7 @@ function TrainingForm({
   };
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
+    <form className="space-y-4 " onSubmit={handleSubmit}>
       <div className="grid grid-cols-1 gap-4">
         <div>
           <Label>
@@ -2150,9 +2175,21 @@ function TrainingForm({
             </SelectTrigger>
             <SelectContent>
               {uniqueProjectTitle.map((title) => (
-                <SelectItem key={title} value={title}>
-                  {title}
-                </SelectItem>
+                <TooltipProvider key={title}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SelectItem
+                        value={title}
+                        className="truncate w-[400px] whitespace-nowrap overflow-hidden"
+                      >
+                        {title}
+                      </SelectItem>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs break-words tracking-wide">
+                      <p>{title}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ))}
             </SelectContent>
           </Select>

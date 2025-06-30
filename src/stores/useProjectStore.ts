@@ -47,7 +47,7 @@ export const useProjectStore = create<ProjectStore>()(
             projects: response.data,
             lastFetched: Date.now(),
             error: null,
-            isLoading: false
+            isLoading: false,
           });
         } catch (error) {
           const errorMessage =
@@ -56,7 +56,7 @@ export const useProjectStore = create<ProjectStore>()(
           console.error("Could not load projects", error);
           set({
             error: errorMessage,
-            isLoading: false
+            isLoading: false,
           });
         }
       },
@@ -65,33 +65,33 @@ export const useProjectStore = create<ProjectStore>()(
         set({
           projects: [],
           lastFetched: null,
-          error: null
+          error: null,
         }),
 
       clearError: () => set({ error: null }),
 
       addProject: (project) =>
         set((state) => ({
-          projects: [...state.projects, project]
+          projects: [...state.projects, project],
         })),
 
       updateProject: (id, updates) =>
         set((state) => ({
           projects: state.projects.map((project) =>
             project.id === id ? { ...project, ...updates } : project
-          )
+          ),
         })),
 
       removeProject: (id) =>
         set((state) => ({
-          projects: state.projects.filter((project) => project.id !== id)
-        }))
+          projects: state.projects.filter((project) => project.id !== id),
+        })),
     }),
     {
       name: "project-storage",
       partialize: (state) => ({
         projects: state.projects,
-        lastFetched: state.lastFetched
+        lastFetched: state.lastFetched,
       }),
       onRehydrateStorage: () => {
         return (state) => {
@@ -99,7 +99,7 @@ export const useProjectStore = create<ProjectStore>()(
             state.hasHydrated = true;
           }
         };
-      }
+      },
     }
   )
 );

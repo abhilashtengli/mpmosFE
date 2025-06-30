@@ -74,6 +74,7 @@ import { useActivityCategoriesStore } from "@/stores/useActivityCategoryStore";
 import iimr from "@/assets/IIMR_logo.jpg";
 import aicrp from "@/assets/AICRP_logo.png";
 import cpgs from "@/assets/CPGS_logo.jpg";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 // Updated validation schemas based on backend requirements
 const baseActivitySchema = z.object({
   title: z
@@ -578,6 +579,8 @@ export default function ActivityPage() {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("");
   const [isDeleting, setIsDeleting] = useState(false);
   const projects = useProjectStore((state) => state.projects);
+  const fetchProjects = useProjectStore((state) => state.fetchProjects);
+
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
   const userRole = useAuthStore((state) => state.user);
@@ -586,6 +589,7 @@ export default function ActivityPage() {
     useActivityCategoriesStore();
   // Get current category
   const activityCategory = getCategoryById(activityCategoryId || "");
+  const handleAuthError = useAuthStore((state) => state.handleAuthError);
 
   // Set category name when category is loaded
   useEffect(() => {
@@ -593,6 +597,10 @@ export default function ActivityPage() {
       setCategoryName(activityCategory.name);
     }
   }, [activityCategory]);
+  useEffect(() => {
+    fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fetch activities data
   const fetchActivities = async () => {
@@ -606,16 +614,27 @@ export default function ActivityPage() {
       const response = await axios.get(
         `${Base_Url}/${endpoint}/${activityCategoryId}`,
         {
-          withCredentials: true
+          withCredentials: true,
+          validateStatus: (status) => status < 500
         }
       );
 
       const data = response.data;
-      if (response.data.code === "UNAUTHORIZED") {
-        toast.success("UNAUTHORIZED", {
-          description: `${response.data.message}`
+      if (
+        [
+          "UNAUTHORIZED",
+          "USER_NOT_FOUND",
+          "SESSION_NOT_FOUND",
+          "SESSION_EXPIRED"
+        ].includes(response.data.code)
+      ) {
+        toast.info("You're logged out", {
+          description:
+            response.data?.message ||
+            "Your session has expired or your account was signed in from another device. Please sign in again."
         });
-        logout();
+        handleAuthError(response.data.message);
+        return;
       } else if (response.data.code === "NO_ACTIVITY_FOUND") {
         toast.info("No Activities Found", {
           description: "No activity data available. Please add new data."
@@ -2379,9 +2398,21 @@ function ActivityForm({
             </SelectTrigger>
             <SelectContent>
               {uniqueProjectTitle.map((title) => (
-                <SelectItem key={title} value={title}>
-                  {title}
-                </SelectItem>
+                <TooltipProvider key={title}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SelectItem
+                        value={title}
+                        className="truncate w-[400px] whitespace-nowrap overflow-hidden"
+                      >
+                        {title}
+                      </SelectItem>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs break-words tracking-wide">
+                      <p>{title}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ))}
             </SelectContent>
           </Select>
