@@ -61,26 +61,19 @@ export const useSSEConnection = () => {
               break;
 
             case "force-logout": {
-              console.log("Force logout received:", data.reason);
+              if (data.sessionId && data.sessionId !== user.sessionId) {
+                // This message is not for the current session, ignore it
+                return;
+              }
+              console.log("Executing log out! : ", data);
               logout();
-
-              const reasonMessages = {
-                "new-device-login":
-                  "Someone else has signed in to your account from another device.",
-                "session-expired": "Your session has expired.",
-                "admin-logout": "You have been logged out by an administrator."
-              };
-
-              const message =
-                reasonMessages[data.reason as keyof typeof reasonMessages] ||
-                "You have been logged out.";
-
               toast.error("Logged Out", {
-                description: message,
+                description:
+                  data.message ||
+                  "You have been logged out due to another login or session expiration.",
                 duration: 5000
               });
 
-              // Redirect to signin page
               window.location.href = "/signin";
               break;
             }

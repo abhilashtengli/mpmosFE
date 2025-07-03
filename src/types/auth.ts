@@ -7,9 +7,10 @@ export interface User {
   isVerified: boolean;
   sessionId?: string;
 }
-
 export interface SSEMessage {
   type: "force-logout" | "connected" | "session-expired" | "heartbeat";
   reason?: string;
   timestamp: string;
+  sessionId?: string; // 👈 Add this line
+  message?: string; // 👈 (optional) for logout description
 }

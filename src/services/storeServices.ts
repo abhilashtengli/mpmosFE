@@ -47,6 +47,7 @@ export const fetchProjectsAPI = async () => {
 
 export const fetchloggedInUser = async () => {
   try {
+    await new Promise((resolve) => setTimeout(resolve, 200));
     const response = await axios.get(`${Base_Url}/get-me`, {
       withCredentials: true
     });
