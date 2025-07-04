@@ -20,6 +20,7 @@ import { Base_Url } from "@/lib/constants";
 import iimr from "@/assets/IIMR_logo.jpg";
 import aicrp from "@/assets/AICRP_logo.png";
 import cpgs from "@/assets/CPGS_logo.jpg";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 // Form validation schema
 const requestVerifyEmailSchema = z.object({
@@ -48,6 +49,7 @@ export default function RequestVerifyEmailPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [email, setEmail] = useState<string>("");
   const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const user = useAuthStore((state) => state.user);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const { value } = e.target;
@@ -342,23 +344,27 @@ export default function RequestVerifyEmailPage() {
               </Button>
 
               <div className="text-center space-y-2">
-                <p className="text-sm text-gray-600">
-                  Already verified?{" "}
+                {!user && (
+                  <p className="text-sm text-gray-600">
+                    Already verified?{" "}
+                    <Link
+                      to="/admin/signin"
+                      className="font-medium text-green-600 hover:text-green-700 focus:outline-none focus:underline"
+                      tabIndex={isLoading ? -1 : 0}
+                    >
+                      Sign in here
+                    </Link>
+                  </p>
+                )}
+                {user && (
                   <Link
-                    to="/admin/signin"
-                    className="font-medium text-green-600 hover:text-green-700 focus:outline-none focus:underline"
-                    tabIndex={isLoading ? -1 : 0}
+                    to="/admin/signup"
+                    className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800"
                   >
-                    Sign in here
+                    <ArrowLeft className="mr-1 h-4 w-4" />
+                    Back to Sign Up
                   </Link>
-                </p>
-                <Link
-                  to="/admin/signup"
-                  className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800"
-                >
-                  <ArrowLeft className="mr-1 h-4 w-4" />
-                  Back to Sign Up
-                </Link>
+                )}
               </div>
             </CardFooter>
           </form>
