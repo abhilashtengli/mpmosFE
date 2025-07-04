@@ -1,7 +1,3 @@
-"use client";
-
-import type React from "react";
-
 import { useState } from "react";
 import { z } from "zod";
 import { User, Edit3, Lock, Eye, EyeOff, Loader2, Save, X } from "lucide-react";

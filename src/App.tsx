@@ -31,7 +31,7 @@ import Publications from "./Pages/Publication";
 import VerifyEmailPage from "./Pages/admin/auth/verify-email";
 import ForgotPasswordPage from "./Pages/admin/auth/forgot-password";
 import VerifyPasswordPage from "./Pages/admin/auth/verify-password";
-import UserProfilePage from "./Pages/admin/auth/User-profile";
+import UserProfilePage from "./components/profile";
 
 function App() {
   const { isAuthenticated, fetchUser } = useAuthStore();
