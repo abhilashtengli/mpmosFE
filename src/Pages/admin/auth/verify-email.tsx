@@ -54,15 +54,15 @@ export default function VerifyEmailPage() {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Get user data from navigation state
-  const { email, name, userId } = location.state || {};
+  const { email } = location.state || {};
 
   // Redirect if no user data
   useEffect(() => {
-    if (!email || !name || !userId) {
+    if (!email) {
       toast.error("Invalid verification session");
       navigate("/admin/signup", { replace: true });
     }
-  }, [email, name, userId, navigate]);
+  }, [email, navigate]);
 
   // Timer countdown
   useEffect(() => {
@@ -283,7 +283,7 @@ export default function VerifyEmailPage() {
     }
   };
 
-  if (!email || !name || !userId) {
+  if (!email) {
     return null; // Will redirect in useEffect
   }
 
