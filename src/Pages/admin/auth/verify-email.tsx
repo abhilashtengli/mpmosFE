@@ -19,6 +19,7 @@ import { Base_Url } from "@/lib/constants";
 import iimr from "@/assets/IIMR_logo.jpg";
 import aicrp from "@/assets/AICRP_logo.png";
 import cpgs from "@/assets/CPGS_logo.jpg";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 // Verification code validation
 const verificationSchema = z.object({
@@ -50,7 +51,7 @@ export default function VerifyEmailPage() {
   const [verificationCode, setVerificationCode] = useState<string>("");
   const [codeError, setCodeError] = useState<string>("");
   const [timeLeft, setTimeLeft] = useState<number>(600); // 10 minutes
-
+  const user = useAuthStore((state) => state.user);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Get user data from navigation state
@@ -425,15 +426,28 @@ export default function VerifyEmailPage() {
               {isLoading ? "Verifying..." : "Verify Email"}
             </Button>
 
-            <div className="text-center">
-              <Link
-                to="/admin/signup"
-                className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800"
-              >
-                <ArrowLeft className="mr-1 h-4 w-4" />
-                Back to Sign Up
-              </Link>
-            </div>
+            {!user && (
+              <div className="text-center">
+                <Link
+                  to="/admin/signup"
+                  className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800"
+                >
+                  <ArrowLeft className="mr-1 h-4 w-4" />
+                  Back to Sign Up
+                </Link>
+              </div>
+            )}
+            {user && (
+              <div className="text-center">
+                <Link
+                  to="/admin/dashboard"
+                  className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800"
+                >
+                  <ArrowLeft className="mr-1 h-4 w-4" />
+                  Back to dashboard
+                </Link>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>

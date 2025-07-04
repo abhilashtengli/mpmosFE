@@ -32,6 +32,7 @@ import VerifyEmailPage from "./Pages/admin/auth/verify-email";
 import ForgotPasswordPage from "./Pages/admin/auth/forgot-password";
 import VerifyPasswordPage from "./Pages/admin/auth/verify-password";
 import UserProfilePage from "./components/profile";
+import RequestVerifyEmailPage from "./components/request-verify-email-page";
 
 function App() {
   const { isAuthenticated, fetchUser } = useAuthStore();
@@ -59,6 +60,8 @@ function App() {
             <Route path="/about" element={<AboutPage />} />
           </Route>
           <Route path="/admin/signin" element={<SigninPage />} />
+          <Route path="/admin/request-email-verification" element={<RequestVerifyEmailPage />} />
+
           <Route
             path="/admin/forgot-password"
             element={<ForgotPasswordPage />}

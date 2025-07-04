@@ -3,8 +3,11 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import axios from "axios";
 import { toast } from "sonner";
 
+
+
 export const fetchProjectsAPI = async () => {
   try {
+    
     const user = useAuthStore.getState().user;
     const handleAuthError = useAuthStore.getState().handleAuthError;
     let response;
@@ -47,6 +50,7 @@ export const fetchProjectsAPI = async () => {
 
 export const fetchloggedInUser = async () => {
   try {
+
     await new Promise((resolve) => setTimeout(resolve, 200));
     const response = await axios.get(`${Base_Url}/get-me`, {
       withCredentials: true

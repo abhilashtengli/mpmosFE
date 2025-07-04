@@ -356,16 +356,16 @@ export default function SigninPage() {
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
 
-              {/* <p className="text-center text-sm text-gray-600">
-                Don&apos;t have an account?{" "}
+              <p className="text-center text-sm text-gray-600">
+                Account not verified ? {" "}
                 <Link
-                  to="/signup"
+                  to="/admin/request-email-verification"
                   className="font-medium text-green-600 hover:text-green-700 focus:outline-none focus:underline"
                   tabIndex={isLoading ? -1 : 0}
                 >
-                  Request access
+                  Verify account
                 </Link>
-              </p> */}
+              </p>
             </CardFooter>
           </form>
         </Card>
