@@ -31,6 +31,7 @@ import Publications from "./Pages/Publication";
 import VerifyEmailPage from "./Pages/admin/auth/verify-email";
 import ForgotPasswordPage from "./Pages/admin/auth/forgot-password";
 import VerifyPasswordPage from "./Pages/admin/auth/verify-password";
+import UserProfile from "./Pages/admin/auth/User-profile";
 
 function App() {
   const { isAuthenticated, fetchUser } = useAuthStore();
@@ -56,7 +57,6 @@ function App() {
             <Route path="/aicrp" element={<AICRPProjectsPage />} />
             <Route path="/publications" element={<Publications />} />
             <Route path="/about" element={<AboutPage />} />
-            {/* <Route path="/progressreportsubmission" element={<About />} /> */}
           </Route>
           <Route path="/admin/signin" element={<SigninPage />} />
           <Route
@@ -79,6 +79,7 @@ function App() {
             }
           >
             <Route path="dashboard" element={<DashboardAdPage />} />
+            <Route path="profile" element={<UserProfile />} />
             <Route
               path="reports"
               element={
@@ -93,7 +94,14 @@ function App() {
             <Route path="upcoming_events" element={<EventsAdPage />} />
             <Route path="awarness_programs" element={<AwarenessAdPage />} />
             <Route path="fld" element={<FLDAdPage />} />
-            <Route path="signup" element={<SignupPage />} />
+            <Route
+              path="signup"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <SignupPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/admin/activity/:activityCategoryId"
               element={<ActivityPage />}

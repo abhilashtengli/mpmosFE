@@ -36,7 +36,8 @@ import {
   Search,
   FileText,
   Download,
-  Loader2
+  Loader2,
+  User
 } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { toast } from "sonner";
@@ -267,6 +268,10 @@ export default function DashboardAdPage() {
   const handleAddAdmin = () => {
     setIsOpen(false);
     navigate("/admin/signup");
+  };
+  const handleOpenProfile = () => {
+    setIsOpen(false);
+    navigate("/admin/profile");
   };
 
   const handleLogout = async () => {
@@ -585,17 +590,47 @@ export default function DashboardAdPage() {
                     damping: 30,
                     mass: 0.8
                   }}
-                  className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50"
+                  className="absolute right-0 mt-2 overflow-hidden w-48 bg-white rounded-xl shadow-lg border border-gray-100 p-2 z-50"
                   style={{
                     boxShadow:
                       "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
                   }}
                 >
                   {/* Add Admin Button */}
+                  {user?.role === "admin" && (
+                    <motion.button
+                      onClick={handleAddAdmin}
+                      className="w-full flex cursor-pointer rounded-lg items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-blue-50 transition-colors duration-150"
+                      whileHover={{ x: 1 }}
+                      whileTap={{ scale: 0.98 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 17
+                      }}
+                    >
+                      <motion.div
+                        whileHover={{ rotate: 5, scale: 1.1 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 400,
+                          damping: 17
+                        }}
+                      >
+                        <UserPlus className="w-4 h-4 text-blue-600" />
+                      </motion.div>
+                      <span className="text-sm font-medium">Add Admin</span>
+                    </motion.button>
+                  )}
+
+                  {/* Divider */}
+                  <div className="my-1 border-t border-gray-100" />
+
+                  {/* Profile Button */}
                   <motion.button
-                    onClick={handleAddAdmin}
-                    className="w-full flex cursor-pointer items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 transition-colors duration-150"
-                    whileHover={{ x: 4 }}
+                    onClick={handleOpenProfile}
+                    className="w-full flex cursor-pointer rounded-lg items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-green-50 transition-colors duration-150"
+                    whileHover={{ x: 1 }}
                     whileTap={{ scale: 0.98 }}
                     transition={{ type: "spring", stiffness: 400, damping: 17 }}
                   >
@@ -607,9 +642,9 @@ export default function DashboardAdPage() {
                         damping: 17
                       }}
                     >
-                      <UserPlus className="w-4 h-4 text-blue-600" />
+                      <User className="w-4 h-4 text-green-600" />
                     </motion.div>
-                    <span className="text-sm font-medium">Add Admin</span>
+                    <span className="text-sm font-medium">Profile</span>
                   </motion.button>
 
                   {/* Divider */}
@@ -618,8 +653,8 @@ export default function DashboardAdPage() {
                   {/* Logout Button */}
                   <motion.button
                     onClick={handleLogout}
-                    className="w-full flex cursor-pointer items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors duration-150"
-                    whileHover={{ x: 4 }}
+                    className="w-full flex cursor-pointer rounded-lg items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors duration-150"
+                    whileHover={{ x: 1 }}
                     whileTap={{ scale: 0.98 }}
                     transition={{ type: "spring", stiffness: 400, damping: 17 }}
                   >

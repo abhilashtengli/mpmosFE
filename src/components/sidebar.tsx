@@ -30,7 +30,8 @@ import {
   Check,
   X,
   UserPlus,
-  LogOut
+  LogOut,
+  User
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -169,6 +170,10 @@ export function Sidebar() {
   const handleAddAdmin = () => {
     setIsDropdownOpen(false);
     navigate("/admin/signup");
+  };
+  const handleOpenProfile = () => {
+    setIsDropdownOpen(false);
+    navigate("/admin/profile");
   };
 
   const handleLogout = async () => {
@@ -379,17 +384,30 @@ export function Sidebar() {
                 className="w-48 mb-2"
                 sideOffset={8}
               >
+                {user?.role === "admin" && (
+                  <div>
+                    <DropdownMenuItem
+                      onClick={handleAddAdmin}
+                      className="cursor-pointer flex focus:bg-blue-50 items-center space-x-3 px-4 py-3"
+                    >
+                      <UserPlus className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-medium">Add Admin</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </div>
+                )}
+
                 <DropdownMenuItem
-                  onClick={handleAddAdmin}
-                  className="cursor-pointer flex items-center space-x-3 px-4 py-3"
+                  onClick={handleOpenProfile}
+                  className="cursor-pointer focus:bg-green-50 flex items-center space-x-3 px-4 py-3"
                 >
-                  <UserPlus className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-medium">Add Admin</span>
+                  <User className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-medium">Profile</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleLogout}
-                  className="cursor-pointer flex items-center space-x-3 px-4 py-3 text-red-600 focus:text-red-600"
+                  className="cursor-pointer flex items-center focus:bg-red-50 space-x-3 px-4 py-3 text-red-600 focus:text-red-600"
                 >
                   <LogOut className="w-4 h-4 text-red-500" />
                   <span className="text-sm font-medium">Logout</span>
