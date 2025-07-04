@@ -29,6 +29,8 @@ import ActivityPage from "./Pages/admin/ProjectActivities/CustomActivityCategory
 import SignupPage from "./Pages/admin/auth/signup";
 import Publications from "./Pages/Publication";
 import VerifyEmailPage from "./Pages/admin/auth/verify-email";
+import ForgotPasswordPage from "./Pages/admin/auth/forgot-password";
+import VerifyPasswordPage from "./Pages/admin/auth/verify-password";
 
 function App() {
   const { isAuthenticated, fetchUser } = useAuthStore();
@@ -57,6 +59,14 @@ function App() {
             {/* <Route path="/progressreportsubmission" element={<About />} /> */}
           </Route>
           <Route path="/admin/signin" element={<SigninPage />} />
+          <Route
+            path="/admin/forgot-password"
+            element={<ForgotPasswordPage />}
+          />
+          <Route
+            path="/admin/create-new-password"
+            element={<VerifyPasswordPage />}
+          />
           <Route path="/admin/verify-email" element={<VerifyEmailPage />} />
 
           {/* Admin Pages  */}

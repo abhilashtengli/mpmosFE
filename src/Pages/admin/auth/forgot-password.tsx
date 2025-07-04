@@ -1,19 +1,12 @@
-// const handleLogin = async () => {
-//   try {
-//     const res = await loginAPI({ email, password });
-//     useAuthStore.getState().setUser(res.user);
-//     // navigate to dashboard or homepage
-//   } catch (err) {
-//     console.error("Login failed", err);
-//   }
-// };
+"use client";
 
-import { useEffect, useState } from "react";
+import type React from "react";
+
+import { useState } from "react";
 import { z } from "zod";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Loader2, KeyRound, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import axios, { AxiosError } from "axios";
-
+import axios, { type AxiosError } from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,35 +19,23 @@ import {
   CardTitle
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Base_Url } from "@/lib/constants";
-import { useAuthStore } from "@/stores/useAuthStore";
 import iimr from "@/assets/IIMR_logo.jpg";
 import aicrp from "@/assets/AICRP_logo.png";
 import cpgs from "@/assets/CPGS_logo.jpg";
 
 // Form validation schema
-const signinSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(1, "Password is required")
+const forgotPasswordSchema = z.object({
+  email: z.string().email("Please enter a valid email address")
 });
 
 interface FormErrors {
   [key: string]: string;
 }
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  isVerified: boolean;
-  sessionId: string;
-}
-
-interface SigninResponse {
+interface ForgotPasswordResponse {
   success: boolean;
-  data?: User;
   message: string;
   code: string;
 }
@@ -65,50 +46,29 @@ interface ApiError {
   code: string;
 }
 
-export default function SigninPage() {
+export default function ForgotPasswordPage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [formData, setFormData] = useState({
-    email: "",
-    password: ""
-  });
+  const [email, setEmail] = useState<string>("");
   const [formErrors, setFormErrors] = useState<FormErrors>({});
-  const { setUser, isAuthenticated, clearError } = useAuthStore();
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      const from = location.state?.from || "/admin/dashboard";
-      navigate(from, { replace: true });
-    }
-  }, [isAuthenticated, navigate, location.state]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { value } = e.target;
+    setEmail(value);
 
-    // Clear error for this field
-    if (formErrors[name]) {
-      setFormErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
+    // Clear errors when user starts typing
+    if (formErrors.email) {
+      setFormErrors({});
     }
-
-    // Clear form error when user starts typing
     if (formError) {
       setFormError(null);
-      clearError();
     }
   };
 
   const validateForm = (): boolean => {
     try {
-      signinSchema.parse(formData);
+      forgotPasswordSchema.parse({ email });
       setFormErrors({});
       return true;
     } catch (error) {
@@ -130,23 +90,32 @@ export default function SigninPage() {
     }
 
     const status = error.response?.status;
+    const code = error.response?.data?.code;
 
-    if (status === 401) {
-      return "Invalid email or password. Please check your credentials.";
+    // Handle specific error codes
+    if (code === "EMAIL_MISSING_FIELD") {
+      return "Email address is required.";
+    }
+    if (code === "INVALID_EMAIL") {
+      return "Please enter a valid email address.";
+    }
+    if (code === "EMAIL_NOT_VERIFIED") {
+      return "Please verify your email address before resetting your password.";
+    }
+    if (code === "EMAIL_SEND_FAILED") {
+      return "Failed to send reset code. Please try again later.";
     }
 
-    if (status === 403) {
-      return "Please verify your email address before signing in.";
+    // Handle HTTP status codes
+    if (status === 400) {
+      return "Invalid request. Please check your email address.";
     }
-
     if (status === 429) {
-      return "Too many login attempts. Please try again later.";
+      return "Too many requests. Please try again later.";
     }
-
     if (status && status >= 500) {
       return "Server error. Please try again later.";
     }
-
     if (error.code === "NETWORK_ERROR" || !error.response) {
       return "Network error. Please check your internet connection.";
     }
@@ -165,49 +134,55 @@ export default function SigninPage() {
 
     setIsLoading(true);
     setFormError(null);
-    clearError();
 
     try {
-      const response = await axios.post<SigninResponse>(
-        `${Base_Url}/signin`,
+      const response = await axios.post<ForgotPasswordResponse>(
+        `${Base_Url}/forgot-password`,
         {
-          email: formData.email.trim(),
-          password: formData.password
+          email: email.trim()
         },
         {
-          timeout: 10000, // 10 second timeout
-          withCredentials: true, // Important for cookies
+          timeout: 15000, // 15 second timeout
+          withCredentials: true,
           headers: {
             "Content-Type": "application/json"
           }
         }
       );
 
-      if (response.data.success && response.data.data) {
-        // Store user data
-        setUser(response.data.data);
-
-        toast.success("Signed in successfully", {
-          description: `Welcome back, ${response.data.data.name}!`
+      // Backend always returns success for security reasons
+      if (response.data.success) {
+        toast.success("Reset code sent!", {
+          description:
+            "If your email exists in our system, a reset code has been sent."
         });
 
-        // Navigate to dashboard
-        const from = location.state?.from || "/admin/dashboard";
-        navigate(from, { replace: true });
+        // Navigate to verification page
+        navigate("/admin/create-new-password", {
+          state: {
+            email: email.trim()
+          },
+          replace: true
+        });
       } else {
-        setFormError("Signin failed. Please try again.");
+        setFormError("Failed to send reset code. Please try again.");
       }
     } catch (error) {
-      console.error("Signin error:", error);
+      console.error("Forgot password error:", error);
 
       if (axios.isAxiosError(error)) {
         const errorMessage = getErrorMessage(error as AxiosError<ApiError>);
         setFormError(errorMessage);
 
-        // Handle specific error codes
-        if (error.response?.data?.code === "USER_NOT_VERIFIED") {
-          toast.error("Email verification required", {
-            description: "Please check your email and verify your account."
+        // Handle specific error codes with toast
+        const code = error.response?.data?.code;
+        if (code === "EMAIL_NOT_VERIFIED") {
+          toast.error("Email Not Verified", {
+            description: "Please verify your email address first."
+          });
+        } else if (code === "EMAIL_SEND_FAILED") {
+          toast.error("Email Send Failed", {
+            description: "Unable to send reset code. Please try again later."
           });
         }
       } else {
@@ -227,21 +202,21 @@ export default function SigninPage() {
             <div className="flex flex-wrap items-center gap-6">
               <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
                 <img
-                  src={aicrp}
+                  src={aicrp || "/placeholder.svg"}
                   alt="AICRP on Sorghum and Millets"
                   className="rounded-full w-12 h-12 object-contain"
                 />
               </div>
-              <div className=" w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
+              <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md">
                 <img
-                  src={cpgs}
+                  src={cpgs || "/placeholder.svg"}
                   alt="CPGS Logo"
-                  className=" rounded-full w-20 h-20 object-contain"
+                  className="rounded-full w-20 h-20 object-contain"
                 />
               </div>
               <div className="w-24 h-14 rounded- flex items-center justify-center shadow-md">
                 <img
-                  src={iimr}
+                  src={iimr || "/placeholder.svg"}
                   alt="IIMR Logo"
                   className="rounded-lg h-16 object-contain"
                 />
@@ -257,12 +232,16 @@ export default function SigninPage() {
       {/* Main content */}
       <main className="flex-1 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1 pt-10">
+          <CardHeader className="space-y-1 pt-8">
+            <div className="flex items-center justify-center mb-2">
+              <KeyRound className="h-8 w-8 text-green-600" />
+            </div>
             <CardTitle className="text-2xl font-bold text-center">
-              Sign In
+              Forgot Password
             </CardTitle>
             <CardDescription className="text-center">
-              Enter your credentials to access the dashboard
+              Enter your email address and we'll send you a verification code to
+              reset your password
             </CardDescription>
           </CardHeader>
 
@@ -276,73 +255,32 @@ export default function SigninPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="email">
-                  Email <span className="text-red-500">*</span>
+                  Email Address <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="email"
                   name="email"
                   type="email"
-                  placeholder="Enter your email"
-                  value={formData.email}
+                  placeholder="Enter your email address"
+                  value={email}
                   onChange={handleInputChange}
                   disabled={isLoading}
                   className={formErrors.email ? "border-red-500" : ""}
                   required
                   autoComplete="email"
+                  autoFocus
                 />
                 {formErrors.email && (
                   <p className="text-sm text-red-500">{formErrors.email}</p>
                 )}
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">
-                    Password <span className="text-red-500">*</span>
-                  </Label>
-                  <Link
-                    to="/admin/forgot-password"
-                    className="text-xs text-green-600 hover:text-green-700"
-                    tabIndex={isLoading ? -1 : 0}
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    name="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    disabled={isLoading}
-                    className={formErrors.password ? "border-red-500" : ""}
-                    required
-                    autoComplete="current-password"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                    disabled={isLoading}
-                    tabIndex={isLoading ? -1 : 0}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-gray-500" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-gray-500" />
-                    )}
-                    <span className="sr-only">
-                      {showPassword ? "Hide password" : "Show password"}
-                    </span>
-                  </Button>
-                </div>
-                {formErrors.password && (
-                  <p className="text-sm text-red-500">{formErrors.password}</p>
-                )}
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Note:</strong> If your email exists in our system and
+                  is verified, you'll receive a 6-digit verification code to
+                  reset your password.
+                </p>
               </div>
             </CardContent>
 
@@ -353,19 +291,18 @@ export default function SigninPage() {
                 disabled={isLoading}
               >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLoading ? "Signing in..." : "Sign In"}
+                {isLoading ? "Sending Reset Code..." : "Send Reset Code"}
               </Button>
 
-              {/* <p className="text-center text-sm text-gray-600">
-                Don&apos;t have an account?{" "}
+              <div className="text-center space-y-2">
                 <Link
-                  to="/signup"
-                  className="font-medium text-green-600 hover:text-green-700 focus:outline-none focus:underline"
-                  tabIndex={isLoading ? -1 : 0}
+                  to="/admin/signin"
+                  className="inline-flex items-center text-sm text-gray-600 hover:text-gray-800"
                 >
-                  Request access
+                  <ArrowLeft className="mr-1 h-4 w-4" />
+                  Back to Sign In
                 </Link>
-              </p> */}
+              </div>
             </CardFooter>
           </form>
         </Card>
